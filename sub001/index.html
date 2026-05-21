@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>sub001 Camera</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4efe8;
+      --panel: rgba(255, 252, 247, 0.92);
+      --ink: #1e1a17;
+      --accent: #d4572f;
+      --accent-strong: #ab3511;
+      --line: rgba(30, 26, 23, 0.12);
+      --shadow: 0 20px 40px rgba(74, 45, 33, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(255, 191, 105, 0.35), transparent 30%),
+        linear-gradient(160deg, #f9f4ed 0%, #efe6db 55%, #e4d8cb 100%);
+    }
+
+    main {
+      width: min(100%, 720px);
+      margin: 0 auto;
+      padding: calc(20px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+    }
+
+    .hero {
+      margin-bottom: 18px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.9rem;
+      line-height: 1.1;
+    }
+
+    p {
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    .camera-shell {
+      overflow: hidden;
+      border-radius: 28px;
+      border: 1px solid rgba(30, 26, 23, 0.18);
+      background: #201b17;
+      box-shadow: var(--shadow);
+    }
+
+    .preview {
+      position: relative;
+      aspect-ratio: 3 / 4;
+      background: #120f0d;
+    }
+
+    video,
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #120f0d;
+    }
+
+    canvas {
+      display: none;
+    }
+
+    .status {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      font-size: 0.95rem;
+      background: rgba(18, 15, 13, 0.64);
+      color: #fff7f1;
+      backdrop-filter: blur(10px);
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      padding: 16px;
+      background: rgba(255, 248, 241, 0.96);
+    }
+
+    button,
+    a.action-link {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      padding: 14px 18px;
+      font: inherit;
+      text-align: center;
+      text-decoration: none;
+      color: #fffaf5;
+      background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+      box-shadow: 0 10px 24px rgba(171, 53, 17, 0.25);
+    }
+
+    button.secondary {
+      color: var(--ink);
+      background: #fff7f0;
+      border: 1px solid rgba(30, 26, 23, 0.1);
+      box-shadow: none;
+    }
+
+    button:disabled,
+    a.action-link.disabled {
+      opacity: 0.45;
+      pointer-events: none;
+    }
+
+    .notes {
+      margin-top: 18px;
+      padding: 16px 18px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: rgba(255, 252, 247, 0.78);
+    }
+
+    .notes ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+    }
+
+    @media (max-width: 480px) {
+      .controls {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>iPhone Browser Camera</h1>
+      <p>Safari から背面カメラを起動し、その場で静止画を撮影できます。</p>
+    </section>
+
+    <section class="camera-shell">
+      <div class="preview">
+        <video id="camera" playsinline autoplay muted></video>
+        <canvas id="snapshot"></canvas>
+        <div id="status" class="status">カメラを起動してください。</div>
+      </div>
+      <div class="controls">
+        <button id="startButton" type="button">カメラ起動</button>
+        <button id="captureButton" type="button" class="secondary" disabled>撮影</button>
+        <button id="retryButton" type="button" class="secondary" disabled>再撮影</button>
+        <a id="downloadLink" class="action-link disabled" href="#" download="sub001-camera-shot.png">画像を保存</a>
+      </div>
+    </section>
+
+    <section class="notes">
+      <p>利用メモ</p>
+      <ul>
+        <li>iPhone Safari では HTTPS または localhost 配信でカメラ利用が必要です。</li>
+        <li>初回はカメラ権限の許可が必要です。</li>
+        <li>背面カメラが使えない端末では利用可能なカメラに自動で切り替わります。</li>
+      </ul>
+    </section>
+  </main>
+
+  <script>
+    const video = document.getElementById("camera");
+    const canvas = document.getElementById("snapshot");
+    const statusBox = document.getElementById("status");
+    const startButton = document.getElementById("startButton");
+    const captureButton = document.getElementById("captureButton");
+    const retryButton = document.getElementById("retryButton");
+    const downloadLink = document.getElementById("downloadLink");
+
+    let stream = null;
+    let captured = false;
+
+    function setStatus(message) {
+      statusBox.textContent = message;
+    }
+
+    function setDownloadDisabled(disabled) {
+      downloadLink.classList.toggle("disabled", disabled);
+      if (disabled) {
+        downloadLink.removeAttribute("href");
+      }
+    }
+
+    async function startCamera() {
+      setStatus("カメラを起動しています...");
+
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+
+      const preferredConstraints = {
+        audio: false,
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      };
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(preferredConstraints);
+      } catch (error) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        } catch (fallbackError) {
+          setStatus("カメラを起動できませんでした。HTTPS 配信と権限設定を確認してください。");
+          console.error(fallbackError);
+          return;
+        }
+      }
+
+      video.srcObject = stream;
+      canvas.style.display = "none";
+      video.style.display = "block";
+      captured = false;
+      captureButton.disabled = false;
+      retryButton.disabled = true;
+      setDownloadDisabled(true);
+      setStatus("カメラ起動中。撮影できます。");
+    }
+
+    function captureImage() {
+      if (!stream || !video.videoWidth || !video.videoHeight) {
+        setStatus("映像の準備がまだできていません。");
+        return;
+      }
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext("2d");
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      video.style.display = "none";
+      canvas.style.display = "block";
+      captured = true;
+      retryButton.disabled = false;
+
+      const imageUrl = canvas.toDataURL("image/png");
+      downloadLink.href = imageUrl;
+      setDownloadDisabled(false);
+      setStatus("撮影しました。保存するか再撮影してください。");
+    }
+
+    function resetPreview() {
+      if (!captured) {
+        return;
+      }
+
+      canvas.style.display = "none";
+      video.style.display = "block";
+      retryButton.disabled = true;
+      setStatus("カメラ映像に戻りました。");
+    }
+
+    startButton.addEventListener("click", startCamera);
+    captureButton.addEventListener("click", captureImage);
+    retryButton.addEventListener("click", resetPreview);
+
+    window.addEventListener("beforeunload", () => {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    });
+  </script>
+</body>
+</html>

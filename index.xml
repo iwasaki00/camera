@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/css" href="data:text/css,%0Abody%20%7B%20margin%3A%200%3B%20font-family%3A%20'Hiragino%20Sans'%2C%20'Yu%20Gothic'%2C%20sans-serif%3B%20background%3A%20linear-gradient(180deg%2C%20%23f7f1e8%200%25%2C%20%23e8ddd1%20100%25)%3B%20color%3A%20%231f1a16%3B%20%7D%0Amain%20%7B%20max-width%3A%20680px%3B%20margin%3A%200%20auto%3B%20padding%3A%2032px%2016px%3B%20%7D%0Ah1%20%7B%20margin%3A%200%200%2012px%3B%20font-size%3A%202.1rem%3B%20%7D%0Ap%20%7B%20line-height%3A%201.7%3B%20%7D%0Asection%20%7B%20background%3A%20rgba(255%2C255%2C255%2C0.72)%3B%20border%3A%201px%20solid%20rgba(31%2C26%2C22%2C0.12)%3B%20border-radius%3A%2024px%3B%20padding%3A%2020px%3B%20box-shadow%3A%200%2018px%2036px%20rgba(70%2C45%2C31%2C0.12)%3B%20%7D%0Aul%20%7B%20padding-left%3A%2018px%3B%20%7D%0Aa%20%7B%20display%3A%20inline-block%3B%20margin-top%3A%2010px%3B%20padding%3A%2012px%2016px%3B%20background%3A%20%23c8562d%3B%20color%3A%20white%3B%20text-decoration%3A%20none%3B%20border-radius%3A%20999px%3B%20%7D%0A"/?>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ja" lang="ja">
+  <head>
+    <title>Camera Menu</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  </head>
+  <body>
+    <main>
+      <section>
+        <h1>Camera Menu</h1>
+        <p>`camera` 配下の iPhone ブラウザ向けカメラ機能メニューです。</p>
+        <ul>
+          <li>
+            <strong>sub001</strong>
+            <p>背面カメラ優先で起動し、その場で静止画を撮影して保存できます。</p>
+            <a href="./sub001/index.html">sub001 を開く</a>
+          </li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>
