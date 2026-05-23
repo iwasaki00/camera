@@ -31,7 +31,7 @@ body {
 }
 
 .app {
-  width: min(100%, 760px);
+  width: min(100%, 820px);
   margin: 0 auto;
   padding: calc(20px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom));
 }
@@ -88,7 +88,7 @@ ol {
 
 .canvas-wrap {
   position: relative;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 9 / 13;
   background: #18100c;
 }
 
@@ -157,7 +157,7 @@ video {
 
 .effect-picker {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
