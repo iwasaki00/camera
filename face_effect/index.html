@@ -11,7 +11,7 @@
     <header class="hero">
       <p class="eyebrow">FACE_EFFECT</p>
       <h1>顔エフェクトカメラ</h1>
-      <p class="updated-at">更新日時: <span id="buildUpdatedAt">2026-05-23 19:49:30 +09:00</span></p>
+      <p class="updated-at">更新日時: <span id="buildUpdatedAt">2026-05-23 19:53:30 +09:00</span></p>
       <p class="lead">
         カメラ映像に顔ランドマークを重ねて、白目、つながり眉、数式、おそろしい子の
         4種類を切り替えられる簡易フィルターです。
@@ -48,7 +48,7 @@
           <div class="effect-settings-panel is-active" data-panel="white-eye">
             <div class="effect-settings-header">
               <h2>白目の調整</h2>
-              <p>目のサイズ、枠線、黒目の大きさを変更できます。</p>
+              <p>目のサイズ、枠線、黒い点の表示を変更できます。</p>
             </div>
             <label class="slider-control" for="whiteEyeScale">
               <span>目の大きさ</span>
@@ -62,11 +62,10 @@
             </label>
             <input id="whiteEyeStroke" class="slider-input" type="range" min="3" max="14" step="1" value="7">
 
-            <label class="slider-control" for="whiteEyePupil">
-              <span>黒目の大きさ</span>
-              <strong id="whiteEyePupilValue">16%</strong>
+            <label class="toggle-control" for="whiteEyePupilEnabled">
+              <span>黒い点を入れる</span>
+              <input id="whiteEyePupilEnabled" type="checkbox" checked>
             </label>
-            <input id="whiteEyePupil" class="slider-input" type="range" min="8" max="28" step="1" value="16">
           </div>
 
           <div class="effect-settings-panel" data-panel="unibrow">
