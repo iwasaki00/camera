@@ -86,12 +86,20 @@ function updateMessageForEffect(effectName) {
 }
 
 function updateEffectSettingsPanel(effectName) {
+  if (!effectSettingPanels.length) {
+    return;
+  }
+
   effectSettingPanels.forEach((panel) => {
     panel.classList.toggle("is-active", panel.dataset.panel === effectName);
   });
 }
 
 function syncWhiteEyeControlLabels() {
+  if (!whiteEyeScaleValue || !whiteEyeStrokeValue) {
+    return;
+  }
+
   whiteEyeScaleValue.textContent = `${Math.round(effectSettings.whiteEye.scale * 100)}%`;
   whiteEyeStrokeValue.textContent = `${Math.round(effectSettings.whiteEye.strokeScale * 100)}%`;
 }
@@ -568,15 +576,19 @@ effectButtons.forEach((button) => {
   });
 });
 
-whiteEyeScaleInput.addEventListener("input", (event) => {
-  effectSettings.whiteEye.scale = Number(event.target.value) / 100;
-  syncWhiteEyeControlLabels();
-});
+if (whiteEyeScaleInput) {
+  whiteEyeScaleInput.addEventListener("input", (event) => {
+    effectSettings.whiteEye.scale = Number(event.target.value) / 100;
+    syncWhiteEyeControlLabels();
+  });
+}
 
-whiteEyeStrokeInput.addEventListener("input", (event) => {
-  effectSettings.whiteEye.strokeScale = Number(event.target.value) / 100;
-  syncWhiteEyeControlLabels();
-});
+if (whiteEyeStrokeInput) {
+  whiteEyeStrokeInput.addEventListener("input", (event) => {
+    effectSettings.whiteEye.strokeScale = Number(event.target.value) / 100;
+    syncWhiteEyeControlLabels();
+  });
+}
 
 startButton.addEventListener("click", boot);
 
