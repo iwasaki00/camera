@@ -223,21 +223,6 @@ video {
   accent-color: var(--accent);
 }
 
-.toggle-control {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 16px;
-  font-weight: 700;
-}
-
-.toggle-control input {
-  width: 20px;
-  height: 20px;
-  accent-color: var(--accent);
-}
-
 .action-buttons {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
