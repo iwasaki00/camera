@@ -5,7 +5,7 @@ import {
 
 const FACE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
-const BUILD_UPDATED_AT = "2026-05-23 19:36:11 +09:00";
+const BUILD_UPDATED_AT = "2026-05-23 19:44:30 +09:00";
 
 const EFFECT_LABELS = {
   "white-eye": "白目",
@@ -44,7 +44,7 @@ const buildUpdatedAt = document.getElementById("buildUpdatedAt");
 const statusBadge = document.getElementById("statusBadge");
 const message = document.getElementById("message");
 const errorMessage = document.getElementById("errorMessage");
-const effectButtons = Array.from(document.querySelectorAll(".effect-button"));
+const effectSelect = document.getElementById("effectSelect");
 const effectSettingPanels = Array.from(document.querySelectorAll(".effect-settings-panel"));
 const whiteEyeScaleInput = document.getElementById("whiteEyeScale");
 const whiteEyeScaleValue = document.getElementById("whiteEyeScaleValue");
@@ -116,9 +116,9 @@ function syncWhiteEyeControlLabels() {
 
 function setEffect(effectName) {
   currentEffect = effectName;
-  effectButtons.forEach((button) => {
-    button.classList.toggle("is-active", button.dataset.effect === effectName);
-  });
+  if (effectSelect) {
+    effectSelect.value = effectName;
+  }
   updateEffectSettingsPanel(effectName);
 
   if (isRunning) {
@@ -580,11 +580,11 @@ window.addEventListener("beforeunload", () => {
   stopCurrentSession();
 });
 
-effectButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    setEffect(button.dataset.effect);
+if (effectSelect) {
+  effectSelect.addEventListener("change", (event) => {
+    setEffect(event.target.value);
   });
-});
+}
 
 if (whiteEyeScaleInput) {
   whiteEyeScaleInput.addEventListener("input", (event) => {

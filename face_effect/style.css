@@ -54,6 +54,12 @@ body {
   margin-top: 18px;
 }
 
+.action-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .eyebrow {
   margin: 0 0 8px;
   color: var(--accent-strong);
@@ -115,10 +121,6 @@ video {
   display: none;
 }
 
-.status-panel {
-  padding: 16px 16px 0;
-}
-
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -129,6 +131,11 @@ video {
   color: var(--ink);
   font-size: 0.95rem;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.status-panel {
+  padding: 16px 16px 0;
 }
 
 .status-badge[data-state="detecting"] {
@@ -165,10 +172,20 @@ video {
   padding: 16px;
 }
 
-.effect-picker {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+.effect-select-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.effect-select {
+  width: 100%;
+  border: 1px solid rgba(212, 85, 35, 0.22);
+  border-radius: 16px;
+  padding: 13px 14px;
+  background: rgba(255, 250, 246, 0.92);
+  color: var(--ink);
+  font: inherit;
   margin-bottom: 14px;
 }
 
@@ -224,7 +241,6 @@ video {
   border: 0;
 }
 
-.effect-button,
 .start-button,
 .secondary-button {
   appearance: none;
@@ -234,25 +250,13 @@ video {
   font-weight: 700;
 }
 
-.effect-button {
-  border-radius: 18px;
-  padding: 12px 10px;
-  color: var(--ink);
-  background: var(--chip);
-}
-
-.effect-button.is-active {
-  color: #fffaf6;
-  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
-  box-shadow: 0 12px 24px rgba(159, 52, 17, 0.22);
-}
-
 .start-button {
   border-radius: 999px;
   padding: 15px 18px;
   color: #fffaf6;
   background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
   box-shadow: 0 12px 24px rgba(159, 52, 17, 0.28);
+  flex: 1 1 auto;
 }
 
 .secondary-button {
@@ -284,11 +288,16 @@ video {
 }
 
 @media (max-width: 480px) {
-  .effect-picker {
-    grid-template-columns: 1fr;
+  .action-bar {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .action-buttons {
     grid-template-columns: 1fr;
+  }
+
+  .status-badge {
+    justify-content: center;
   }
 }

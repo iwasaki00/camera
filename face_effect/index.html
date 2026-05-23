@@ -11,13 +11,14 @@
     <header class="hero">
       <p class="eyebrow">FACE_EFFECT</p>
       <h1>顔エフェクトカメラ</h1>
-      <p class="updated-at">更新日時: <span id="buildUpdatedAt">2026-05-23 19:36:11 +09:00</span></p>
+      <p class="updated-at">更新日時: <span id="buildUpdatedAt">2026-05-23 19:44:30 +09:00</span></p>
       <p class="lead">
         カメラ映像に顔ランドマークを重ねて、白目、つながり眉、数式、おそろしい子の
         4種類を切り替えられる簡易フィルターです。
       </p>
-      <div class="action-buttons action-buttons-top">
+      <div class="action-bar action-buttons-top">
         <button id="startButton" class="start-button" type="button">カメラ起動</button>
+        <p id="statusBadge" class="status-badge" data-state="idle">待機中</p>
       </div>
     </header>
 
@@ -28,20 +29,20 @@
       </div>
 
       <div class="status-panel">
-        <p id="statusBadge" class="status-badge" data-state="idle">待機中</p>
         <p id="message" class="message">
           HTTPS または localhost 上で「カメラ起動」を押してください。
         </p>
         <p id="errorMessage" class="error-message" hidden></p>
       </div>
 
-      <div class="controls">
-        <div class="effect-picker" role="group" aria-label="エフェクト選択">
-          <button class="effect-button is-active" type="button" data-effect="white-eye">白目</button>
-          <button class="effect-button" type="button" data-effect="unibrow">つながり眉</button>
-          <button class="effect-button" type="button" data-effect="equations">数式</button>
-          <button class="effect-button" type="button" data-effect="osoroshii">おそろしい子</button>
-        </div>
+<div class="controls">
+        <label class="effect-select-label" for="effectSelect">エフェクト</label>
+        <select id="effectSelect" class="effect-select" aria-label="エフェクト選択">
+          <option value="white-eye">白目</option>
+          <option value="unibrow">つながり眉</option>
+          <option value="equations">数式</option>
+          <option value="osoroshii">おそろしい子</option>
+        </select>
         <section class="effect-settings" aria-label="エフェクト調整">
           <div class="effect-settings-panel is-active" data-panel="white-eye">
             <div class="effect-settings-header">
