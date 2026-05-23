@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 
-const BUILD_UPDATED_AT = "2026-05-23 21:12:00 +09:00";
+const BUILD_UPDATED_AT = "2026-05-23 21:24:00 +09:00";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
 const FACE_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
@@ -222,6 +222,14 @@ function drawTransformedPart(
   const shiftBase = config.distance * Math.max(rect.width, rect.height);
   const shiftX = pairDirection === 0 ? 0 : (vectorX / norm) * shiftBase;
   const shiftY = pairDirection === 0 ? 0 : (vectorY / norm) * shiftBase * 0.28;
+  const scaledWidth = rect.width * config.size * config.scaleX;
+  const scaledHeight = rect.height * config.size * config.scaleY;
+  const clearX = Math.min(rect.x, partCenter.x + shiftX - scaledWidth / 2) - 6;
+  const clearY = Math.min(rect.y, partCenter.y + shiftY - scaledHeight / 2) - 6;
+  const clearMaxX = Math.max(rect.x + rect.width, partCenter.x + shiftX + scaledWidth / 2) + 6;
+  const clearMaxY = Math.max(rect.y + rect.height, partCenter.y + shiftY + scaledHeight / 2) + 6;
+
+  ctx.clearRect(clearX, clearY, clearMaxX - clearX, clearMaxY - clearY);
 
   ctx.save();
   ctx.globalAlpha = clamp(config.opacity, 0.15, 1.5);
@@ -351,6 +359,7 @@ const PRESET_DIAGNOSIS: Record<keyof typeof PRESETS, string> = {
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const frameRef = useRef<HTMLDivElement | null>(null);
   const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const faceLandmarkerRef = useRef<FaceLandmarker | null>(null);
@@ -422,10 +431,11 @@ export default function App() {
   function renderLoop(): void {
     const video = videoRef.current;
     const canvas = canvasRef.current;
+    const frame = frameRef.current;
     const sourceCanvas = getSourceCanvas();
     const landmarker = faceLandmarkerRef.current;
 
-    if (!video || !canvas || !landmarker || !streamRef.current) {
+    if (!video || !canvas || !frame || !landmarker || !streamRef.current) {
       return;
     }
 
@@ -445,6 +455,7 @@ export default function App() {
       canvas.height = video.videoHeight;
       sourceCanvas.width = video.videoWidth;
       sourceCanvas.height = video.videoHeight;
+      frame.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
     }
 
     sourceCtx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
@@ -624,7 +635,7 @@ export default function App() {
       </section>
 
       <section className="viewer-card">
-        <div className="preview-frame">
+        <div ref={frameRef} className="preview-frame">
           <canvas ref={canvasRef} aria-label="変顔メーカーのプレビュー" />
           <video ref={videoRef} playsInline muted />
           {!cameraActive && <div className="placeholder">前面カメラで起動</div>}

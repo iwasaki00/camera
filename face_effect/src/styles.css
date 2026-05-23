@@ -151,8 +151,9 @@ h1 {
 
 .canvas-frame {
   position: relative;
-  aspect-ratio: 9 / 13;
+  aspect-ratio: 3 / 4;
   background: #040508;
+  overflow: hidden;
 }
 
 .canvas-frame canvas,

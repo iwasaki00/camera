@@ -160,8 +160,9 @@ h1 {
 
 .preview-frame {
   position: relative;
-  aspect-ratio: 9 / 13;
+  aspect-ratio: 3 / 4;
   background: #05070b;
+  overflow: hidden;
 }
 
 .preview-frame canvas,

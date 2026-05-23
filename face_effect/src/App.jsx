@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 
-const BUILD_UPDATED_AT = "2026-05-23 20:36:00 +09:00";
+const BUILD_UPDATED_AT = "2026-05-23 21:24:00 +09:00";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
 const FACE_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
@@ -509,6 +509,7 @@ function describeEffect(effect, thinking) {
 export default function App() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const frameRef = useRef(null);
   const animationFrameRef = useRef(0);
   const streamRef = useRef(null);
   const faceLandmarkerRef = useRef(null);
@@ -619,9 +620,10 @@ export default function App() {
   function renderLoop() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
+    const frame = frameRef.current;
     const landmarker = faceLandmarkerRef.current;
 
-    if (!video || !canvas || !landmarker || !streamRef.current) {
+    if (!video || !canvas || !frame || !landmarker || !streamRef.current) {
       return;
     }
 
@@ -638,6 +640,7 @@ export default function App() {
     if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
+      frame.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
     }
 
     drawMirroredVideo(ctx, video, canvas.width, canvas.height);
@@ -816,7 +819,7 @@ export default function App() {
       </section>
 
       <section className="viewer-card">
-        <div className="canvas-frame">
+        <div ref={frameRef} className="canvas-frame">
           <canvas ref={canvasRef} aria-label="顔エフェクトカメラのプレビュー" />
           <video ref={videoRef} playsInline muted />
           {!cameraActive && <div className="canvas-placeholder">前面カメラで起動</div>}
