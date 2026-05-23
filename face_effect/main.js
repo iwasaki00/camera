@@ -5,7 +5,7 @@ import {
 
 const FACE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
-const BUILD_UPDATED_AT = "2026-05-23 19:32:25 +09:00";
+const BUILD_UPDATED_AT = "2026-05-23 19:36:11 +09:00";
 
 const EFFECT_LABELS = {
   "white-eye": "白目",

@@ -9,14 +9,14 @@
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">face_effect</p>
+      <p class="eyebrow">FACE_EFFECT</p>
       <h1>顔エフェクトカメラ</h1>
-      <p class="updated-at">更新日時: <span id="buildUpdatedAt"></span></p>
+      <p class="updated-at">更新日時: <span id="buildUpdatedAt">2026-05-23 19:36:11 +09:00</span></p>
       <p class="lead">
-        カメラ映像や静止画に顔ランドマークを重ねて、
-        白目、つながり眉、数式、おそろしい子の 4 種類を切り替えられる簡易フィルターです。
+        カメラ映像に顔ランドマークを重ねて、白目、つながり眉、数式、おそろしい子の
+        4種類を切り替えられる簡易フィルターです。
       </p>
-<div class="action-buttons action-buttons-top">
+      <div class="action-buttons action-buttons-top">
         <button id="startButton" class="start-button" type="button">カメラ起動</button>
       </div>
     </header>
@@ -29,13 +29,13 @@
 
       <div class="status-panel">
         <p id="statusBadge" class="status-badge" data-state="idle">待機中</p>
-<p id="message" class="message">
+        <p id="message" class="message">
           HTTPS または localhost 上で「カメラ起動」を押してください。
         </p>
         <p id="errorMessage" class="error-message" hidden></p>
       </div>
 
-<div class="controls">
+      <div class="controls">
         <div class="effect-picker" role="group" aria-label="エフェクト選択">
           <button class="effect-button is-active" type="button" data-effect="white-eye">白目</button>
           <button class="effect-button" type="button" data-effect="unibrow">つながり眉</button>
@@ -81,11 +81,12 @@
       </div>
     </section>
 
-<section class="notes">
+    <section class="notes">
       <h2>使い方</h2>
       <ol>
         <li>スマホでは「カメラ起動」でリアルタイム確認できます。</li>
         <li>下のボタンでエフェクトを切り替えられます。</li>
+        <li>白目は下部のスライダーでサイズと枠線を調整できます。</li>
         <li>「おそろしい子」は顔の上に吹き出しと集中線を重ねます。</li>
       </ol>
     </section>
