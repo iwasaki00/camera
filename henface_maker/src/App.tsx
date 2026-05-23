@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 
-const BUILD_UPDATED_AT = "2026-05-23 21:02:00 +09:00";
+const BUILD_UPDATED_AT = "2026-05-23 21:12:00 +09:00";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
 const FACE_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
@@ -374,6 +374,13 @@ export default function App() {
     [activePart]
   );
 
+  function getSourceCanvas(): HTMLCanvasElement {
+    if (!sourceCanvasRef.current) {
+      sourceCanvasRef.current = document.createElement("canvas");
+    }
+    return sourceCanvasRef.current;
+  }
+
   async function ensureLandmarker(): Promise<FaceLandmarker> {
     if (faceLandmarkerRef.current) {
       return faceLandmarkerRef.current;
@@ -415,10 +422,10 @@ export default function App() {
   function renderLoop(): void {
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const sourceCanvas = sourceCanvasRef.current;
+    const sourceCanvas = getSourceCanvas();
     const landmarker = faceLandmarkerRef.current;
 
-    if (!video || !canvas || !sourceCanvas || !landmarker || !streamRef.current) {
+    if (!video || !canvas || !landmarker || !streamRef.current) {
       return;
     }
 
@@ -500,6 +507,7 @@ export default function App() {
         throw new Error("video 要素を初期化できませんでした。");
       }
 
+      getSourceCanvas();
       streamRef.current = stream;
       video.srcObject = stream;
       await video.play();
