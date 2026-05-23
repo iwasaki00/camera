@@ -1,7 +1,7 @@
 :root {
   color-scheme: light;
   --bg-top: #fff8f0;
-  --bg-bottom: #e9ddcf;
+  --bg-bottom: #e7dacc;
   --panel: rgba(255, 252, 247, 0.84);
   --ink: #221913;
   --muted: #6d5b4d;
@@ -12,6 +12,7 @@
   --ok: #196b45;
   --warn: #8c5a00;
   --error: #a12424;
+  --chip: rgba(34, 25, 19, 0.08);
 }
 
 * {
@@ -154,20 +155,44 @@ video {
   padding: 16px;
 }
 
-button {
+.effect-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.effect-button,
+.start-button {
   appearance: none;
   width: 100%;
   border: 0;
-  border-radius: 999px;
-  padding: 15px 18px;
   font: inherit;
   font-weight: 700;
+}
+
+.effect-button {
+  border-radius: 18px;
+  padding: 12px 10px;
+  color: var(--ink);
+  background: var(--chip);
+}
+
+.effect-button.is-active {
+  color: #fffaf6;
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+  box-shadow: 0 12px 24px rgba(159, 52, 17, 0.22);
+}
+
+.start-button {
+  border-radius: 999px;
+  padding: 15px 18px;
   color: #fffaf6;
   background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
   box-shadow: 0 12px 24px rgba(159, 52, 17, 0.28);
 }
 
-button:disabled {
+.start-button:disabled {
   opacity: 0.58;
 }
 
@@ -184,4 +209,10 @@ button:disabled {
 .notes ol {
   margin: 0;
   padding-left: 20px;
+}
+
+@media (max-width: 480px) {
+  .effect-picker {
+    grid-template-columns: 1fr;
+  }
 }

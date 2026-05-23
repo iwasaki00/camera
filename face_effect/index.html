@@ -3,22 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>sub003 White Eye Camera</title>
+  <title>face_effect Camera</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">sub003</p>
-      <h1>白目カメラ</h1>
+      <p class="eyebrow">face_effect</p>
+      <h1>顔エフェクトカメラ</h1>
       <p class="lead">
-        iPhone のインカメラ映像に顔ランドマークを重ね、両目を白い楕円で上書きする簡易フィルターです。
+        iPhone のインカメラ映像に顔ランドマークを重ねて、白目、つながり眉、数式エフェクトを切り替えられる簡易フィルターです。
       </p>
     </header>
 
     <section class="viewer-card">
       <div class="canvas-wrap">
-        <canvas id="outputCanvas" width="720" height="960" aria-label="白目カメラのプレビュー"></canvas>
+        <canvas id="outputCanvas" width="720" height="960" aria-label="顔エフェクトカメラのプレビュー"></canvas>
         <video id="cameraVideo" playsinline muted></video>
       </div>
 
@@ -29,7 +29,12 @@
       </div>
 
       <div class="controls">
-        <button id="startButton" type="button">カメラ開始</button>
+        <div class="effect-picker" role="group" aria-label="エフェクト選択">
+          <button class="effect-button is-active" type="button" data-effect="white-eye">白目</button>
+          <button class="effect-button" type="button" data-effect="unibrow">つながり眉</button>
+          <button class="effect-button" type="button" data-effect="equations">数式</button>
+        </div>
+        <button id="startButton" class="start-button" type="button">カメラ開始</button>
       </div>
     </section>
 
@@ -37,8 +42,9 @@
       <h2>使い方</h2>
       <ol>
         <li>iPhone でこのページを開く</li>
+        <li>上のボタンでエフェクトを選ぶ</li>
         <li>「カメラ開始」を押してカメラ許可を与える</li>
-        <li>顔が映ると目の位置に白い楕円と小さな黒目を重ねる</li>
+        <li>顔が映ると選択中の加工を重ねる</li>
       </ol>
     </section>
   </main>
