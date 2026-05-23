@@ -5,6 +5,7 @@ import {
 
 const FACE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
+const SAMPLE_IMAGE_PATH = "./sample-face.jpg";
 
 const EFFECT_LABELS = {
   "white-eye": "白目",
@@ -32,23 +33,31 @@ const EQUATIONS = [
   "a^2 + b^2"
 ];
 
-const OSOROSHII_TEXT = ["お", "そ", "ろ", "し", "い", "子", "！"];
+const OSOROSHII_TEXT = ["お", "そ", "ろ", "し", "い", "子"];
 
 const video = document.getElementById("cameraVideo");
 const canvas = document.getElementById("outputCanvas");
+const canvasWrap = document.getElementById("canvasWrap");
 const ctx = canvas.getContext("2d");
 const startButton = document.getElementById("startButton");
+const pcTestButton = document.getElementById("pcTestButton");
+const sampleTestButton = document.getElementById("sampleTestButton");
+const testImageInput = document.getElementById("testImageInput");
 const statusBadge = document.getElementById("statusBadge");
 const message = document.getElementById("message");
 const errorMessage = document.getElementById("errorMessage");
 const effectButtons = Array.from(document.querySelectorAll(".effect-button"));
 
 let stream = null;
-let faceLandmarker = null;
+let videoFaceLandmarker = null;
+let imageFaceLandmarker = null;
 let animationFrameId = 0;
 let lastVideoTime = -1;
 let isRunning = false;
 let currentEffect = "white-eye";
+let currentSource = "idle";
+let testImage = null;
+let testFaceLandmarks = null;
 
 function setStatus(text, state) {
   statusBadge.textContent = text;
@@ -65,8 +74,13 @@ function setError(text = "") {
 }
 
 function updateMessageForEffect(effectName) {
+  if (currentSource === "image") {
+    setMessage(`PC ブラウザテスト画像に${EFFECT_LABELS[effectName]}エフェクトを表示しています。`);
+    return;
+  }
+
   if (effectName === "osoroshii") {
-    setMessage("おそろしい子の漫画演出を表示しています。");
+    setMessage("おそろしい子モードを表示しています。");
     return;
   }
 
@@ -79,7 +93,10 @@ function setEffect(effectName) {
     button.classList.toggle("is-active", button.dataset.effect === effectName);
   });
 
-  if (isRunning) {
+  if (currentSource === "image") {
+    renderTestImageFrame();
+    updateMessageForEffect(effectName);
+  } else if (isRunning) {
     updateMessageForEffect(effectName);
   }
 }
@@ -91,6 +108,14 @@ function stopStreamTracks() {
 
   stream.getTracks().forEach((track) => track.stop());
   stream = null;
+}
+
+function stopCurrentSession() {
+  window.cancelAnimationFrame(animationFrameId);
+  animationFrameId = 0;
+  isRunning = false;
+  lastVideoTime = -1;
+  stopStreamTracks();
 }
 
 function drawWaitingScreen() {
@@ -107,7 +132,17 @@ function drawWaitingScreen() {
   ctx.font = "700 32px 'Hiragino Sans', 'Yu Gothic', sans-serif";
   ctx.fillText("顔エフェクトカメラ", canvas.width / 2, canvas.height / 2 - 18);
   ctx.font = "20px 'Hiragino Sans', 'Yu Gothic', sans-serif";
-  ctx.fillText("ボタンを押してカメラを開始", canvas.width / 2, canvas.height / 2 + 28);
+  ctx.fillText("カメラ起動または PC ブラウザテストを選択", canvas.width / 2, canvas.height / 2 + 28);
+}
+
+function setCanvasSize(width, height) {
+  canvas.width = width;
+  canvas.height = height;
+  canvasWrap.style.aspectRatio = `${width} / ${height}`;
+}
+
+function resetCanvasAspectRatio() {
+  canvasWrap.style.aspectRatio = "9 / 13";
 }
 
 function resizeCanvasToVideo() {
@@ -115,21 +150,40 @@ function resizeCanvasToVideo() {
     return;
   }
 
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  setCanvasSize(video.videoWidth, video.videoHeight);
 }
 
-async function createLandmarkers() {
-  if (faceLandmarker) {
+async function createVideoLandmarker() {
+  if (videoFaceLandmarker) {
     return;
   }
 
   const vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
-  faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+  videoFaceLandmarker = await FaceLandmarker.createFromOptions(vision, {
     baseOptions: {
       modelAssetPath: FACE_MODEL_URL
     },
     runningMode: "VIDEO",
+    numFaces: 1,
+    minFaceDetectionConfidence: 0.45,
+    minFacePresenceConfidence: 0.45,
+    minTrackingConfidence: 0.45,
+    outputFaceBlendshapes: false,
+    outputFacialTransformationMatrixes: false
+  });
+}
+
+async function createImageLandmarker() {
+  if (imageFaceLandmarker) {
+    return;
+  }
+
+  const vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
+  imageFaceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: FACE_MODEL_URL
+    },
+    runningMode: "IMAGE",
     numFaces: 1,
     minFaceDetectionConfidence: 0.45,
     minFacePresenceConfidence: 0.45,
@@ -400,11 +454,11 @@ function drawOsoroshiiOverlay(faceLandmarks) {
   drawSpeechBubble(head);
 }
 
-function drawMirroredVideoFrame() {
+function drawMirroredFrame(source) {
   ctx.save();
   ctx.translate(canvas.width, 0);
   ctx.scale(-1, 1);
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
   ctx.restore();
 }
 
@@ -412,37 +466,38 @@ function applyEffect(faceLandmarks, now) {
   switch (currentEffect) {
     case "white-eye":
       drawWhiteEyeOverlay(faceLandmarks);
-      setStatus("顔検出中", "detecting");
-      setMessage("白目エフェクトを表示しています。");
+      setStatus("顔を検出中", "detecting");
       return;
-
     case "unibrow":
       drawUnibrowOverlay(faceLandmarks);
-      setStatus("顔検出中", "detecting");
-      setMessage("つながり眉エフェクトを表示しています。");
+      setStatus("顔を検出中", "detecting");
       return;
-
     case "equations":
       drawEquationOverlay(faceLandmarks, now);
-      setStatus("顔検出中", "detecting");
-      setMessage("数式エフェクトを表示しています。");
+      setStatus("顔を検出中", "detecting");
       return;
-
     case "osoroshii":
       drawOsoroshiiOverlay(faceLandmarks);
-      setStatus("おそろしい子モード発動中", "detecting");
-      setMessage("おそろしい子の漫画演出を表示しています。");
+      setStatus("おそろしい子表示中", "detecting");
       return;
-
     default:
       drawWhiteEyeOverlay(faceLandmarks);
-      setStatus("顔検出中", "detecting");
-      setMessage("白目エフェクトを表示しています。");
+      setStatus("顔を検出中", "detecting");
   }
 }
 
+function renderTestImageFrame() {
+  if (!testImage || !testFaceLandmarks) {
+    return;
+  }
+
+  drawMirroredFrame(testImage);
+  applyEffect(testFaceLandmarks, performance.now());
+  setError("");
+}
+
 function renderLoop() {
-  if (!isRunning || !faceLandmarker) {
+  if (!isRunning || !videoFaceLandmarker) {
     return;
   }
 
@@ -452,7 +507,7 @@ function renderLoop() {
   }
 
   resizeCanvasToVideo();
-  drawMirroredVideoFrame();
+  drawMirroredFrame(video);
 
   if (video.currentTime === lastVideoTime) {
     animationFrameId = window.requestAnimationFrame(renderLoop);
@@ -461,25 +516,26 @@ function renderLoop() {
 
   lastVideoTime = video.currentTime;
   const now = performance.now();
-  const faceResult = faceLandmarker.detectForVideo(video, now);
+  const faceResult = videoFaceLandmarker.detectForVideo(video, now);
   const faceLandmarks = faceResult.faceLandmarks?.[0];
 
   if (!faceLandmarks) {
-    setStatus("顔を検出中", "waiting");
-    setMessage("顔全体が画面に入る位置へ調整してください。");
+    setStatus("顔を検出待ち", "waiting");
+    setMessage("顔が画面に入るとエフェクトを重ねます。");
     setError("");
     animationFrameId = window.requestAnimationFrame(renderLoop);
     return;
   }
 
   applyEffect(faceLandmarks, now);
+  updateMessageForEffect(currentEffect);
   setError("");
   animationFrameId = window.requestAnimationFrame(renderLoop);
 }
 
 async function startCamera() {
   if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error("このブラウザでは getUserMedia() が利用できません。HTTPS または対応ブラウザを確認してください。");
+    throw new Error("このブラウザでは getUserMedia() を利用できません。HTTPS または localhost で開いてください。");
   }
 
   stream = await navigator.mediaDevices.getUserMedia({
@@ -495,39 +551,153 @@ async function startCamera() {
   await video.play();
 }
 
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("画像を読み込めませんでした。"));
+    };
+
+    image.src = objectUrl;
+  });
+}
+
+function loadImageFromPath(path) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+
+    image.onload = () => {
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      reject(new Error(`サンプル画像を読み込めませんでした: ${path}`));
+    };
+
+    image.src = path;
+  });
+}
+
+async function startImageTest(loadImage, loadingMessage, failureMessage) {
+  stopCurrentSession();
+  currentSource = "idle";
+  testImage = null;
+  testFaceLandmarks = null;
+  startButton.disabled = true;
+  pcTestButton.disabled = true;
+  sampleTestButton.disabled = true;
+  setStatus("画像を解析中", "waiting");
+  setMessage(loadingMessage);
+  setError("");
+
+  try {
+    await createImageLandmarker();
+    const image = await loadImage();
+    setCanvasSize(image.naturalWidth, image.naturalHeight);
+
+    const faceResult = imageFaceLandmarker.detect(image);
+    const faceLandmarks = faceResult.faceLandmarks?.[0];
+
+    if (!faceLandmarks) {
+      throw new Error("画像内の顔を検出できませんでした。別の顔写真で試してください。");
+    }
+
+    currentSource = "image";
+    testImage = image;
+    testFaceLandmarks = faceLandmarks;
+    renderTestImageFrame();
+    updateMessageForEffect(currentEffect);
+    setStatus("PCテスト表示中", "detecting");
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    currentSource = "idle";
+    testImage = null;
+    testFaceLandmarks = null;
+    resetCanvasAspectRatio();
+    setCanvasSize(720, 960);
+    drawWaitingScreen();
+    setStatus("エラー", "error");
+    setMessage(failureMessage);
+    setError(detail);
+    console.error(error);
+  } finally {
+    startButton.disabled = false;
+    pcTestButton.disabled = false;
+    sampleTestButton.disabled = false;
+    testImageInput.value = "";
+  }
+}
+
+async function startPcBrowserTest(file) {
+  if (!file) {
+    return;
+  }
+
+  await startImageTest(
+    () => loadImageFromFile(file),
+    "選択した画像から顔を検出しています。",
+    "PCブラウザテストの準備に失敗しました。"
+  );
+}
+
+async function startSampleImageTest() {
+  await startImageTest(
+    () => loadImageFromPath(SAMPLE_IMAGE_PATH),
+    "同梱サンプル画像から顔を検出しています。",
+    "サンプル画像テストの準備に失敗しました。"
+  );
+}
+
 async function boot() {
   if (isRunning) {
     return;
   }
 
+  stopCurrentSession();
+  currentSource = "idle";
+  testImage = null;
+  testFaceLandmarks = null;
   startButton.disabled = true;
-  setStatus("初期化中", "waiting");
-  setMessage("カメラと顔検出を準備しています。");
+  pcTestButton.disabled = true;
+  sampleTestButton.disabled = true;
+  setStatus("起動準備中", "waiting");
+  setMessage("カメラと顔検出の準備をしています。");
   setError("");
 
   try {
-    await createLandmarkers();
+    await createVideoLandmarker();
     await startCamera();
     isRunning = true;
+    currentSource = "camera";
     lastVideoTime = -1;
     renderLoop();
-    setStatus("顔を検出中", "waiting");
+    setStatus("顔を検出待ち", "waiting");
     setMessage("顔が映ると選択中のエフェクトを重ねます。");
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     setStatus("エラー", "error");
-    setMessage("カメラまたはモデルの初期化に失敗しました。");
+    setMessage("カメラまたはモデルの起動に失敗しました。");
     setError(detail);
-    startButton.disabled = false;
-    isRunning = false;
-    stopStreamTracks();
+    currentSource = "idle";
+    stopCurrentSession();
     console.error(error);
+  } finally {
+    startButton.disabled = false;
+    pcTestButton.disabled = false;
+    sampleTestButton.disabled = false;
   }
 }
 
 window.addEventListener("beforeunload", () => {
-  window.cancelAnimationFrame(animationFrameId);
-  stopStreamTracks();
+  stopCurrentSession();
 });
 
 effectButtons.forEach((button) => {
@@ -536,6 +706,27 @@ effectButtons.forEach((button) => {
   });
 });
 
+startButton.addEventListener("click", boot);
+pcTestButton.addEventListener("click", () => {
+  try {
+    if (typeof testImageInput.showPicker === "function") {
+      testImageInput.showPicker();
+      return;
+    }
+  } catch (error) {
+    console.error(error);
+  }
+
+  testImageInput.click();
+});
+sampleTestButton.addEventListener("click", () => {
+  startSampleImageTest();
+});
+testImageInput.addEventListener("change", (event) => {
+  const [file] = event.target.files ?? [];
+  startPcBrowserTest(file);
+});
+
+setCanvasSize(720, 960);
 drawWaitingScreen();
 setEffect(currentEffect);
-startButton.addEventListener("click", boot);

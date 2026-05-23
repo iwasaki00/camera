@@ -50,6 +50,10 @@ body {
   padding: 22px 20px;
 }
 
+.action-buttons-top {
+  margin-top: 18px;
+}
+
 .eyebrow {
   margin: 0 0 8px;
   color: var(--accent-strong);
@@ -162,8 +166,27 @@ video {
   margin-bottom: 14px;
 }
 
+.action-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.visually-hidden-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .effect-button,
-.start-button {
+.start-button,
+.secondary-button {
   appearance: none;
   width: 100%;
   border: 0;
@@ -192,7 +215,16 @@ video {
   box-shadow: 0 12px 24px rgba(159, 52, 17, 0.28);
 }
 
-.start-button:disabled {
+.secondary-button {
+  border-radius: 999px;
+  padding: 15px 18px;
+  color: var(--accent-strong);
+  background: rgba(212, 85, 35, 0.1);
+  border: 1px solid rgba(212, 85, 35, 0.22);
+}
+
+.start-button:disabled,
+.secondary-button:disabled {
   opacity: 0.58;
 }
 
@@ -213,6 +245,10 @@ video {
 
 @media (max-width: 480px) {
   .effect-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .action-buttons {
     grid-template-columns: 1fr;
   }
 }

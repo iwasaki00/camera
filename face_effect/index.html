@@ -12,20 +12,28 @@
       <p class="eyebrow">face_effect</p>
       <h1>顔エフェクトカメラ</h1>
       <p class="lead">
-        iPhone のインカメラ映像に顔ランドマークを重ねて、
+        カメラ映像や静止画に顔ランドマークを重ねて、
         白目、つながり眉、数式、おそろしい子の 4 種類を切り替えられる簡易フィルターです。
       </p>
+      <div class="action-buttons action-buttons-top">
+        <button id="startButton" class="start-button" type="button">カメラ起動</button>
+        <button id="pcTestButton" class="secondary-button" type="button">PCブラウザテスト</button>
+        <button id="sampleTestButton" class="secondary-button" type="button">サンプル画像テスト</button>
+      </div>
+      <input id="testImageInput" class="visually-hidden-input" type="file" accept="image/*">
     </header>
 
     <section class="viewer-card">
-      <div class="canvas-wrap">
+      <div id="canvasWrap" class="canvas-wrap">
         <canvas id="outputCanvas" width="720" height="960" aria-label="顔エフェクトカメラのプレビュー"></canvas>
         <video id="cameraVideo" playsinline muted></video>
       </div>
 
       <div class="status-panel">
         <p id="statusBadge" class="status-badge" data-state="idle">待機中</p>
-        <p id="message" class="message">HTTPS またはローカルサーバー上で「カメラ開始」を押してください。</p>
+        <p id="message" class="message">
+          HTTPS または localhost 上で「カメラ起動」を押すか、「PCブラウザテスト」で顔写真を選んでください。
+        </p>
         <p id="errorMessage" class="error-message" hidden></p>
       </div>
 
@@ -36,17 +44,16 @@
           <button class="effect-button" type="button" data-effect="equations">数式</button>
           <button class="effect-button" type="button" data-effect="osoroshii">おそろしい子</button>
         </div>
-        <button id="startButton" class="start-button" type="button">カメラ開始</button>
       </div>
     </section>
 
     <section class="notes">
       <h2>使い方</h2>
       <ol>
-        <li>iPhone でこのページを開く</li>
-        <li>上のボタンでエフェクトを選ぶ</li>
-        <li>「カメラ開始」を押してカメラ許可を与える</li>
-        <li>おそろしい子モードでは顔が映ると漫画演出を重ねる</li>
+        <li>スマホでは「カメラ起動」でリアルタイム確認できます。</li>
+        <li>PC Chrome では「PCブラウザテスト」から顔写真を選ぶと静止画で確認できます。</li>
+        <li>下のボタンでエフェクトを切り替えられます。</li>
+        <li>「おそろしい子」は顔の上に吹き出しと集中線を重ねます。</li>
       </ol>
     </section>
   </main>
