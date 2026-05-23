@@ -1,83 +1,53 @@
-# face_effect 顔エフェクトカメラ
+# Genius Filter Camera
 
-iPhone の Safari で使う前提の、静的 HTML / CSS / JavaScript だけで作った Web アプリです。  
-インカメラ映像を `canvas` に描画し、MediaPipe Tasks Vision の顔ランドマークと手ランドマークを使って、次のエフェクトを切り替えられます。
+React + Vite + MediaPipe Face Landmarker で作る、iPhone Safari 向けの「考えている風・天才風フィルター」です。
 
-- 白目
-- つながり眉
-- 数式
-- おそろしい子
+## 機能
 
-`おそろしい子` モードでは、顔を検出すると昭和少女漫画風の演出をそのまま表示します。
+- 前面カメラのリアルタイム表示
+- 顔周辺へ数式オーバーレイを表示
+- 球体ワイヤーフレーム、円錐断面、XYZ 軸、幾何学図形、ベクトル矢印を重ねる
+- 鼻を基準にした顔追従
+- 口が閉じる、または眉間が寄ると「考え中モード」で数式量を増やす
+- Canvas 合成結果のスクリーンショット保存
 
-## ファイル構成
+## 使用技術
 
-- `index.html`
-- `style.css`
-- `main.js`
-- `README.md`
+- React
+- Vite
+- MediaPipe Tasks Vision
+- Canvas API
+- requestAnimationFrame
 
-## 起動方法
+## セットアップ
 
-1. `face_effect` フォルダをローカルサーバーで公開します
-2. ブラウザで `face_effect/index.html` を開きます
-3. エフェクトを選びます
-4. 「カメラ開始」を押します
-5. カメラ権限を許可します
-6. 顔が映ると、選択中のエフェクトが重なります
-
-## iPhone で試す方法
-
-1. iPhone と PC を同じ Wi-Fi に接続します
-2. VSCode の Live Server などで `face_effect` を配信します
-3. PC のローカル IP アドレスを確認します
-4. iPhone の Safari で `http://PCのIPアドレス:ポート/face_effect/` を開きます
-
-例:
-
-```text
-http://192.168.1.10:5500/face_effect/
+```bash
+npm install
+npm run dev
 ```
 
-補足:
-iPhone で `localhost` を開くと iPhone 自身を見に行くため、PC のサーバーには接続できません。
+Vite の開発サーバーが起動したら、表示された URL を iPhone Safari で開いてください。
 
-## GitHub Pages で公開する方法
+## ビルド
 
-1. GitHub にリポジトリを作成します
-2. `index.html` / `style.css` / `main.js` / `README.md` を Push します
-3. GitHub のリポジトリ画面で `Settings` を開きます
-4. `Pages` を開きます
-5. `Source` を `Deploy from a branch` にします
-6. `Branch` を `main`、folder を `/root` にします
-7. `Save` を押します
-8. 数分後に表示される URL を iPhone で開きます
-9. カメラ権限を許可します
-
-URL 例:
-
-```text
-https://<username>.github.io/<repository>/face_effect/
+```bash
+npm run build
 ```
 
-GitHub Pages は HTTPS で配信されるため、iPhone のカメラ検証に向いています。
+`dist/` を GitHub Pages へ配置できます。
 
-## カメラ権限について
+## GitHub Pages
 
-- このアプリは `navigator.mediaDevices.getUserMedia()` を使うため、カメラ権限が必要です
-- iPhone Safari で「カメラ開始」を押したら、カメラの使用を許可してください
-- 以前に拒否した場合は、Safari のサイト設定または iPhone の設定から権限を見直してください
+このプロジェクトは `vite.config.js` で `base: "./"` を設定しています。GitHub Pages にそのまま配置しやすい構成です。
 
-## HTTPS 環境について
+標準的な公開手順:
 
-- iPhone では HTTPS 環境でないとカメラが動かない可能性があります
-- `file://` 直開きではカメラは動きません
-- 公開して試す場合は GitHub Pages の HTTPS URL を使ってください
+1. `npm install`
+2. `npm run build`
+3. `dist/` の中身を公開ブランチへ配置
 
-## 実装メモ
+## 注意点
 
-- カメラ取得は `getUserMedia()` を使用
-- 顔検出には `FaceLandmarker` を使用
-- `おそろしい子` モードでは、顔検出時に白目、吹き出し、集中線を常時表示
-- 吹き出し、集中線、白目はすべて `canvas` 描画のみで表現
-- プロトタイプ優先で、判定はシンプルな閾値ベースにしています
+- iPhone Safari ではカメラ利用時に HTTPS 配信が必要です
+- `file://` 直開きではカメラ許可が出ない場合があります
+- 顔認識モデルは初回起動時に CDN から取得します
