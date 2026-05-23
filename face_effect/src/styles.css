@@ -197,9 +197,46 @@ h1 {
   font-weight: 700;
 }
 
+.effect-select {
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font: inherit;
+}
+
 .info-message {
   margin-top: 6px;
   line-height: 1.7;
+}
+
+.settings-panel {
+  border-top: 1px solid var(--panel-border);
+  padding: 16px;
+}
+
+.settings-header p {
+  margin-top: 6px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  font-weight: 700;
+}
+
+.slider-input {
+  width: 100%;
+  margin-top: 8px;
+  accent-color: var(--accent);
 }
 
 .error-box {
