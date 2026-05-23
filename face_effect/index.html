@@ -15,12 +15,9 @@
         カメラ映像や静止画に顔ランドマークを重ねて、
         白目、つながり眉、数式、おそろしい子の 4 種類を切り替えられる簡易フィルターです。
       </p>
-      <div class="action-buttons action-buttons-top">
+<div class="action-buttons action-buttons-top">
         <button id="startButton" class="start-button" type="button">カメラ起動</button>
-        <button id="pcTestButton" class="secondary-button" type="button">PCブラウザテスト</button>
-        <button id="sampleTestButton" class="secondary-button" type="button">サンプル画像テスト</button>
       </div>
-      <input id="testImageInput" class="visually-hidden-input" type="file" accept="image/*">
     </header>
 
     <section class="viewer-card">
@@ -31,27 +28,62 @@
 
       <div class="status-panel">
         <p id="statusBadge" class="status-badge" data-state="idle">待機中</p>
-        <p id="message" class="message">
-          HTTPS または localhost 上で「カメラ起動」を押すか、「PCブラウザテスト」で顔写真を選んでください。
+<p id="message" class="message">
+          HTTPS または localhost 上で「カメラ起動」を押してください。
         </p>
         <p id="errorMessage" class="error-message" hidden></p>
       </div>
 
-      <div class="controls">
+<div class="controls">
         <div class="effect-picker" role="group" aria-label="エフェクト選択">
           <button class="effect-button is-active" type="button" data-effect="white-eye">白目</button>
           <button class="effect-button" type="button" data-effect="unibrow">つながり眉</button>
           <button class="effect-button" type="button" data-effect="equations">数式</button>
           <button class="effect-button" type="button" data-effect="osoroshii">おそろしい子</button>
         </div>
+        <section class="effect-settings" aria-label="エフェクト調整">
+          <div class="effect-settings-panel is-active" data-panel="white-eye">
+            <div class="effect-settings-header">
+              <h2>白目の調整</h2>
+              <p>目のサイズと枠線の太さを変更できます。</p>
+            </div>
+            <label class="slider-control" for="whiteEyeScale">
+              <span>目の大きさ</span>
+              <strong id="whiteEyeScaleValue">100%</strong>
+            </label>
+            <input id="whiteEyeScale" class="slider-input" type="range" min="70" max="170" step="5" value="100">
+            <label class="slider-control" for="whiteEyeStroke">
+              <span>目の枠線の太さ</span>
+              <strong id="whiteEyeStrokeValue">7%</strong>
+            </label>
+            <input id="whiteEyeStroke" class="slider-input" type="range" min="3" max="14" step="1" value="7">
+          </div>
+          <div class="effect-settings-panel" data-panel="unibrow">
+            <div class="effect-settings-header">
+              <h2>つながり眉の調整</h2>
+              <p>このエフェクトの調整項目は準備中です。</p>
+            </div>
+          </div>
+          <div class="effect-settings-panel" data-panel="equations">
+            <div class="effect-settings-header">
+              <h2>数式の調整</h2>
+              <p>このエフェクトの調整項目は準備中です。</p>
+            </div>
+          </div>
+          <div class="effect-settings-panel" data-panel="osoroshii">
+            <div class="effect-settings-header">
+              <h2>おそろしい子の調整</h2>
+              <p>このエフェクトの調整項目は準備中です。</p>
+            </div>
+          </div>
+        </section>
       </div>
     </section>
 
-    <section class="notes">
+<section class="notes">
       <h2>使い方</h2>
       <ol>
         <li>スマホでは「カメラ起動」でリアルタイム確認できます。</li>
-        <li>PC Chrome では「PCブラウザテスト」から顔写真を選ぶと静止画で確認できます。</li>
         <li>下のボタンでエフェクトを切り替えられます。</li>
         <li>「おそろしい子」は顔の上に吹き出しと集中線を重ねます。</li>
       </ol>

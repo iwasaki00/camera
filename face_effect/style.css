@@ -166,6 +166,40 @@ video {
   margin-bottom: 14px;
 }
 
+.effect-settings {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.effect-settings-panel {
+  display: none;
+}
+
+.effect-settings-panel.is-active {
+  display: block;
+}
+
+.effect-settings-header p {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.93rem;
+}
+
+.slider-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  font-weight: 700;
+}
+
+.slider-input {
+  width: 100%;
+  margin-top: 8px;
+  accent-color: var(--accent);
+}
+
 .action-buttons {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
