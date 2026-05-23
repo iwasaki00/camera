@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 
-const BUILD_UPDATED_AT = "2026-05-23 20:18:00 +09:00";
+const BUILD_UPDATED_AT = "2026-05-23 20:36:00 +09:00";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
 const FACE_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
@@ -9,9 +9,7 @@ const FACE_MODEL_URL =
 const EFFECTS = [
   { value: "genius", label: "天才風" },
   { value: "white-eye", label: "白目" },
-  { value: "unibrow", label: "つながり眉" },
-  { value: "equations", label: "数式" },
-  { value: "osoroshii", label: "おそろしい子" }
+  { value: "unibrow", label: "つながり眉" }
 ];
 
 const FORMULAS = [
@@ -36,8 +34,6 @@ const FORMULAS = [
   "cosh x",
   "phi = (1+sqrt5)/2"
 ];
-
-const OSOROSHII_TEXT = ["お", "そ", "ろ", "し", "い", "子"];
 
 const LEFT_EYE_INDEXES = [33, 133, 159, 145, 160, 144, 158, 153];
 const RIGHT_EYE_INDEXES = [362, 263, 386, 374, 385, 380, 387, 373];
@@ -213,11 +209,13 @@ function drawWhiteEyeOverlay(ctx, landmarks, width, height, settings, hidePupil 
   });
 }
 
-function drawUnibrowOverlay(ctx, landmarks, width, height) {
+function drawUnibrowOverlay(ctx, landmarks, width, height, settings) {
   const left = LEFT_BROW_CURVE.map((index) => mirrorPoint(landmarks[index], width, height));
   const right = RIGHT_BROW_CURVE.map((index) => mirrorPoint(landmarks[index], width, height));
   const bridge = BROW_BRIDGE.map((index) => mirrorPoint(landmarks[index], width, height));
-  const browThickness = Math.max(distance(left[0], left[2]) * 0.18, 10);
+  const baseThickness = Math.max(distance(left[0], left[2]) * 0.18, 10);
+  const browThickness = baseThickness * settings.thicknessScale;
+  const lift = browThickness * settings.liftScale;
 
   ctx.save();
   ctx.lineCap = "round";
@@ -229,12 +227,12 @@ function drawUnibrowOverlay(ctx, landmarks, width, height) {
   ctx.lineWidth = browThickness;
   ctx.beginPath();
   ctx.moveTo(left[0].x, left[0].y);
-  ctx.quadraticCurveTo(left[1].x, left[1].y - browThickness * 0.18, left[2].x, left[2].y);
+  ctx.quadraticCurveTo(left[1].x, left[1].y - lift, left[2].x, left[2].y);
   ctx.stroke();
 
   ctx.beginPath();
   ctx.moveTo(right[0].x, right[0].y);
-  ctx.quadraticCurveTo(right[1].x, right[1].y - browThickness * 0.18, right[2].x, right[2].y);
+  ctx.quadraticCurveTo(right[1].x, right[1].y - lift, right[2].x, right[2].y);
   ctx.stroke();
 
   ctx.lineWidth = browThickness * 0.92;
@@ -245,7 +243,31 @@ function drawUnibrowOverlay(ctx, landmarks, width, height) {
   ctx.restore();
 }
 
-function drawEquationOverlay(ctx, head, width, height, now, countMultiplier = 1) {
+function getFormulaMotionOffset(mode, angle, drift, motionScale, radius) {
+  switch (mode) {
+    case "wave":
+      return {
+        x: Math.sin(drift * 1.6) * 10 * motionScale,
+        y: Math.cos(drift * 1.2 + angle) * 18 * motionScale
+      };
+    case "scatter":
+      return {
+        x: Math.cos(drift * 0.9 + angle * 1.3) * radius * 0.08 * motionScale,
+        y: Math.sin(drift * 1.4 - angle) * radius * 0.12 * motionScale
+      };
+    case "orbit":
+    default:
+      return {
+        x: Math.sin(drift) * 18 * motionScale,
+        y: Math.cos(drift * 1.2) * 14 * motionScale
+      };
+  }
+}
+
+function drawEquationOverlay(ctx, head, width, height, now, countMultiplier = 1, options = {}) {
+  const speed = options.speed ?? 1;
+  const motionScale = options.motionScale ?? 1;
+  const motionMode = options.motionMode ?? "orbit";
   const maxRadius = Math.hypot(width, height) * 0.78;
   const total = Math.round(24 * countMultiplier);
   const spreadProgress = Math.min((now % 1800) / 1800, 1);
@@ -260,12 +282,13 @@ function drawEquationOverlay(ctx, head, width, height, now, countMultiplier = 1)
   for (let index = 0; index < total; index += 1) {
     const formula = FORMULAS[index % FORMULAS.length];
     const lane = Math.floor(index / FORMULAS.length);
-    const angle = ((Math.PI * 2) / total) * index + now / 2400;
+    const angle = ((Math.PI * 2) / total) * index + (now * speed) / 2400;
     const radiusBase = maxRadius * (0.16 + (index % 6) * 0.08);
-    const radius = Math.min(maxRadius, radiusBase * (0.48 + spreadProgress * 1.4) + lane * 24);
-    const drift = now / 900 + index * 0.8;
-    const x = head.foreheadX + Math.cos(angle) * radius + Math.sin(drift) * 18;
-    const y = head.foreheadY + Math.sin(angle) * radius * 0.82 + Math.cos(drift * 1.2) * 14;
+    const radius = Math.min(maxRadius, (radiusBase * (0.48 + spreadProgress * 1.4) + lane * 24) * (0.88 + motionScale * 0.12));
+    const drift = (now * speed) / 900 + index * 0.8;
+    const motionOffset = getFormulaMotionOffset(motionMode, angle, drift, motionScale, radius);
+    const x = head.foreheadX + Math.cos(angle) * radius + motionOffset.x;
+    const y = head.foreheadY + Math.sin(angle) * radius * 0.82 + motionOffset.y;
     const alpha = 0.24 + ((Math.sin(drift * 1.4) + 1) / 2) * 0.38;
     const fontSize = 16 + (index % 4) * 4;
 
@@ -276,91 +299,6 @@ function drawEquationOverlay(ctx, head, width, height, now, countMultiplier = 1)
   }
 
   ctx.restore();
-}
-
-function drawOsoroshiiRays(ctx, centerX, centerY, width, height) {
-  ctx.save();
-  ctx.globalAlpha = 0.92;
-
-  for (let index = 0; index < 28; index += 1) {
-    const angle = (Math.PI * 2 * index) / 28;
-    const spread = 0.09 + (index % 3) * 0.012;
-    const inner = Math.max(width, height) * 0.15;
-    const outer = Math.max(width, height) * 0.95;
-
-    ctx.beginPath();
-    ctx.moveTo(centerX + Math.cos(angle - spread) * inner, centerY + Math.sin(angle - spread) * inner);
-    ctx.lineTo(centerX + Math.cos(angle - spread * 0.25) * outer, centerY + Math.sin(angle - spread * 0.25) * outer);
-    ctx.lineTo(centerX + Math.cos(angle + spread * 0.25) * outer, centerY + Math.sin(angle + spread * 0.25) * outer);
-    ctx.lineTo(centerX + Math.cos(angle + spread) * inner, centerY + Math.sin(angle + spread) * inner);
-    ctx.closePath();
-    ctx.fillStyle = index % 2 === 0 ? "rgba(0, 0, 0, 0.86)" : "rgba(255, 255, 255, 0.92)";
-    ctx.fill();
-  }
-
-  ctx.restore();
-}
-
-function drawSpeechBubble(ctx, head, width, height) {
-  const bubbleWidth = Math.min(width * 0.34, 220);
-  const bubbleHeight = Math.min(height * 0.42, 320);
-  const bubbleX = Math.max(28, head.centerX - head.width * 0.58 - bubbleWidth * 0.5);
-  const bubbleY = Math.max(22, head.topY - bubbleHeight * 0.08);
-  const tailX = head.centerX - head.width * 0.15;
-  const tailY = head.foreheadY + head.width * 0.05;
-
-  ctx.save();
-  ctx.fillStyle = "rgba(255, 255, 255, 0.98)";
-  ctx.strokeStyle = "#111";
-  ctx.lineWidth = 4;
-  ctx.shadowColor = "rgba(0, 0, 0, 0.18)";
-  ctx.shadowBlur = 16;
-
-  ctx.beginPath();
-  ctx.moveTo(bubbleX + 28, bubbleY);
-  ctx.quadraticCurveTo(bubbleX, bubbleY, bubbleX, bubbleY + 28);
-  ctx.lineTo(bubbleX, bubbleY + bubbleHeight - 28);
-  ctx.quadraticCurveTo(bubbleX, bubbleY + bubbleHeight, bubbleX + 28, bubbleY + bubbleHeight);
-  ctx.lineTo(bubbleX + bubbleWidth - 28, bubbleY + bubbleHeight);
-  ctx.quadraticCurveTo(bubbleX + bubbleWidth, bubbleY + bubbleHeight, bubbleX + bubbleWidth, bubbleY + bubbleHeight - 28);
-  ctx.lineTo(bubbleX + bubbleWidth, bubbleY + 28);
-  ctx.quadraticCurveTo(bubbleX + bubbleWidth, bubbleY, bubbleX + bubbleWidth - 28, bubbleY);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(bubbleX + bubbleWidth * 0.68, bubbleY + bubbleHeight);
-  ctx.lineTo(tailX, tailY);
-  ctx.lineTo(bubbleX + bubbleWidth * 0.46, bubbleY + bubbleHeight - 8);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = "#111";
-  ctx.textAlign = "center";
-  ctx.font = "700 32px 'Hiragino Mincho ProN', 'Yu Mincho', serif";
-
-  OSOROSHII_TEXT.forEach((char, index) => {
-    ctx.fillText(char, bubbleX + bubbleWidth * 0.5, bubbleY + 58 + index * 34);
-  });
-
-  ctx.restore();
-}
-
-function drawOsoroshiiOverlay(ctx, landmarks, width, height, settings) {
-  const head = getHeadGeometry(landmarks, width, height);
-  const burstX = head.centerX;
-  const burstY = head.foreheadY - head.width * 0.08;
-
-  ctx.save();
-  ctx.fillStyle = "rgba(255, 255, 255, 0.06)";
-  ctx.fillRect(0, 0, width, height);
-  ctx.restore();
-
-  drawOsoroshiiRays(ctx, burstX, burstY, width, height);
-  drawWhiteEyeOverlay(ctx, landmarks, width, height, settings, true, 0.1);
-  drawSpeechBubble(ctx, head, width, height);
 }
 
 function drawWireSphere(ctx, centerX, centerY, radius, now) {
@@ -506,11 +444,16 @@ function drawVectorArrows(ctx, centerX, centerY, scale, now) {
   ctx.restore();
 }
 
-function drawGeniusOverlay(ctx, metrics, head, width, height, now) {
-  drawEquationOverlay(ctx, head, width, height, now, metrics.thinking ? 1.15 : 0.7);
+function drawGeniusOverlay(ctx, metrics, head, width, height, now, settings) {
+  const densityMultiplier = (metrics.thinking ? 1.15 : 0.7) * settings.formulaDensity;
+  drawEquationOverlay(ctx, head, width, height, now, densityMultiplier, {
+    speed: settings.formulaSpeed,
+    motionScale: settings.motionScale,
+    motionMode: settings.motionMode
+  });
 
-  const drift = Math.sin(now / 1600) * metrics.eyeDistance * 0.08;
-  const pulse = 1 + Math.sin(now / 1400) * 0.04;
+  const drift = Math.sin((now * settings.formulaSpeed) / 1600) * metrics.eyeDistance * 0.08 * settings.motionScale;
+  const pulse = 1 + Math.sin((now * settings.formulaSpeed) / 1400) * 0.04 * settings.motionScale;
 
   drawWireSphere(
     ctx,
@@ -555,12 +498,6 @@ function describeEffect(effect, thinking) {
       return "白目エフェクトを表示しています。";
     case "unibrow":
       return "つながり眉エフェクトを表示しています。";
-    case "equations":
-      return thinking
-        ? "考え中モードで数式の量を増やしています。"
-        : "数式エフェクトを表示しています。";
-    case "osoroshii":
-      return "おそろしい子エフェクトを表示しています。";
     case "genius":
     default:
       return thinking
@@ -582,6 +519,16 @@ export default function App() {
       scale: 1,
       strokeScale: 0.07,
       pupilScale: 0.16
+    },
+    genius: {
+      formulaDensity: 1,
+      formulaSpeed: 1,
+      motionScale: 1,
+      motionMode: "orbit"
+    },
+    unibrow: {
+      thicknessScale: 1,
+      liftScale: 0.18
     }
   });
   const uiRef = useRef({
@@ -602,6 +549,12 @@ export default function App() {
   const [whiteEyeScale, setWhiteEyeScale] = useState(100);
   const [whiteEyeStroke, setWhiteEyeStroke] = useState(7);
   const [whiteEyePupil, setWhiteEyePupil] = useState(16);
+  const [geniusFormulaDensity, setGeniusFormulaDensity] = useState(100);
+  const [geniusFormulaSpeed, setGeniusFormulaSpeed] = useState(100);
+  const [geniusMotionScale, setGeniusMotionScale] = useState(100);
+  const [geniusMotionMode, setGeniusMotionMode] = useState("orbit");
+  const [unibrowThickness, setUnibrowThickness] = useState(100);
+  const [unibrowLift, setUnibrowLift] = useState(18);
 
   function updateUi(next) {
     const current = uiRef.current;
@@ -714,24 +667,20 @@ export default function App() {
     const metrics = getFaceMetrics(faceLandmarks, canvas.width, canvas.height);
     const head = getHeadGeometry(faceLandmarks, canvas.width, canvas.height);
     const currentEffect = effectRef.current;
-    const settings = settingsRef.current.whiteEye;
+    const geniusSettings = settingsRef.current.genius;
+    const whiteEyeSettings = settingsRef.current.whiteEye;
+    const unibrowSettings = settingsRef.current.unibrow;
 
     switch (currentEffect) {
       case "white-eye":
-        drawWhiteEyeOverlay(ctx, faceLandmarks, canvas.width, canvas.height, settings);
+        drawWhiteEyeOverlay(ctx, faceLandmarks, canvas.width, canvas.height, whiteEyeSettings);
         break;
       case "unibrow":
-        drawUnibrowOverlay(ctx, faceLandmarks, canvas.width, canvas.height);
-        break;
-      case "equations":
-        drawEquationOverlay(ctx, head, canvas.width, canvas.height, now, metrics.thinking ? 1.2 : 0.85);
-        break;
-      case "osoroshii":
-        drawOsoroshiiOverlay(ctx, faceLandmarks, canvas.width, canvas.height, settings);
+        drawUnibrowOverlay(ctx, faceLandmarks, canvas.width, canvas.height, unibrowSettings);
         break;
       case "genius":
       default:
-        drawGeniusOverlay(ctx, metrics, head, canvas.width, canvas.height, now);
+        drawGeniusOverlay(ctx, metrics, head, canvas.width, canvas.height, now, geniusSettings);
         break;
     }
 
@@ -811,12 +760,28 @@ export default function App() {
   }, [effect]);
 
   useEffect(() => {
+    settingsRef.current.genius = {
+      formulaDensity: geniusFormulaDensity / 100,
+      formulaSpeed: geniusFormulaSpeed / 100,
+      motionScale: geniusMotionScale / 100,
+      motionMode: geniusMotionMode
+    };
+  }, [geniusFormulaDensity, geniusFormulaSpeed, geniusMotionScale, geniusMotionMode]);
+
+  useEffect(() => {
     settingsRef.current.whiteEye = {
       scale: whiteEyeScale / 100,
       strokeScale: whiteEyeStroke / 100,
       pupilScale: whiteEyePupil / 100
     };
   }, [whiteEyeScale, whiteEyeStroke, whiteEyePupil]);
+
+  useEffect(() => {
+    settingsRef.current.unibrow = {
+      thicknessScale: unibrowThickness / 100,
+      liftScale: unibrowLift / 100
+    };
+  }, [unibrowThickness, unibrowLift]);
 
   useEffect(() => {
     return () => {
@@ -835,7 +800,7 @@ export default function App() {
         <h1>顔エフェクトカメラ</h1>
         <p className="updated-at">更新日時: {BUILD_UPDATED_AT}</p>
         <p className="lead">
-          天才風、白目、つながり眉、数式、おそろしい子の 5 種類を切り替えられます。
+          天才風、白目、つながり眉の 3 種類を切り替えられます。
           iPhone Safari でも使いやすいように、エフェクト選択と調整をひとつの画面にまとめています。
         </p>
 
@@ -875,7 +840,75 @@ export default function App() {
         </div>
 
         <div className="settings-panel">
-          {effect === "white-eye" ? (
+          {effect === "genius" ? (
+            <>
+              <div className="settings-header">
+                <h2>天才風の調整</h2>
+                <p>式の量、スピード、動きの大きさ、動き方を変更できます。</p>
+              </div>
+              <label className="slider-row">
+                <span>式の量</span>
+                <strong>{geniusFormulaDensity}%</strong>
+              </label>
+              <input
+                className="slider-input"
+                type="range"
+                min="40"
+                max="220"
+                step="10"
+                value={geniusFormulaDensity}
+                onChange={(event) => setGeniusFormulaDensity(Number(event.target.value))}
+              />
+
+              <label className="slider-row">
+                <span>式のスピード</span>
+                <strong>{geniusFormulaSpeed}%</strong>
+              </label>
+              <input
+                className="slider-input"
+                type="range"
+                min="20"
+                max="220"
+                step="10"
+                value={geniusFormulaSpeed}
+                onChange={(event) => setGeniusFormulaSpeed(Number(event.target.value))}
+              />
+
+              <label className="slider-row">
+                <span>式の動きの大きさ</span>
+                <strong>{geniusMotionScale}%</strong>
+              </label>
+              <input
+                className="slider-input"
+                type="range"
+                min="20"
+                max="220"
+                step="10"
+                value={geniusMotionScale}
+                onChange={(event) => setGeniusMotionScale(Number(event.target.value))}
+              />
+
+              <label className="slider-row">
+                <span>式の動き方</span>
+                <strong>
+                  {geniusMotionMode === "orbit"
+                    ? "周回"
+                    : geniusMotionMode === "wave"
+                      ? "波打ち"
+                      : "拡散"}
+                </strong>
+              </label>
+              <select
+                className="effect-select"
+                value={geniusMotionMode}
+                onChange={(event) => setGeniusMotionMode(event.target.value)}
+              >
+                <option value="orbit">周回</option>
+                <option value="wave">波打ち</option>
+                <option value="scatter">拡散</option>
+              </select>
+            </>
+          ) : effect === "white-eye" ? (
             <>
               <div className="settings-header">
                 <h2>白目の調整</h2>
@@ -923,6 +956,40 @@ export default function App() {
                 onChange={(event) => setWhiteEyePupil(Number(event.target.value))}
               />
             </>
+          ) : effect === "unibrow" ? (
+            <>
+              <div className="settings-header">
+                <h2>つながり眉の調整</h2>
+                <p>眉の太さとアーチの持ち上げ量を変更できます。</p>
+              </div>
+              <label className="slider-row">
+                <span>眉の太さ</span>
+                <strong>{unibrowThickness}%</strong>
+              </label>
+              <input
+                className="slider-input"
+                type="range"
+                min="50"
+                max="180"
+                step="5"
+                value={unibrowThickness}
+                onChange={(event) => setUnibrowThickness(Number(event.target.value))}
+              />
+
+              <label className="slider-row">
+                <span>眉の持ち上げ量</span>
+                <strong>{unibrowLift}%</strong>
+              </label>
+              <input
+                className="slider-input"
+                type="range"
+                min="0"
+                max="40"
+                step="2"
+                value={unibrowLift}
+                onChange={(event) => setUnibrowLift(Number(event.target.value))}
+              />
+            </>
           ) : (
             <div className="settings-header">
               <h2>{EFFECTS.find((item) => item.value === effect)?.label} の表示</h2>
@@ -931,9 +998,7 @@ export default function App() {
                   ? "数式と幾何学オブジェクトを顔の周囲へ追従表示します。"
                   : effect === "unibrow"
                     ? "眉を太くつなげて表示します。"
-                    : effect === "equations"
-                      ? "顔の周囲に数式だけを集中表示します。"
-                      : "集中線、白目、吹き出しを重ねて表示します。"}
+                    : "白目を強調して表示します。"}
               </p>
             </div>
           )}
@@ -946,8 +1011,9 @@ export default function App() {
         <h2>機能</h2>
         <ul>
           <li>前面カメラと MediaPipe Face Landmarker によるリアルタイム顔追従</li>
-          <li>天才風、白目、つながり眉、数式、おそろしい子の 5 種類を切り替え</li>
+          <li>天才風、白目、つながり眉の 3 種類を切り替え</li>
           <li>白目はサイズ、枠線、黒い点をスライダーで調整</li>
+          <li>つながり眉は太さと持ち上げ量をスライダーで調整</li>
           <li>Canvas 合成結果のスクリーンショット保存</li>
           <li>GitHub Pages 公開を想定した Vite 構成</li>
         </ul>
