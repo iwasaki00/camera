@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 
-const BUILD_UPDATED_AT = "2026-05-23 21:24:00 +09:00";
+const BUILD_UPDATED_AT = "2026-05-23 21:33:00 +09:00";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
 const FACE_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
@@ -204,6 +204,10 @@ function applyPartFilter(ctx: CanvasRenderingContext2D, opacity: number): void {
   ctx.filter = `contrast(${Math.max(0.25, contrast)}) brightness(${Math.max(0.65, brightness)})`;
 }
 
+function amplifyAroundOne(value: number, strength: number, min: number, max: number): number {
+  return clamp(1 + (value - 1) * strength, min, max);
+}
+
 function drawTransformedPart(
   ctx: CanvasRenderingContext2D,
   source: HTMLCanvasElement,
@@ -212,6 +216,10 @@ function drawTransformedPart(
   faceCenter: Point,
   pairDirection = 0
 ): void {
+  const amplifiedSize = amplifyAroundOne(config.size, 1.6, 0.2, 3.2);
+  const amplifiedScaleX = amplifyAroundOne(config.scaleX, 1.75, 0.2, 3.2);
+  const amplifiedScaleY = amplifyAroundOne(config.scaleY, 1.75, 0.2, 3.2);
+  const amplifiedOpacity = clamp(1 + (config.opacity - 1) * 1.25, 0.1, 1.6);
   const partCenter = {
     x: rect.x + rect.width / 2,
     y: rect.y + rect.height / 2
@@ -219,23 +227,24 @@ function drawTransformedPart(
   const vectorX = partCenter.x - faceCenter.x;
   const vectorY = partCenter.y - faceCenter.y;
   const norm = Math.hypot(vectorX, vectorY) || 1;
-  const shiftBase = config.distance * Math.max(rect.width, rect.height);
+  const shiftBase = config.distance * Math.max(rect.width, rect.height) * 1.85;
   const shiftX = pairDirection === 0 ? 0 : (vectorX / norm) * shiftBase;
   const shiftY = pairDirection === 0 ? 0 : (vectorY / norm) * shiftBase * 0.28;
-  const scaledWidth = rect.width * config.size * config.scaleX;
-  const scaledHeight = rect.height * config.size * config.scaleY;
-  const clearX = Math.min(rect.x, partCenter.x + shiftX - scaledWidth / 2) - 6;
-  const clearY = Math.min(rect.y, partCenter.y + shiftY - scaledHeight / 2) - 6;
-  const clearMaxX = Math.max(rect.x + rect.width, partCenter.x + shiftX + scaledWidth / 2) + 6;
-  const clearMaxY = Math.max(rect.y + rect.height, partCenter.y + shiftY + scaledHeight / 2) + 6;
+  const scaledWidth = rect.width * amplifiedSize * amplifiedScaleX;
+  const scaledHeight = rect.height * amplifiedSize * amplifiedScaleY;
+  const clearPadding = Math.max(rect.width, rect.height) * 0.12 + 8;
+  const clearX = Math.min(rect.x, partCenter.x + shiftX - scaledWidth / 2) - clearPadding;
+  const clearY = Math.min(rect.y, partCenter.y + shiftY - scaledHeight / 2) - clearPadding;
+  const clearMaxX = Math.max(rect.x + rect.width, partCenter.x + shiftX + scaledWidth / 2) + clearPadding;
+  const clearMaxY = Math.max(rect.y + rect.height, partCenter.y + shiftY + scaledHeight / 2) + clearPadding;
 
   ctx.clearRect(clearX, clearY, clearMaxX - clearX, clearMaxY - clearY);
 
   ctx.save();
-  ctx.globalAlpha = clamp(config.opacity, 0.15, 1.5);
-  applyPartFilter(ctx, config.opacity);
+  ctx.globalAlpha = amplifiedOpacity;
+  applyPartFilter(ctx, amplifiedOpacity);
   ctx.translate(partCenter.x + shiftX, partCenter.y + shiftY);
-  ctx.scale(config.size * config.scaleX, config.size * config.scaleY);
+  ctx.scale(amplifiedSize * amplifiedScaleX, amplifiedSize * amplifiedScaleY);
   ctx.drawImage(
     source,
     rect.x,
@@ -261,7 +270,7 @@ function drawPartSet(
 ): void {
   const definitions = PART_INDEXES[partId];
   const faceCenter = getFaceCenter(landmarks, width, height);
-  const padding = partId === "head" ? 28 : partId === "jaw" ? 22 : 16;
+  const padding = partId === "head" ? 40 : partId === "jaw" ? 30 : partId === "mouth" ? 24 : 20;
 
   definitions.forEach((indexes, index) => {
     const rect = boundsFromIndexes(landmarks, indexes, width, height, padding);
