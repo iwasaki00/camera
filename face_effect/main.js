@@ -5,7 +5,7 @@ import {
 
 const FACE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
-const BUILD_UPDATED_AT = "2026-05-23 19:56:10 +09:00";
+const BUILD_UPDATED_AT = "2026-05-23 19:58:20 +09:00";
 
 const EFFECT_LABELS = {
   "white-eye": "白目",
@@ -298,15 +298,21 @@ function drawWhiteEyeOverlay(
     ctx.ellipse(0, 0, eyeWidth / 2, eyeHeight / 2, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = "rgba(18, 12, 10, 0.92)";
-    ctx.lineWidth = Math.max(2, eyeHeight * strokeScale);
-    ctx.stroke();
+    const strokeWidth = eyeHeight * strokeScale;
+    if (strokeWidth > 0) {
+      ctx.lineWidth = strokeWidth;
+      ctx.stroke();
+    }
     ctx.restore();
 
     if (hidePupil) {
       return;
     }
 
-    const pupilRadius = Math.max(eyeHeight * pupilScale, 4);
+    const pupilRadius = eyeHeight * pupilScale;
+    if (pupilRadius <= 0) {
+      return;
+    }
     const pupilOffsetX = (eye.pupilX - eye.x) * 0.22;
     ctx.fillStyle = "#121212";
     ctx.beginPath();
