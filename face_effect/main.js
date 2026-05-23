@@ -281,8 +281,8 @@ function drawUnibrowOverlay(landmarks) {
 
 function drawEquationOverlay(landmarks, now) {
   const head = getHeadGeometry(landmarks);
-  const baseY = Math.min(head.topY - head.width * 0.08, head.foreheadY - 26);
-  const spacing = Math.max(head.width * 0.18, 72);
+  const maxRadius = Math.hypot(canvas.width, canvas.height) * 0.78;
+  const spreadProgress = Math.min((now % 1800) / 1800, 1);
 
   ctx.save();
   ctx.textAlign = "center";
@@ -291,18 +291,26 @@ function drawEquationOverlay(landmarks, now) {
   ctx.shadowColor = "rgba(8, 12, 25, 0.25)";
   ctx.shadowBlur = 14;
 
-  EQUATIONS.forEach((formula, index) => {
-    const wave = now / 700 + index * 0.9;
-    const x = head.foreheadX + (index - 3) * spacing * 0.52 + Math.sin(wave * 1.2) * 10;
-    const y = baseY - Math.sin(wave) * 14 - index * 12;
-    const alpha = 0.58 + ((Math.sin(wave) + 1) / 2) * 0.35;
-    const fontSize = 20 + (index % 3) * 4;
+  for (let index = 0; index < 24; index += 1) {
+    const formula = EQUATIONS[index % EQUATIONS.length];
+    const lane = Math.floor(index / EQUATIONS.length);
+    const angle = ((Math.PI * 2) / 24) * index + now / 240;
+    const radiusBase = maxRadius * (0.22 + (index % 6) * 0.11);
+    const radius = Math.min(
+      maxRadius,
+      radiusBase * (0.35 + spreadProgress * 1.75) + lane * 28
+    );
+    const drift = now / 240 + index * 0.8;
+    const x = head.foreheadX + Math.cos(angle) * radius + Math.sin(drift) * 18;
+    const y = head.foreheadY + Math.sin(angle) * radius * 0.82 + Math.cos(drift * 1.2) * 14;
+    const alpha = 0.42 + ((Math.sin(drift * 1.4) + 1) / 2) * 0.42;
+    const fontSize = 20 + (index % 4) * 5;
 
     ctx.globalAlpha = alpha;
     ctx.font = `700 ${fontSize}px Georgia, 'Times New Roman', serif`;
     ctx.strokeText(formula, x, y);
     ctx.fillText(formula, x, y);
-  });
+  }
 
   ctx.restore();
 }
