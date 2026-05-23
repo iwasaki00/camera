@@ -5,7 +5,7 @@ import {
 
 const FACE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
-const BUILD_UPDATED_AT = "2026-05-23 19:44:30 +09:00";
+const BUILD_UPDATED_AT = "2026-05-23 19:49:30 +09:00";
 
 const EFFECT_LABELS = {
   "white-eye": "白目",
@@ -50,6 +50,8 @@ const whiteEyeScaleInput = document.getElementById("whiteEyeScale");
 const whiteEyeScaleValue = document.getElementById("whiteEyeScaleValue");
 const whiteEyeStrokeInput = document.getElementById("whiteEyeStroke");
 const whiteEyeStrokeValue = document.getElementById("whiteEyeStrokeValue");
+const whiteEyePupilInput = document.getElementById("whiteEyePupil");
+const whiteEyePupilValue = document.getElementById("whiteEyePupilValue");
 
 let stream = null;
 let videoFaceLandmarker = null;
@@ -60,7 +62,8 @@ let currentEffect = "white-eye";
 const effectSettings = {
   whiteEye: {
     scale: 1,
-    strokeScale: 0.07
+    strokeScale: 0.07,
+    pupilScale: 0.16
   }
 };
 
@@ -106,12 +109,13 @@ function updateEffectSettingsPanel(effectName) {
 }
 
 function syncWhiteEyeControlLabels() {
-  if (!whiteEyeScaleValue || !whiteEyeStrokeValue) {
+  if (!whiteEyeScaleValue || !whiteEyeStrokeValue || !whiteEyePupilValue) {
     return;
   }
 
   whiteEyeScaleValue.textContent = `${Math.round(effectSettings.whiteEye.scale * 100)}%`;
   whiteEyeStrokeValue.textContent = `${Math.round(effectSettings.whiteEye.strokeScale * 100)}%`;
+  whiteEyePupilValue.textContent = `${Math.round(effectSettings.whiteEye.pupilScale * 100)}%`;
 }
 
 function setEffect(effectName) {
@@ -273,7 +277,13 @@ function getHeadGeometry(landmarks) {
   };
 }
 
-function drawWhiteEyeOverlay(landmarks, hidePupil = false, scale = effectSettings.whiteEye.scale, strokeScale = effectSettings.whiteEye.strokeScale) {
+function drawWhiteEyeOverlay(
+  landmarks,
+  hidePupil = false,
+  scale = effectSettings.whiteEye.scale,
+  strokeScale = effectSettings.whiteEye.strokeScale,
+  pupilScale = effectSettings.whiteEye.pupilScale
+) {
   const leftEye = getEyeGeometry(landmarks, LEFT_EYE_INDEXES, LEFT_IRIS_INDEXES);
   const rightEye = getEyeGeometry(landmarks, RIGHT_EYE_INDEXES, RIGHT_IRIS_INDEXES);
 
@@ -296,7 +306,7 @@ function drawWhiteEyeOverlay(landmarks, hidePupil = false, scale = effectSetting
       return;
     }
 
-    const pupilRadius = Math.max(eyeHeight * 0.16, 4);
+    const pupilRadius = Math.max(eyeHeight * pupilScale, 4);
     const pupilOffsetX = (eye.pupilX - eye.x) * 0.22;
     ctx.fillStyle = "#121212";
     ctx.beginPath();
@@ -454,7 +464,7 @@ function drawOsoroshiiOverlay(faceLandmarks) {
   ctx.restore();
 
   drawOsoroshiiRays(burstX, burstY);
-  drawWhiteEyeOverlay(faceLandmarks, true, effectSettings.whiteEye.scale, 0.1);
+  drawWhiteEyeOverlay(faceLandmarks, true, effectSettings.whiteEye.scale, 0.1, effectSettings.whiteEye.pupilScale);
   drawSpeechBubble(head);
 }
 
@@ -596,6 +606,13 @@ if (whiteEyeScaleInput) {
 if (whiteEyeStrokeInput) {
   whiteEyeStrokeInput.addEventListener("input", (event) => {
     effectSettings.whiteEye.strokeScale = Number(event.target.value) / 100;
+    syncWhiteEyeControlLabels();
+  });
+}
+
+if (whiteEyePupilInput) {
+  whiteEyePupilInput.addEventListener("input", (event) => {
+    effectSettings.whiteEye.pupilScale = Number(event.target.value) / 100;
     syncWhiteEyeControlLabels();
   });
 }

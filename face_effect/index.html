@@ -11,7 +11,7 @@
     <header class="hero">
       <p class="eyebrow">FACE_EFFECT</p>
       <h1>顔エフェクトカメラ</h1>
-      <p class="updated-at">更新日時: <span id="buildUpdatedAt">2026-05-23 19:44:30 +09:00</span></p>
+      <p class="updated-at">更新日時: <span id="buildUpdatedAt">2026-05-23 19:49:30 +09:00</span></p>
       <p class="lead">
         カメラ映像に顔ランドマークを重ねて、白目、つながり眉、数式、おそろしい子の
         4種類を切り替えられる簡易フィルターです。
@@ -35,7 +35,7 @@
         <p id="errorMessage" class="error-message" hidden></p>
       </div>
 
-<div class="controls">
+      <div class="controls">
         <label class="effect-select-label" for="effectSelect">エフェクト</label>
         <select id="effectSelect" class="effect-select" aria-label="エフェクト選択">
           <option value="white-eye">白目</option>
@@ -43,35 +43,46 @@
           <option value="equations">数式</option>
           <option value="osoroshii">おそろしい子</option>
         </select>
+
         <section class="effect-settings" aria-label="エフェクト調整">
           <div class="effect-settings-panel is-active" data-panel="white-eye">
             <div class="effect-settings-header">
               <h2>白目の調整</h2>
-              <p>目のサイズと枠線の太さを変更できます。</p>
+              <p>目のサイズ、枠線、黒目の大きさを変更できます。</p>
             </div>
             <label class="slider-control" for="whiteEyeScale">
               <span>目の大きさ</span>
               <strong id="whiteEyeScaleValue">100%</strong>
             </label>
             <input id="whiteEyeScale" class="slider-input" type="range" min="70" max="170" step="5" value="100">
+
             <label class="slider-control" for="whiteEyeStroke">
               <span>目の枠線の太さ</span>
               <strong id="whiteEyeStrokeValue">7%</strong>
             </label>
             <input id="whiteEyeStroke" class="slider-input" type="range" min="3" max="14" step="1" value="7">
+
+            <label class="slider-control" for="whiteEyePupil">
+              <span>黒目の大きさ</span>
+              <strong id="whiteEyePupilValue">16%</strong>
+            </label>
+            <input id="whiteEyePupil" class="slider-input" type="range" min="8" max="28" step="1" value="16">
           </div>
+
           <div class="effect-settings-panel" data-panel="unibrow">
             <div class="effect-settings-header">
               <h2>つながり眉の調整</h2>
               <p>このエフェクトの調整項目は準備中です。</p>
             </div>
           </div>
+
           <div class="effect-settings-panel" data-panel="equations">
             <div class="effect-settings-header">
               <h2>数式の調整</h2>
               <p>このエフェクトの調整項目は準備中です。</p>
             </div>
           </div>
+
           <div class="effect-settings-panel" data-panel="osoroshii">
             <div class="effect-settings-header">
               <h2>おそろしい子の調整</h2>
@@ -86,8 +97,8 @@
       <h2>使い方</h2>
       <ol>
         <li>スマホでは「カメラ起動」でリアルタイム確認できます。</li>
-        <li>下のボタンでエフェクトを切り替えられます。</li>
-        <li>白目は下部のスライダーでサイズと枠線を調整できます。</li>
+        <li>エフェクトはプルダウンから切り替えられます。</li>
+        <li>白目は下部のスライダーでサイズ、枠線、黒目を調整できます。</li>
         <li>「おそろしい子」は顔の上に吹き出しと集中線を重ねます。</li>
       </ol>
     </section>
