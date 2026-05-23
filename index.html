@@ -3,80 +3,173 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Camera Menu</title>
+  <title>Camera Apps</title>
   <style>
+    :root {
+      color-scheme: light;
+      --bg-0: #f7efe4;
+      --bg-1: #efe2d0;
+      --card: rgba(255, 255, 255, 0.8);
+      --line: rgba(49, 32, 19, 0.12);
+      --text: #21150f;
+      --muted: #6c554a;
+      --accent: #cb5b32;
+      --accent-2: #194a63;
+      --shadow: 0 24px 48px rgba(80, 46, 25, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
       font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
-      background: linear-gradient(180deg, #f7f1e8 0%, #e8ddd1 100%);
-      color: #1f1a16;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(203, 91, 50, 0.16), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(25, 74, 99, 0.12), transparent 30%),
+        linear-gradient(180deg, var(--bg-0), var(--bg-1));
     }
 
     main {
-      max-width: 760px;
+      width: min(100%, 980px);
       margin: 0 auto;
-      padding: 32px 16px;
+      padding: 28px 16px 40px;
     }
 
-    section {
-      background: rgba(255, 255, 255, 0.72);
-      border: 1px solid rgba(31, 26, 22, 0.12);
-      border-radius: 24px;
-      padding: 20px;
-      box-shadow: 0 18px 36px rgba(70, 45, 31, 0.12);
+    .hero,
+    .app-card {
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: var(--card);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+
+    .hero {
+      padding: 24px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    p {
+      margin: 0;
     }
 
     h1 {
-      margin: 0 0 12px;
-      font-size: 2.1rem;
+      font-size: clamp(2rem, 7vw, 3.4rem);
+      line-height: 1.04;
     }
 
-    p {
-      line-height: 1.7;
+    .lead {
+      margin-top: 12px;
+      color: var(--muted);
+      line-height: 1.8;
     }
 
-    ul {
-      margin: 0;
-      padding-left: 18px;
-    }
-
-    li + li {
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
       margin-top: 18px;
     }
 
-    a {
-      display: inline-block;
-      margin-top: 10px;
-      padding: 12px 16px;
-      background: #c8562d;
-      color: #fff;
-      text-decoration: none;
+    .app-card {
+      padding: 20px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      padding: 0 12px;
       border-radius: 999px;
+      color: var(--accent-2);
+      background: rgba(25, 74, 99, 0.08);
+      font-size: 0.88rem;
+      font-weight: 700;
+    }
+
+    .app-card p {
+      margin-top: 12px;
+      color: var(--muted);
+      line-height: 1.75;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      padding: 0 18px;
+      border-radius: 999px;
+      color: #fffaf7;
+      background: linear-gradient(135deg, #df8761, var(--accent));
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .sub-link {
+      color: var(--accent-2);
+      background: rgba(25, 74, 99, 0.08);
+    }
+
+    @media (max-width: 720px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
   <main>
-    <section>
-      <h1>Camera Menu</h1>
-      <p>`camera` 配下の iPhone 向けカメラ実験を選ぶメニューです。</p>
-      <ul>
-        <li>
-          <strong>sub001</strong>
-          <p>既存のカメラ検証ページです。</p>
-          <a href="./sub001/index.html">sub001 を開く</a>
-        </li>
-        <li>
-          <strong>sub002</strong>
-          <p>インカメラ映像の両目に白目フィルターを重ねる既存版です。</p>
-          <a href="./sub002/index.html">sub002 を開く</a>
-        </li>
-        <li>
-          <strong>face_effect</strong>
-          <p>白目、つながり眉、頭上の数式を切り替えられる顔エフェクトカメラです。</p>
-          <a href="./face_effect/index.html">face_effect を開く</a>
-        </li>
-      </ul>
+    <section class="hero">
+      <p class="eyebrow">CAMERA APPS</p>
+      <h1>iPhone向けカメラアプリ集</h1>
+      <p class="lead">
+        GitHub Pages で公開しているカメラアプリの入口です。下のカードから
+        `顔エフェクトカメラ` と `変顔メーカー` を選べます。
+      </p>
+    </section>
+
+    <section class="grid">
+      <article class="app-card">
+        <span class="tag">React + Vite</span>
+        <h2>顔エフェクトカメラ</h2>
+        <p>
+          `天才風 / 白目 / つながり眉` を切り替えながら、顔にリアルタイムのエフェクトを重ねるアプリです。
+        </p>
+        <div class="actions">
+          <a href="./face_effect/">顔エフェクトカメラを開く</a>
+        </div>
+      </article>
+
+      <article class="app-card">
+        <span class="tag">React + Vite + TypeScript</span>
+        <h2>変顔メーカー</h2>
+        <p>
+          眉、目、耳、頬、鼻、口、頭、顎を個別に変形し、ランダム事故やプリセットでも遊べるアプリです。
+        </p>
+        <div class="actions">
+          <a href="./henface_maker/">変顔メーカーを開く</a>
+        </div>
+      </article>
     </section>
   </main>
 </body>
