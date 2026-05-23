@@ -1,11 +1,9 @@
 import {
   FaceLandmarker,
-  FilesetResolver,
-  HandLandmarker
+  FilesetResolver
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/vision_bundle.mjs";
 
 const FACE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
-const HAND_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
 
 const EFFECT_LABELS = {
@@ -24,9 +22,6 @@ const LEFT_BROW_CURVE = [70, 63, 105];
 const RIGHT_BROW_CURVE = [336, 296, 334];
 const BROW_BRIDGE = [107, 9, 336];
 const FOREHEAD_ANCHORS = [10, 67, 109, 338, 297];
-const CHIN_INDEX = 152;
-
-const HAND_CHECK_INDEXES = [0, 5, 9];
 const EQUATIONS = [
   "E = mc^2",
   "f(x) = sin(x)",
@@ -48,7 +43,6 @@ const effectButtons = Array.from(document.querySelectorAll(".effect-button"));
 
 let stream = null;
 let faceLandmarker = null;
-let handLandmarker = null;
 let animationFrameId = 0;
 let lastVideoTime = -1;
 let isRunning = false;
@@ -79,7 +73,7 @@ function setEffect(effectName) {
   }
 
   if (effectName === "osoroshii") {
-    setMessage("顔を検出したら、手を顎に近づけてください。");
+    setMessage("おそろしい子モードを表示しています。");
     return;
   }
 
@@ -122,7 +116,7 @@ function resizeCanvasToVideo() {
 }
 
 async function createLandmarkers() {
-  if (faceLandmarker && handLandmarker) {
+  if (faceLandmarker) {
     return;
   }
 
@@ -143,18 +137,6 @@ async function createLandmarkers() {
     });
   }
 
-  if (!handLandmarker) {
-    handLandmarker = await HandLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: HAND_MODEL_URL
-      },
-      runningMode: "VIDEO",
-      numHands: 2,
-      minHandDetectionConfidence: 0.4,
-      minHandPresenceConfidence: 0.4,
-      minTrackingConfidence: 0.4
-    });
-  }
 }
 
 function averagePoint(landmarks, indexes) {
@@ -234,26 +216,6 @@ function getHeadGeometry(landmarks) {
     foreheadX: foreheadCenter.x,
     foreheadY: foreheadCenter.y
   };
-}
-
-function isHandNearChin(faceLandmarks, handsLandmarks) {
-  if (!handsLandmarks?.length) {
-    return false;
-  }
-
-  const chin = mirroredPoint(faceLandmarks[CHIN_INDEX]);
-  const bounds = getFaceBounds(faceLandmarks);
-  const faceWidth = (bounds.maxX - bounds.minX) * canvas.width;
-  const threshold = Math.max(faceWidth * 0.3, 56);
-
-  return handsLandmarks.some((handLandmarks) => {
-    return HAND_CHECK_INDEXES.some((index) => {
-      const point = mirroredPoint(handLandmarks[index]);
-      const nearChin = distanceBetween(point, chin) < threshold;
-      const notTooHigh = point.y > chin.y - faceWidth * 0.22;
-      return nearChin && notTooHigh;
-    });
-  });
 }
 
 function drawWhiteEyeOverlay(landmarks, hidePupil = false, strokeScale = 0.07) {
@@ -460,7 +422,7 @@ function drawStandardEffect(faceLandmarks, now) {
 }
 
 function renderLoop() {
-  if (!isRunning || !faceLandmarker || !handLandmarker) {
+  if (!isRunning || !faceLandmarker) {
     return;
   }
 
@@ -499,20 +461,9 @@ function renderLoop() {
     return;
   }
 
-  // おそろしい子モードだけ、顎付近の手ポーズを追加で判定する。
-  const handResult = handLandmarker.detectForVideo(video, now);
-  const handsLandmarks = handResult.landmarks ?? [];
-  const poseMatched = isHandNearChin(faceLandmarks, handsLandmarks);
-
-  if (poseMatched) {
-    drawOsoroshiiOverlay(faceLandmarks);
-    setStatus("おそろしい子モード発動中", "detecting");
-    setMessage("顎に手が近づいたので漫画演出を表示しています。");
-  } else {
-    setStatus("手を顎に近づけてください", "waiting");
-    setMessage("顎に手を当てるようなポーズで演出が発動します。");
-  }
-
+  drawOsoroshiiOverlay(faceLandmarks);
+  setStatus("おそろしい子モード発動中", "detecting");
+  setMessage("おそろしい子の漫画演出を表示しています。");
   setError("");
   animationFrameId = window.requestAnimationFrame(renderLoop);
 }
@@ -542,7 +493,7 @@ async function boot() {
 
   startButton.disabled = true;
   setStatus("初期化中", "waiting");
-  setMessage("カメラ、顔検出、手検出を準備しています。");
+  setMessage("カメラと顔検出を準備しています。");
   setError("");
 
   try {
@@ -552,13 +503,8 @@ async function boot() {
     lastVideoTime = -1;
     renderLoop();
 
-    if (currentEffect === "osoroshii") {
-      setStatus("顔を検出中", "waiting");
-      setMessage("顔を検出したら、手を顎に近づけてください。");
-    } else {
-      setStatus("顔を検出中", "waiting");
-      setMessage("顔が映ると選択中のエフェクトを重ねます。");
-    }
+    setStatus("顔を検出中", "waiting");
+    setMessage("顔が映ると選択中のエフェクトを重ねます。");
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     setStatus("エラー", "error");
