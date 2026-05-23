@@ -13,7 +13,7 @@
     }
 
     main {
-      max-width: 680px;
+      max-width: 760px;
       margin: 0 auto;
       padding: 32px 16px;
     }
@@ -36,7 +36,12 @@
     }
 
     ul {
+      margin: 0;
       padding-left: 18px;
+    }
+
+    li + li {
+      margin-top: 18px;
     }
 
     a {
@@ -54,17 +59,22 @@
   <main>
     <section>
       <h1>Camera Menu</h1>
-      <p>`camera` 配下の iPhone ブラウザ向けカメラ機能メニューです。</p>
+      <p>`camera` 配下の iPhone 向けカメラ実験を選ぶメニューです。</p>
       <ul>
         <li>
           <strong>sub001</strong>
-          <p>背面カメラ優先で起動し、その場で静止画を撮影して保存できます。</p>
+          <p>既存のカメラ検証ページです。</p>
           <a href="./sub001/index.html">sub001 を開く</a>
         </li>
         <li>
           <strong>sub002</strong>
-          <p>インカメラ映像の両目に白い楕円を重ねる「白目カメラ」です。</p>
+          <p>インカメラ映像の両目に白目フィルターを重ねる既存版です。</p>
           <a href="./sub002/index.html">sub002 を開く</a>
+        </li>
+        <li>
+          <strong>sub003</strong>
+          <p>MediaPipe Face Landmarker で目位置を取り、iPhone 向けに白い楕円を重ねる静的 Web アプリです。</p>
+          <a href="./sub003/index.html">sub003 を開く</a>
         </li>
       </ul>
     </section>

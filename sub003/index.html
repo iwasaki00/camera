@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>sub003 White Eye Camera</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <p class="eyebrow">sub003</p>
+      <h1>白目カメラ</h1>
+      <p class="lead">
+        iPhone のインカメラ映像に顔ランドマークを重ね、両目を白い楕円で上書きする簡易フィルターです。
+      </p>
+    </header>
+
+    <section class="viewer-card">
+      <div class="canvas-wrap">
+        <canvas id="outputCanvas" width="720" height="960" aria-label="白目カメラのプレビュー"></canvas>
+        <video id="cameraVideo" playsinline muted></video>
+      </div>
+
+      <div class="status-panel">
+        <p id="statusBadge" class="status-badge" data-state="idle">待機中</p>
+        <p id="message" class="message">HTTPS またはローカルサーバー上で「カメラ開始」を押してください。</p>
+        <p id="errorMessage" class="error-message" hidden></p>
+      </div>
+
+      <div class="controls">
+        <button id="startButton" type="button">カメラ開始</button>
+      </div>
+    </section>
+
+    <section class="notes">
+      <h2>使い方</h2>
+      <ol>
+        <li>iPhone でこのページを開く</li>
+        <li>「カメラ開始」を押してカメラ許可を与える</li>
+        <li>顔が映ると目の位置に白い楕円と小さな黒目を重ねる</li>
+      </ol>
+    </section>
+  </main>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
