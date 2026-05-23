@@ -5,6 +5,7 @@ import {
 
 const FACE_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
+const BUILD_UPDATED_AT = "2026-05-23 19:32:25 +09:00";
 
 const EFFECT_LABELS = {
   "white-eye": "白目",
@@ -39,6 +40,7 @@ const canvas = document.getElementById("outputCanvas");
 const canvasWrap = document.getElementById("canvasWrap");
 const ctx = canvas.getContext("2d");
 const startButton = document.getElementById("startButton");
+const buildUpdatedAt = document.getElementById("buildUpdatedAt");
 const statusBadge = document.getElementById("statusBadge");
 const message = document.getElementById("message");
 const errorMessage = document.getElementById("errorMessage");
@@ -74,6 +76,14 @@ function setMessage(text) {
 function setError(text = "") {
   errorMessage.textContent = text;
   errorMessage.hidden = !text;
+}
+
+function renderBuildUpdatedAt() {
+  if (!buildUpdatedAt) {
+    return;
+  }
+
+  buildUpdatedAt.textContent = BUILD_UPDATED_AT;
 }
 
 function updateMessageForEffect(effectName) {
@@ -594,5 +604,6 @@ startButton.addEventListener("click", boot);
 
 setCanvasSize(720, 960);
 drawWaitingScreen();
+renderBuildUpdatedAt();
 syncWhiteEyeControlLabels();
 setEffect(currentEffect);

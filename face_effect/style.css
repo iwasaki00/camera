@@ -74,6 +74,12 @@ h1 {
   line-height: 1.1;
 }
 
+.updated-at {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .lead,
 .message,
 .error-message,
