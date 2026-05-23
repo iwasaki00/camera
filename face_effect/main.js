@@ -17,11 +17,11 @@ const LEFT_EYE_INDEXES = [33, 133, 159, 145, 160, 144, 158, 153];
 const RIGHT_EYE_INDEXES = [362, 263, 386, 374, 385, 380, 387, 373];
 const LEFT_IRIS_INDEXES = [468, 469, 470, 471, 472];
 const RIGHT_IRIS_INDEXES = [473, 474, 475, 476, 477];
-
 const LEFT_BROW_CURVE = [70, 63, 105];
 const RIGHT_BROW_CURVE = [336, 296, 334];
 const BROW_BRIDGE = [107, 9, 336];
 const FOREHEAD_ANCHORS = [10, 67, 109, 338, 297];
+
 const EQUATIONS = [
   "E = mc^2",
   "f(x) = sin(x)",
@@ -31,6 +31,8 @@ const EQUATIONS = [
   "Sigma a_n",
   "a^2 + b^2"
 ];
+
+const OSOROSHII_TEXT = ["お", "そ", "ろ", "し", "い", "子", "！"];
 
 const video = document.getElementById("cameraVideo");
 const canvas = document.getElementById("outputCanvas");
@@ -62,22 +64,24 @@ function setError(text = "") {
   errorMessage.hidden = !text;
 }
 
+function updateMessageForEffect(effectName) {
+  if (effectName === "osoroshii") {
+    setMessage("おそろしい子の漫画演出を表示しています。");
+    return;
+  }
+
+  setMessage(`${EFFECT_LABELS[effectName]}エフェクトを表示しています。`);
+}
+
 function setEffect(effectName) {
   currentEffect = effectName;
   effectButtons.forEach((button) => {
     button.classList.toggle("is-active", button.dataset.effect === effectName);
   });
 
-  if (!isRunning) {
-    return;
+  if (isRunning) {
+    updateMessageForEffect(effectName);
   }
-
-  if (effectName === "osoroshii") {
-    setMessage("おそろしい子モードを表示しています。");
-    return;
-  }
-
-  setMessage(`${EFFECT_LABELS[effectName]}エフェクトを表示しています。`);
 }
 
 function stopStreamTracks() {
@@ -121,22 +125,18 @@ async function createLandmarkers() {
   }
 
   const vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
-
-  if (!faceLandmarker) {
-    faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: FACE_MODEL_URL
-      },
-      runningMode: "VIDEO",
-      numFaces: 1,
-      minFaceDetectionConfidence: 0.45,
-      minFacePresenceConfidence: 0.45,
-      minTrackingConfidence: 0.45,
-      outputFaceBlendshapes: false,
-      outputFacialTransformationMatrixes: false
-    });
-  }
-
+  faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: FACE_MODEL_URL
+    },
+    runningMode: "VIDEO",
+    numFaces: 1,
+    minFaceDetectionConfidence: 0.45,
+    minFacePresenceConfidence: 0.45,
+    minTrackingConfidence: 0.45,
+    outputFaceBlendshapes: false,
+    outputFacialTransformationMatrixes: false
+  });
 }
 
 function averagePoint(landmarks, indexes) {
@@ -370,8 +370,7 @@ function drawSpeechBubble(head) {
   ctx.textAlign = "center";
   ctx.font = "700 32px 'Hiragino Mincho ProN', 'Yu Mincho', serif";
 
-  const chars = ["お", "そ", "ろ", "し", "い", "子", "！"];
-  chars.forEach((char, index) => {
+  OSOROSHII_TEXT.forEach((char, index) => {
     ctx.fillText(char, bubbleX + bubbleWidth * 0.5, bubbleY + 58 + index * 34);
   });
 
@@ -401,24 +400,37 @@ function drawMirroredVideoFrame() {
   ctx.restore();
 }
 
-function drawStandardEffect(faceLandmarks, now) {
-  if (currentEffect === "white-eye") {
-    drawWhiteEyeOverlay(faceLandmarks);
-    setStatus("顔検出中", "detecting");
-    setMessage("白目エフェクトを表示しています。");
-    return;
-  }
+function applyEffect(faceLandmarks, now) {
+  switch (currentEffect) {
+    case "white-eye":
+      drawWhiteEyeOverlay(faceLandmarks);
+      setStatus("顔検出中", "detecting");
+      setMessage("白目エフェクトを表示しています。");
+      return;
 
-  if (currentEffect === "unibrow") {
-    drawUnibrowOverlay(faceLandmarks);
-    setStatus("顔検出中", "detecting");
-    setMessage("つながり眉エフェクトを表示しています。");
-    return;
-  }
+    case "unibrow":
+      drawUnibrowOverlay(faceLandmarks);
+      setStatus("顔検出中", "detecting");
+      setMessage("つながり眉エフェクトを表示しています。");
+      return;
 
-  drawEquationOverlay(faceLandmarks, now);
-  setStatus("顔検出中", "detecting");
-  setMessage("数式エフェクトを表示しています。");
+    case "equations":
+      drawEquationOverlay(faceLandmarks, now);
+      setStatus("顔検出中", "detecting");
+      setMessage("数式エフェクトを表示しています。");
+      return;
+
+    case "osoroshii":
+      drawOsoroshiiOverlay(faceLandmarks);
+      setStatus("おそろしい子モード発動中", "detecting");
+      setMessage("おそろしい子の漫画演出を表示しています。");
+      return;
+
+    default:
+      drawWhiteEyeOverlay(faceLandmarks);
+      setStatus("顔検出中", "detecting");
+      setMessage("白目エフェクトを表示しています。");
+  }
 }
 
 function renderLoop() {
@@ -441,8 +453,6 @@ function renderLoop() {
 
   lastVideoTime = video.currentTime;
   const now = performance.now();
-
-  // 顔演出の土台になるため、毎フレームまず顔を検出する。
   const faceResult = faceLandmarker.detectForVideo(video, now);
   const faceLandmarks = faceResult.faceLandmarks?.[0];
 
@@ -454,16 +464,7 @@ function renderLoop() {
     return;
   }
 
-  if (currentEffect !== "osoroshii") {
-    drawStandardEffect(faceLandmarks, now);
-    setError("");
-    animationFrameId = window.requestAnimationFrame(renderLoop);
-    return;
-  }
-
-  drawOsoroshiiOverlay(faceLandmarks);
-  setStatus("おそろしい子モード発動中", "detecting");
-  setMessage("おそろしい子の漫画演出を表示しています。");
+  applyEffect(faceLandmarks, now);
   setError("");
   animationFrameId = window.requestAnimationFrame(renderLoop);
 }
@@ -502,7 +503,6 @@ async function boot() {
     isRunning = true;
     lastVideoTime = -1;
     renderLoop();
-
     setStatus("顔を検出中", "waiting");
     setMessage("顔が映ると選択中のエフェクトを重ねます。");
   } catch (error) {
