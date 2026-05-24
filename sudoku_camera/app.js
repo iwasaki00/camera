@@ -188,8 +188,7 @@ function handleCapture() {
     setCameraState("撮影完了");
     setCameraMessage("撮影画像を表示しました。手入力や解答機能はそのまま利用できます。");
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "撮影に失敗しました。";
+    const errorMessage = error instanceof Error ? error.message : "撮影に失敗しました。";
     setCameraState("撮影失敗");
     setCameraMessage(errorMessage, "is-error");
   }

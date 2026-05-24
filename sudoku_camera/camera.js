@@ -46,8 +46,7 @@ export async function initializeCamera(videoElement) {
       });
     } catch (fallbackError) {
       const originalMessage = error instanceof Error ? error.message : "";
-      const fallbackMessage =
-        fallbackError instanceof Error ? fallbackError.message : "";
+      const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : "";
       throw new Error(
         "カメラを起動できませんでした。SafariでHTTPSのページを開き、カメラ権限を許可しているか確認してください。" +
           (originalMessage || fallbackMessage ? ` (${originalMessage || fallbackMessage})` : "")
@@ -59,7 +58,7 @@ export async function initializeCamera(videoElement) {
 
   try {
     await videoElement.play();
-  } catch (error) {
+  } catch {
     stopCurrentStream();
     throw new Error("カメラ映像の再生を開始できませんでした。");
   }
