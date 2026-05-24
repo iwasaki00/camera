@@ -146,9 +146,9 @@ function clearBoard() {
   setMessage("盤面をクリアしました。");
 }
 
-function drawPlaceholder(canvas, title, subtitle, ratio = 1) {
+function drawPlaceholder(canvas, title, subtitle) {
   const width = 900;
-  const height = Math.round(width / ratio);
+  const height = 900;
   canvas.width = width;
   canvas.height = height;
 
@@ -185,8 +185,8 @@ async function handleStartCamera() {
   try {
     await initializeCamera(cameraPreview);
     captureButton.disabled = false;
-    setCameraState("プレビュー中");
-    setCameraMessage("カメラ映像を表示しています。「撮影」で静止画を取得できます。");
+    setCameraState("ライブ映像");
+    setCameraMessage("ライブ映像を表示しています。次に「撮影」を押してください。");
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "カメラを起動できませんでした。";
@@ -203,7 +203,7 @@ function handleCapture() {
     capturedCanvas.classList.remove("is-empty");
     detectBoardButton.disabled = false;
     setCameraState("撮影完了");
-    setCameraMessage("撮影画像を表示しました。続けて「盤面検出」を実行できます。", "is-success");
+    setCameraMessage("撮影画像を表示しました。次に「盤面検出」を押してください。", "is-success");
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "撮影に失敗しました。";
     setCameraState("撮影失敗");
@@ -214,7 +214,7 @@ function handleCapture() {
 async function handleDetectBoard() {
   detectBoardButton.disabled = true;
   setCameraState("検出準備中");
-  setCameraMessage("盤面検出エンジンを読み込んでいます。初回は少し時間がかかります。");
+  setCameraMessage("OpenCV.js を読み込んでいます。初回は少し時間がかかります。");
 
   try {
     await ensureOpenCvReady();
@@ -226,7 +226,7 @@ async function handleDetectBoard() {
     setCameraMessage("盤面を検出し、正方形に補正しました。", "is-success");
   } catch (error) {
     const errorMessage =
-      error instanceof Error ? error.message : "盤面を検出できませんでした";
+      error instanceof Error ? error.message : "盤面を検出できませんでした。";
     setCameraState("検出失敗");
     setCameraMessage(errorMessage, "is-error");
   } finally {

@@ -84,52 +84,61 @@ function drawGridOverlay(context, size) {
   context.restore();
 }
 
-function createOpenCvPromise() {
-  return new Promise((resolve, reject) => {
-    if (window.cv && typeof window.cv.getBuildInformation === "function") {
+function loadOpenCvScript(resolve, reject) {
+  if (window.cv && typeof window.cv.getBuildInformation === "function") {
+    resolve(window.cv);
+    return;
+  }
+
+  const existing = document.querySelector('script[data-opencv-loader="true"]');
+  if (existing) {
+    existing.addEventListener("load", () => {
+      if (window.cv && typeof window.cv.getBuildInformation === "function") {
+        resolve(window.cv);
+      } else if (window.cv) {
+        window.cv.onRuntimeInitialized = () => resolve(window.cv);
+      } else {
+        reject(new Error("OpenCV.js の読み込みに失敗しました。"));
+      }
+    }, { once: true });
+    existing.addEventListener("error", () => {
+      reject(new Error("OpenCV.js の読み込みに失敗しました。"));
+    }, { once: true });
+    return;
+  }
+
+  const script = document.createElement("script");
+  script.async = true;
+  script.type = "text/javascript";
+  script.dataset.opencvLoader = "true";
+  script.src = OPEN_CV_URL;
+  script.onload = () => {
+    if (!window.cv) {
+      reject(new Error("OpenCV.js の読み込みに失敗しました。"));
+      return;
+    }
+
+    if (typeof window.cv.getBuildInformation === "function") {
       resolve(window.cv);
       return;
     }
 
-    const existingScript = document.querySelector('script[data-opencv-loader="true"]');
-    if (existingScript) {
-      window.__resolveOpenCv = resolve;
-      window.__rejectOpenCv = reject;
-      return;
-    }
+    window.cv.onRuntimeInitialized = () => resolve(window.cv);
+  };
+  script.onerror = () => {
+    reject(new Error("OpenCV.js の読み込みに失敗しました。"));
+  };
 
-    window.__resolveOpenCv = resolve;
-    window.__rejectOpenCv = reject;
-
-    window.onOpenCvReady = function onOpenCvReady() {
-      if (!window.cv) {
-        reject(new Error("OpenCV.js の読み込みに失敗しました。"));
-        return;
-      }
-
-      if (typeof window.cv.getBuildInformation === "function") {
-        resolve(window.cv);
-        return;
-      }
-
-      window.cv.onRuntimeInitialized = () => resolve(window.cv);
-    };
-
-    const script = document.createElement("script");
-    script.async = true;
-    script.type = "text/javascript";
-    script.dataset.opencvLoader = "true";
-    script.src = OPEN_CV_URL;
-    script.onload = () => window.onOpenCvReady();
-    script.onerror = () => reject(new Error("OpenCV.js の読み込みに失敗しました。"));
-    document.head.appendChild(script);
-  });
+  document.head.appendChild(script);
 }
 
-export async function ensureOpenCvReady() {
+export function ensureOpenCvReady() {
   if (!openCvPromise) {
-    openCvPromise = createOpenCvPromise();
+    openCvPromise = new Promise((resolve, reject) => {
+      loadOpenCvScript(resolve, reject);
+    });
   }
+
   return openCvPromise;
 }
 
@@ -170,7 +179,7 @@ export async function detectSudokuBoard(sourceCanvas, outputCanvas) {
 
     largestQuadrilateral = findLargestQuadrilateral(contours, cv);
     if (!largestQuadrilateral) {
-      throw new Error("盤面を検出できませんでした");
+      throw new Error("盤面を検出できませんでした。");
     }
 
     const points = contourToPoints(largestQuadrilateral);

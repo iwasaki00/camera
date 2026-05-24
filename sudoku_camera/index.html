@@ -12,8 +12,8 @@
       <p class="eyebrow">Sudoku Camera Solver</p>
       <h1>iPhoneで使えるナンプレ解答アプリ</h1>
       <p class="lead">
-        盤面を手入力して解答できる試作版です。カメラ撮影、盤面検出、透視補正まで行い、
-        その先の OCR 追加につなげやすい構成にしています。
+        手入力での解答に加えて、カメラ撮影と盤面検出まで行う試作版です。
+        OCR はまだ入れておらず、今回は工程ごとに状態を確認しやすい UI にしています。
       </p>
     </section>
 
@@ -30,15 +30,19 @@
         <section class="camera-panel" aria-labelledby="cameraHeading">
           <div class="camera-header">
             <div>
-              <h2 id="cameraHeading">カメラ撮影</h2>
-              <p>iPhoneでは背面カメラを優先して起動します。</p>
+              <h2 id="cameraHeading">カメラ工程</h2>
+              <p>ライブ映像、撮影画像、補正後の盤面を順に確認できます。</p>
             </div>
             <span class="camera-chip" id="cameraState">未起動</span>
           </div>
 
           <div class="camera-stage">
-            <div class="camera-card">
-              <h3>ライブ映像</h3>
+            <section class="camera-card">
+              <div class="camera-card-header">
+                <h3>1. ライブ映像</h3>
+                <button id="startCameraButton" class="primary stage-button" type="button">カメラ起動</button>
+              </div>
+              <p class="camera-card-copy">iPhone では背面カメラを優先して起動します。</p>
               <video
                 id="cameraPreview"
                 class="camera-preview"
@@ -46,35 +50,37 @@
                 autoplay
                 muted
               ></video>
-            </div>
+            </section>
 
-            <div class="camera-card">
-              <h3>撮影画像</h3>
+            <section class="camera-card">
+              <div class="camera-card-header">
+                <h3>2. 撮影画像</h3>
+                <button id="captureButton" class="secondary stage-button" type="button" disabled>撮影</button>
+              </div>
+              <p class="camera-card-copy">ライブ映像から静止画を取得します。</p>
               <canvas
                 id="capturedCanvas"
                 class="camera-canvas"
                 aria-label="撮影画像"
               ></canvas>
-            </div>
+            </section>
 
-            <div class="camera-card">
-              <h3>補正後の盤面</h3>
+            <section class="camera-card">
+              <div class="camera-card-header">
+                <h3>3. 補正後の盤面</h3>
+                <button id="detectBoardButton" class="secondary stage-button" type="button" disabled>盤面検出</button>
+              </div>
+              <p class="camera-card-copy">撮影画像から盤面外枠を検出し、正方形へ補正します。</p>
               <canvas
                 id="detectedBoardCanvas"
                 class="camera-canvas"
                 aria-label="補正後の盤面"
               ></canvas>
-            </div>
-          </div>
-
-          <div class="camera-actions">
-            <button id="startCameraButton" class="primary" type="button">カメラを起動</button>
-            <button id="captureButton" class="secondary" type="button" disabled>撮影</button>
-            <button id="detectBoardButton" class="secondary" type="button" disabled>盤面検出</button>
+            </section>
           </div>
 
           <p id="cameraMessage" class="camera-message" role="status" aria-live="polite">
-            カメラを起動すると、ここにプレビューと撮影画像が表示されます。
+            まず「カメラ起動」を押してください。
           </p>
         </section>
 
