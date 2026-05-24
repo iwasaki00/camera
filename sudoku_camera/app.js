@@ -1,6 +1,12 @@
 import { solveSudoku } from "./sudokuSolver.js";
 import { initializeCamera, captureBoardImage, shutdownCamera } from "./camera.js";
-import { detectSudokuBoard, ensureOpenCvReady } from "./imageProcessor.js";
+import {
+  createDefaultCorners,
+  drawCornerEditor,
+  pickCornerIndex,
+  moveCorner,
+  warpBoardFromCorners
+} from "./imageProcessor.js";
 
 const GRID_SIZE = 9;
 
@@ -11,17 +17,19 @@ const message = document.getElementById("message");
 const boardState = document.getElementById("boardState");
 const startCameraButton = document.getElementById("startCameraButton");
 const captureButton = document.getElementById("captureButton");
-const detectBoardButton = document.getElementById("detectBoardButton");
+const rectifyBoardButton = document.getElementById("rectifyBoardButton");
 const cameraPreview = document.getElementById("cameraPreview");
 const capturedCanvas = document.getElementById("capturedCanvas");
+const capturedOverlayCanvas = document.getElementById("capturedOverlayCanvas");
 const detectedBoardCanvas = document.getElementById("detectedBoardCanvas");
 const cameraMessage = document.getElementById("cameraMessage");
 const cameraState = document.getElementById("cameraState");
-const openCvLoadState = document.getElementById("openCvLoadState");
-const openCvLoadBar = document.getElementById("openCvLoadBar");
-const openCvLoadDetail = document.getElementById("openCvLoadDetail");
+const manualAdjustState = document.getElementById("manualAdjustState");
+const manualAdjustDetail = document.getElementById("manualAdjustDetail");
 
 const cells = [];
+let cornerPoints = [];
+let activeCornerIndex = -1;
 
 function setMessage(text, tone = "") {
   message.textContent = text;
@@ -47,62 +55,13 @@ function setCameraState(text) {
   cameraState.textContent = text;
 }
 
-function setOpenCvStatus(label, detail, tone = "idle") {
-  openCvLoadState.textContent = label;
-  openCvLoadDetail.textContent = detail;
-  openCvLoadState.classList.remove("is-loading", "is-ready", "is-error");
-  openCvLoadBar.classList.remove("is-loading", "is-ready", "is-error");
-
-  if (tone === "loading") {
-    openCvLoadState.classList.add("is-loading");
-    openCvLoadBar.classList.add("is-loading");
-  } else if (tone === "ready") {
-    openCvLoadState.classList.add("is-ready");
-    openCvLoadBar.classList.add("is-ready");
-  } else if (tone === "error") {
-    openCvLoadState.classList.add("is-error");
-    openCvLoadBar.classList.add("is-error");
+function setManualAdjustStatus(label, detail, tone = "") {
+  manualAdjustState.textContent = label;
+  manualAdjustDetail.textContent = detail;
+  manualAdjustState.classList.remove("is-ready", "is-editing", "is-error");
+  if (tone) {
+    manualAdjustState.classList.add(tone);
   }
-}
-
-function getOpenCvUiCopy(status) {
-  if (status === "fetching-script") {
-    return {
-      label: "取得中",
-      detail: "OpenCV.js のスクリプトをダウンロードしています。",
-      message: "OpenCV.js をダウンロードしています。通信状況によっては少し時間がかかります。"
-    };
-  }
-
-  if (status === "initializing-runtime") {
-    return {
-      label: "初期化中",
-      detail: "ダウンロードは完了しました。WASM ランタイムを初期化しています。",
-      message: "OpenCV.js を初期化しています。ここで少し待つことがあります。"
-    };
-  }
-
-  if (status === "ready") {
-    return {
-      label: "準備完了",
-      detail: "OpenCV.js の読み込みが完了しました。",
-      message: "OpenCV.js の準備ができました。盤面の外枠を検出しています。"
-    };
-  }
-
-  if (status === "error") {
-    return {
-      label: "失敗",
-      detail: "OpenCV.js の読み込みに失敗しました。",
-      message: "OpenCV.js の読み込みに失敗しました。"
-    };
-  }
-
-  return {
-    label: "未開始",
-    detail: "盤面検出を押すと読み込みを開始します。",
-    message: "盤面検出を押すと OpenCV.js の読み込みを開始します。"
-  };
 }
 
 function sanitizeCellValue(value) {
@@ -234,8 +193,81 @@ function initializeCanvasPlaceholders() {
   drawPlaceholder(
     detectedBoardCanvas,
     "補正後の盤面はここに表示されます",
-    "撮影後に「盤面検出」を押してください"
+    "四隅を合わせて「補正する」を押してください"
   );
+  capturedOverlayCanvas.width = capturedCanvas.width;
+  capturedOverlayCanvas.height = capturedCanvas.height;
+  capturedOverlayCanvas.classList.add("is-empty");
+}
+
+function redrawCornerEditor() {
+  if (!cornerPoints.length) {
+    return;
+  }
+
+  drawCornerEditor({
+    imageCanvas: capturedCanvas,
+    overlayCanvas: capturedOverlayCanvas,
+    corners: cornerPoints,
+    activeIndex: activeCornerIndex
+  });
+}
+
+function getCanvasPoint(event) {
+  const rect = capturedOverlayCanvas.getBoundingClientRect();
+  const scaleX = capturedOverlayCanvas.width / rect.width;
+  const scaleY = capturedOverlayCanvas.height / rect.height;
+  return {
+    x: (event.clientX - rect.left) * scaleX,
+    y: (event.clientY - rect.top) * scaleY
+  };
+}
+
+function handleOverlayPointerDown(event) {
+  if (!cornerPoints.length) {
+    return;
+  }
+
+  const point = getCanvasPoint(event);
+  const picked = pickCornerIndex(cornerPoints, point.x, point.y);
+  if (picked === -1) {
+    return;
+  }
+
+  activeCornerIndex = picked;
+  capturedOverlayCanvas.setPointerCapture(event.pointerId);
+  setManualAdjustStatus("調整中", "四隅ハンドルをドラッグして盤面の角へ合わせてください。", "is-editing");
+  redrawCornerEditor();
+}
+
+function handleOverlayPointerMove(event) {
+  if (activeCornerIndex === -1 || !cornerPoints.length) {
+    return;
+  }
+
+  const point = getCanvasPoint(event);
+  moveCorner(
+    cornerPoints,
+    activeCornerIndex,
+    point.x,
+    point.y,
+    capturedOverlayCanvas.width,
+    capturedOverlayCanvas.height
+  );
+  redrawCornerEditor();
+}
+
+function finishCornerDrag(event) {
+  if (activeCornerIndex === -1) {
+    return;
+  }
+
+  activeCornerIndex = -1;
+  if (event.pointerId !== undefined && capturedOverlayCanvas.hasPointerCapture(event.pointerId)) {
+    capturedOverlayCanvas.releasePointerCapture(event.pointerId);
+  }
+  setManualAdjustStatus("調整済み", "四隅を確認して「補正する」を押してください。", "is-ready");
+  redrawCornerEditor();
 }
 
 async function handleStartCamera() {
@@ -262,9 +294,14 @@ function handleCapture() {
   try {
     captureBoardImage(cameraPreview, capturedCanvas);
     capturedCanvas.classList.remove("is-empty");
-    detectBoardButton.disabled = false;
+    capturedOverlayCanvas.classList.remove("is-empty");
+    cornerPoints = createDefaultCorners(capturedCanvas.width, capturedCanvas.height);
+    rectifyBoardButton.disabled = false;
+    activeCornerIndex = -1;
+    redrawCornerEditor();
     setCameraState("撮影完了");
-    setCameraMessage("撮影画像を表示しました。次に「盤面検出」を押してください。", "is-success");
+    setManualAdjustStatus("調整開始", "オレンジの四隅を盤面の角へ合わせてください。", "is-editing");
+    setCameraMessage("撮影画像を表示しました。四隅を合わせてから「補正する」を押してください。", "is-success");
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "撮影に失敗しました。";
     setCameraState("撮影失敗");
@@ -272,49 +309,20 @@ function handleCapture() {
   }
 }
 
-async function handleDetectBoard() {
-  detectBoardButton.disabled = true;
-  setCameraState("検出準備中");
-  setCameraMessage("OpenCV.js を読み込んでいます。");
-  setOpenCvStatus("取得中", "OpenCV.js のスクリプトをダウンロードしています。", "loading");
-
-  const slowLoadTimer = window.setTimeout(() => {
-    setOpenCvStatus(
-      "停滞中",
-      "OpenCV.js の初期化が長時間終わっていません。WASM の取得や初期化で止まっている可能性があります。",
-      "error"
-    );
-    setCameraMessage(
-      "OpenCV.js の読み込みに時間がかかっています。通信状況、CDN への接続、または iPhone 側の省電力設定を確認してください。",
-      "is-error"
-    );
-  }, 12000);
-
+function handleRectifyBoard() {
   try {
-    await ensureOpenCvReady((status) => {
-      const copy = getOpenCvUiCopy(status);
-      const tone = status === "ready" ? "ready" : "loading";
-      setOpenCvStatus(copy.label, copy.detail, tone);
-      if (status !== "error") {
-        setCameraMessage(copy.message);
-      }
-    });
-
-    setCameraState("検出中");
-    setCameraMessage("盤面の外枠を検出しています。");
-    await detectSudokuBoard(capturedCanvas, detectedBoardCanvas);
+    setCameraState("補正中");
+    setManualAdjustStatus("補正中", "指定した四隅から盤面を正方形に変換しています。", "is-editing");
+    warpBoardFromCorners(capturedCanvas, cornerPoints, detectedBoardCanvas);
     detectedBoardCanvas.classList.remove("is-empty");
-    setCameraState("検出完了");
-    setCameraMessage("盤面を検出し、正方形に補正しました。", "is-success");
+    setCameraState("補正完了");
+    setManualAdjustStatus("補正完了", "補正後の盤面を表示しました。必要なら撮り直して再調整できます。", "is-ready");
+    setCameraMessage("盤面を補正しました。必要なら再撮影してやり直せます。", "is-success");
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "盤面を検出できませんでした。";
-    setCameraState("検出失敗");
+    const errorMessage = error instanceof Error ? error.message : "盤面を補正できませんでした。";
+    setCameraState("補正失敗");
+    setManualAdjustStatus("補正失敗", errorMessage, "is-error");
     setCameraMessage(errorMessage, "is-error");
-    setOpenCvStatus("失敗", errorMessage, "error");
-  } finally {
-    window.clearTimeout(slowLoadTimer);
-    detectBoardButton.disabled = false;
   }
 }
 
@@ -337,13 +345,17 @@ function handleSolve(event) {
 
 buildGrid();
 initializeCanvasPlaceholders();
-setOpenCvStatus("未開始", "盤面検出を押すと読み込みを開始します。");
+setManualAdjustStatus("未調整", "撮影後に四隅ハンドルが表示されます。盤面の角へ合わせてください。");
 
 sudokuForm.addEventListener("submit", handleSolve);
 clearButton.addEventListener("click", clearBoard);
 startCameraButton.addEventListener("click", handleStartCamera);
 captureButton.addEventListener("click", handleCapture);
-detectBoardButton.addEventListener("click", handleDetectBoard);
+rectifyBoardButton.addEventListener("click", handleRectifyBoard);
+capturedOverlayCanvas.addEventListener("pointerdown", handleOverlayPointerDown);
+capturedOverlayCanvas.addEventListener("pointermove", handleOverlayPointerMove);
+capturedOverlayCanvas.addEventListener("pointerup", finishCornerDrag);
+capturedOverlayCanvas.addEventListener("pointercancel", finishCornerDrag);
 
 window.addEventListener("beforeunload", () => {
   shutdownCamera(cameraPreview);

@@ -1,74 +1,138 @@
-const OPEN_CV_URL = "https://docs.opencv.org/4.x/opencv.js";
-const WARPED_BOARD_SIZE = 450;
+const OUTPUT_SIZE = 450;
+const HANDLE_RADIUS = 22;
 
-let openCvPromise = null;
-let openCvStatus = "idle";
-const statusListeners = new Set();
-
-function notifyStatus(status) {
-  openCvStatus = status;
-  for (const listener of statusListeners) {
-    listener(status);
-  }
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
-function sortCorners(points) {
-  const bySum = [...points].sort((a, b) => a.x + a.y - (b.x + b.y));
-  const byDiff = [...points].sort((a, b) => a.y - a.x - (b.y - b.x));
-
-  return {
-    topLeft: bySum[0],
-    bottomRight: bySum[3],
-    topRight: byDiff[0],
-    bottomLeft: byDiff[3]
-  };
+function distanceSquared(point, x, y) {
+  const dx = point.x - x;
+  const dy = point.y - y;
+  return dx * dx + dy * dy;
 }
 
-function contourToPoints(contour) {
-  const points = [];
-  for (let index = 0; index < contour.data32S.length; index += 2) {
-    points.push({
-      x: contour.data32S[index],
-      y: contour.data32S[index + 1]
-    });
-  }
-  return points;
-}
+function solveLinearSystem(matrix, vector) {
+  const size = vector.length;
+  const augmented = matrix.map((row, index) => [...row, vector[index]]);
 
-function findLargestQuadrilateral(contours, cv) {
-  let bestContour = null;
-  let bestArea = 0;
-
-  for (let index = 0; index < contours.size(); index += 1) {
-    const contour = contours.get(index);
-    const perimeter = cv.arcLength(contour, true);
-    const approximation = new cv.Mat();
-
-    try {
-      cv.approxPolyDP(contour, approximation, perimeter * 0.02, true);
-      const area = cv.contourArea(approximation);
-      const isQuadrilateral = approximation.rows === 4;
-      const isConvex = cv.isContourConvex(approximation);
-
-      if (isQuadrilateral && isConvex && area > bestArea) {
-        if (bestContour) {
-          bestContour.delete();
-        }
-        bestContour = approximation.clone();
-        bestArea = area;
+  for (let col = 0; col < size; col += 1) {
+    let pivotRow = col;
+    for (let row = col + 1; row < size; row += 1) {
+      if (Math.abs(augmented[row][col]) > Math.abs(augmented[pivotRow][col])) {
+        pivotRow = row;
       }
-    } finally {
-      approximation.delete();
-      contour.delete();
+    }
+
+    if (Math.abs(augmented[pivotRow][col]) < 1e-8) {
+      throw new Error("変換行列を計算できませんでした。四隅の位置を調整してください。");
+    }
+
+    [augmented[col], augmented[pivotRow]] = [augmented[pivotRow], augmented[col]];
+
+    const pivot = augmented[col][col];
+    for (let current = col; current <= size; current += 1) {
+      augmented[col][current] /= pivot;
+    }
+
+    for (let row = 0; row < size; row += 1) {
+      if (row === col) {
+        continue;
+      }
+
+      const factor = augmented[row][col];
+      for (let current = col; current <= size; current += 1) {
+        augmented[row][current] -= factor * augmented[col][current];
+      }
     }
   }
 
-  return bestContour;
+  return augmented.map((row) => row[size]);
+}
+
+function buildHomography(sourcePoints, destinationPoints) {
+  const matrix = [];
+  const vector = [];
+
+  for (let index = 0; index < 4; index += 1) {
+    const src = sourcePoints[index];
+    const dst = destinationPoints[index];
+
+    matrix.push([src.x, src.y, 1, 0, 0, 0, -dst.x * src.x, -dst.x * src.y]);
+    vector.push(dst.x);
+    matrix.push([0, 0, 0, src.x, src.y, 1, -dst.y * src.x, -dst.y * src.y]);
+    vector.push(dst.y);
+  }
+
+  const solution = solveLinearSystem(matrix, vector);
+  return [
+    [solution[0], solution[1], solution[2]],
+    [solution[3], solution[4], solution[5]],
+    [solution[6], solution[7], 1]
+  ];
+}
+
+function invert3x3(matrix) {
+  const [
+    [a, b, c],
+    [d, e, f],
+    [g, h, i]
+  ] = matrix;
+
+  const determinant =
+    a * (e * i - f * h) -
+    b * (d * i - f * g) +
+    c * (d * h - e * g);
+
+  if (Math.abs(determinant) < 1e-8) {
+    throw new Error("補正に必要な逆行列を計算できませんでした。四隅を調整してください。");
+  }
+
+  const inverseDeterminant = 1 / determinant;
+
+  return [
+    [(e * i - f * h) * inverseDeterminant, (c * h - b * i) * inverseDeterminant, (b * f - c * e) * inverseDeterminant],
+    [(f * g - d * i) * inverseDeterminant, (a * i - c * g) * inverseDeterminant, (c * d - a * f) * inverseDeterminant],
+    [(d * h - e * g) * inverseDeterminant, (b * g - a * h) * inverseDeterminant, (a * e - b * d) * inverseDeterminant]
+  ];
+}
+
+function applyHomography(matrix, x, y) {
+  const denominator = matrix[2][0] * x + matrix[2][1] * y + matrix[2][2];
+  return {
+    x: (matrix[0][0] * x + matrix[0][1] * y + matrix[0][2]) / denominator,
+    y: (matrix[1][0] * x + matrix[1][1] * y + matrix[1][2]) / denominator
+  };
+}
+
+function bilinearSample(imageData, x, y) {
+  const { width, height, data } = imageData;
+  const clampedX = clamp(x, 0, width - 1);
+  const clampedY = clamp(y, 0, height - 1);
+  const x0 = Math.floor(clampedX);
+  const y0 = Math.floor(clampedY);
+  const x1 = Math.min(width - 1, x0 + 1);
+  const y1 = Math.min(height - 1, y0 + 1);
+  const tx = clampedX - x0;
+  const ty = clampedY - y0;
+
+  const topLeftIndex = (y0 * width + x0) * 4;
+  const topRightIndex = (y0 * width + x1) * 4;
+  const bottomLeftIndex = (y1 * width + x0) * 4;
+  const bottomRightIndex = (y1 * width + x1) * 4;
+
+  const rgba = [0, 0, 0, 0];
+  for (let channel = 0; channel < 4; channel += 1) {
+    const top = data[topLeftIndex + channel] * (1 - tx) + data[topRightIndex + channel] * tx;
+    const bottom = data[bottomLeftIndex + channel] * (1 - tx) + data[bottomRightIndex + channel] * tx;
+    rgba[channel] = top * (1 - ty) + bottom * ty;
+  }
+
+  return rgba;
 }
 
 function drawGridOverlay(context, size) {
   context.save();
-  context.strokeStyle = "rgba(24, 88, 116, 0.78)";
+  context.strokeStyle = "rgba(24, 88, 116, 0.82)";
   context.lineCap = "square";
 
   for (let index = 1; index < 9; index += 1) {
@@ -88,194 +152,117 @@ function drawGridOverlay(context, size) {
   }
 
   context.lineWidth = 4;
-  context.strokeStyle = "rgba(24, 88, 116, 0.88)";
+  context.strokeStyle = "rgba(24, 88, 116, 0.92)";
   context.strokeRect(0, 0, size, size);
   context.restore();
 }
 
-function attachListener(listener) {
-  if (!listener) {
-    return () => {};
-  }
-  statusListeners.add(listener);
-  listener(openCvStatus);
-  return () => statusListeners.delete(listener);
+export function createDefaultCorners(width, height) {
+  const insetX = width * 0.14;
+  const insetY = height * 0.14;
+  return [
+    { x: insetX, y: insetY },
+    { x: width - insetX, y: insetY },
+    { x: width - insetX, y: height - insetY },
+    { x: insetX, y: height - insetY }
+  ];
 }
 
-function loadOpenCvScript(resolve, reject) {
-  if (window.cv && typeof window.cv.getBuildInformation === "function") {
-    notifyStatus("ready");
-    resolve(window.cv);
-    return;
+export function drawCornerEditor({ imageCanvas, overlayCanvas, corners, activeIndex }) {
+  overlayCanvas.width = imageCanvas.width;
+  overlayCanvas.height = imageCanvas.height;
+
+  const context = overlayCanvas.getContext("2d");
+  context.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+  context.save();
+  context.fillStyle = "rgba(18, 15, 13, 0.14)";
+  context.strokeStyle = "rgba(201, 88, 46, 0.95)";
+  context.lineWidth = 3;
+
+  context.beginPath();
+  context.moveTo(corners[0].x, corners[0].y);
+  for (let index = 1; index < corners.length; index += 1) {
+    context.lineTo(corners[index].x, corners[index].y);
+  }
+  context.closePath();
+  context.fill();
+  context.stroke();
+
+  for (let index = 0; index < corners.length; index += 1) {
+    const point = corners[index];
+    context.beginPath();
+    context.fillStyle = index === activeIndex ? "#1f556f" : "#f8f3ed";
+    context.strokeStyle = "#c9582e";
+    context.lineWidth = 4;
+    context.arc(point.x, point.y, HANDLE_RADIUS, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
   }
 
-  const existing = document.querySelector('script[data-opencv-loader="true"]');
-  if (existing) {
-    notifyStatus("fetching-script");
-    existing.addEventListener("load", () => {
-      if (window.cv && typeof window.cv.getBuildInformation === "function") {
-        notifyStatus("ready");
-        resolve(window.cv);
-      } else if (window.cv) {
-        notifyStatus("initializing-runtime");
-        window.cv.onRuntimeInitialized = () => {
-          notifyStatus("ready");
-          resolve(window.cv);
-        };
-      } else {
-        notifyStatus("error");
-        reject(new Error("OpenCV.js の読み込みに失敗しました。"));
-      }
-    }, { once: true });
-    existing.addEventListener("error", () => {
-      notifyStatus("error");
-      reject(new Error("OpenCV.js の読み込みに失敗しました。"));
-    }, { once: true });
-    return;
-  }
-
-  notifyStatus("fetching-script");
-  const script = document.createElement("script");
-  script.async = true;
-  script.type = "text/javascript";
-  script.dataset.opencvLoader = "true";
-  script.src = OPEN_CV_URL;
-  script.onload = () => {
-    if (!window.cv) {
-      notifyStatus("error");
-      reject(new Error("OpenCV.js の読み込みに失敗しました。"));
-      return;
-    }
-
-    if (typeof window.cv.getBuildInformation === "function") {
-      notifyStatus("ready");
-      resolve(window.cv);
-      return;
-    }
-
-    notifyStatus("initializing-runtime");
-    window.cv.onRuntimeInitialized = () => {
-      notifyStatus("ready");
-      resolve(window.cv);
-    };
-  };
-  script.onerror = () => {
-    notifyStatus("error");
-    reject(new Error("OpenCV.js の読み込みに失敗しました。"));
-  };
-
-  document.head.appendChild(script);
+  context.restore();
 }
 
-export function ensureOpenCvReady(onStatus) {
-  const detach = attachListener(onStatus);
+export function pickCornerIndex(corners, x, y) {
+  let pickedIndex = -1;
+  let pickedDistance = HANDLE_RADIUS * HANDLE_RADIUS * 2.2;
 
-  if (!openCvPromise) {
-    openCvPromise = new Promise((resolve, reject) => {
-      loadOpenCvScript(resolve, reject);
-    }).finally(() => {
-      detach();
-    });
-  } else {
-    openCvPromise = openCvPromise.finally(() => {
-      detach();
-    });
+  for (let index = 0; index < corners.length; index += 1) {
+    const currentDistance = distanceSquared(corners[index], x, y);
+    if (currentDistance < pickedDistance) {
+      pickedDistance = currentDistance;
+      pickedIndex = index;
+    }
   }
 
-  return openCvPromise;
+  return pickedIndex;
 }
 
-export async function detectSudokuBoard(sourceCanvas, outputCanvas) {
-  const cv = await ensureOpenCvReady();
-  const source = cv.imread(sourceCanvas);
-  const gray = new cv.Mat();
-  const blurred = new cv.Mat();
-  const thresholded = new cv.Mat();
-  const contours = new cv.MatVector();
-  const hierarchy = new cv.Mat();
-  let largestQuadrilateral = null;
-  let warped = null;
-  let sourcePoints = null;
-  let destinationPoints = null;
-  let transform = null;
+export function moveCorner(corners, index, x, y, width, height) {
+  corners[index].x = clamp(x, 0, width);
+  corners[index].y = clamp(y, 0, height);
+}
 
-  try {
-    cv.cvtColor(source, gray, cv.COLOR_RGBA2GRAY, 0);
-    cv.GaussianBlur(gray, blurred, new cv.Size(7, 7), 0, 0, cv.BORDER_DEFAULT);
-    cv.adaptiveThreshold(
-      blurred,
-      thresholded,
-      255,
-      cv.ADAPTIVE_THRESH_GAUSSIAN_C,
-      cv.THRESH_BINARY_INV,
-      11,
-      2
-    );
-
-    cv.findContours(
-      thresholded,
-      contours,
-      hierarchy,
-      cv.RETR_EXTERNAL,
-      cv.CHAIN_APPROX_SIMPLE
-    );
-
-    largestQuadrilateral = findLargestQuadrilateral(contours, cv);
-    if (!largestQuadrilateral) {
-      throw new Error("盤面を検出できませんでした。");
-    }
-
-    const points = contourToPoints(largestQuadrilateral);
-    const ordered = sortCorners(points);
-
-    sourcePoints = cv.matFromArray(4, 1, cv.CV_32FC2, [
-      ordered.topLeft.x, ordered.topLeft.y,
-      ordered.topRight.x, ordered.topRight.y,
-      ordered.bottomRight.x, ordered.bottomRight.y,
-      ordered.bottomLeft.x, ordered.bottomLeft.y
-    ]);
-
-    destinationPoints = cv.matFromArray(4, 1, cv.CV_32FC2, [
-      0, 0,
-      WARPED_BOARD_SIZE, 0,
-      WARPED_BOARD_SIZE, WARPED_BOARD_SIZE,
-      0, WARPED_BOARD_SIZE
-    ]);
-
-    transform = cv.getPerspectiveTransform(sourcePoints, destinationPoints);
-    warped = new cv.Mat();
-    cv.warpPerspective(
-      source,
-      warped,
-      transform,
-      new cv.Size(WARPED_BOARD_SIZE, WARPED_BOARD_SIZE),
-      cv.INTER_LINEAR,
-      cv.BORDER_CONSTANT,
-      new cv.Scalar()
-    );
-
-    outputCanvas.width = WARPED_BOARD_SIZE;
-    outputCanvas.height = WARPED_BOARD_SIZE;
-    cv.imshow(outputCanvas, warped);
-
-    const context = outputCanvas.getContext("2d");
-    drawGridOverlay(context, WARPED_BOARD_SIZE);
-
-    return {
-      size: WARPED_BOARD_SIZE,
-      corners: ordered
-    };
-  } finally {
-    source.delete();
-    gray.delete();
-    blurred.delete();
-    thresholded.delete();
-    contours.delete();
-    hierarchy.delete();
-    largestQuadrilateral?.delete();
-    warped?.delete();
-    sourcePoints?.delete();
-    destinationPoints?.delete();
-    transform?.delete();
+export function warpBoardFromCorners(sourceCanvas, corners, outputCanvas) {
+  if (!sourceCanvas.width || !sourceCanvas.height || corners.length !== 4) {
+    throw new Error("撮影画像または四隅情報が不足しています。");
   }
+
+  const sourcePoints = [
+    corners[0],
+    corners[1],
+    corners[2],
+    corners[3]
+  ];
+  const destinationPoints = [
+    { x: 0, y: 0 },
+    { x: OUTPUT_SIZE - 1, y: 0 },
+    { x: OUTPUT_SIZE - 1, y: OUTPUT_SIZE - 1 },
+    { x: 0, y: OUTPUT_SIZE - 1 }
+  ];
+
+  const homography = buildHomography(sourcePoints, destinationPoints);
+  const inverseHomography = invert3x3(homography);
+  const sourceContext = sourceCanvas.getContext("2d");
+  const sourceImageData = sourceContext.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+
+  outputCanvas.width = OUTPUT_SIZE;
+  outputCanvas.height = OUTPUT_SIZE;
+  const outputContext = outputCanvas.getContext("2d");
+  const outputImageData = outputContext.createImageData(OUTPUT_SIZE, OUTPUT_SIZE);
+
+  for (let y = 0; y < OUTPUT_SIZE; y += 1) {
+    for (let x = 0; x < OUTPUT_SIZE; x += 1) {
+      const sourcePoint = applyHomography(inverseHomography, x, y);
+      const rgba = bilinearSample(sourceImageData, sourcePoint.x, sourcePoint.y);
+      const index = (y * OUTPUT_SIZE + x) * 4;
+      outputImageData.data[index] = rgba[0];
+      outputImageData.data[index + 1] = rgba[1];
+      outputImageData.data[index + 2] = rgba[2];
+      outputImageData.data[index + 3] = rgba[3];
+    }
+  }
+
+  outputContext.putImageData(outputImageData, 0, 0);
+  drawGridOverlay(outputContext, OUTPUT_SIZE);
 }
