@@ -12,8 +12,8 @@
       <p class="eyebrow">Sudoku Camera Solver</p>
       <h1>iPhoneで使えるナンプレ解答アプリ</h1>
       <p class="lead">
-        盤面を手入力して解答できる試作版です。今回は OpenCV.js を使って、
-        撮影画像からナンプレ盤面の外枠を検出し、正方形へ補正できるようにします。
+        盤面を手入力して解答できる試作版です。カメラ撮影、盤面検出、透視補正まで行い、
+        その先の OCR 追加につなげやすい構成にしています。
       </p>
     </section>
 
@@ -98,51 +98,18 @@
         <section class="info-card">
           <h2>今回の範囲</h2>
           <ul>
-            <li>9x9の手入力</li>
+            <li>9x9 の手入力</li>
             <li>バックトラック法での解答</li>
-            <li>iPhoneブラウザ向けカメラ起動と撮影</li>
-            <li>OpenCV.js による盤面の自動検出と透視補正</li>
-            <li>補正結果への9x9グリッド重ね描画</li>
+            <li>iPhone ブラウザ向けカメラ起動と撮影</li>
+            <li>OpenCV.js による盤面検出と透視補正</li>
+            <li>補正後画像への 9x9 グリッド描画</li>
           </ul>
-          <p class="muted">OCRや数字読み取りはまだ実装していません。</p>
+          <p class="muted">OCR や数字読み取りはまだ実装していません。</p>
         </section>
       </aside>
     </section>
   </main>
 
-  <script>
-    window.openCvReadyPromise = new Promise((resolve, reject) => {
-      window.__resolveOpenCv = resolve;
-      window.__rejectOpenCv = reject;
-    });
-
-    window.onOpenCvReady = function onOpenCvReady() {
-      if (!window.cv) {
-        window.__rejectOpenCv?.(new Error("OpenCV.js の読み込みに失敗しました。"));
-        return;
-      }
-
-      if (typeof window.cv.getBuildInformation === "function") {
-        window.__resolveOpenCv?.(window.cv);
-        return;
-      }
-
-      window.cv.onRuntimeInitialized = () => {
-        window.__resolveOpenCv?.(window.cv);
-      };
-    };
-
-    window.onOpenCvError = function onOpenCvError() {
-      window.__rejectOpenCv?.(new Error("OpenCV.js の読み込みに失敗しました。"));
-    };
-  </script>
-  <script
-    async
-    src="https://docs.opencv.org/4.x/opencv.js"
-    onload="onOpenCvReady()"
-    onerror="onOpenCvError()"
-    type="text/javascript"
-  ></script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>

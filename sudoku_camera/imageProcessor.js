@@ -1,4 +1,7 @@
+const OPEN_CV_URL = "https://docs.opencv.org/4.x/opencv.js";
 const WARPED_BOARD_SIZE = 450;
+
+let openCvPromise = null;
 
 function sortCorners(points) {
   const bySum = [...points].sort((a, b) => a.x + a.y - (b.x + b.y));
@@ -61,6 +64,7 @@ function drawGridOverlay(context, size) {
 
   for (let index = 1; index < 9; index += 1) {
     const position = (size / 9) * index;
+
     context.beginPath();
     context.lineWidth = index % 3 === 0 ? 3 : 1;
     context.moveTo(position, 0);
@@ -80,16 +84,57 @@ function drawGridOverlay(context, size) {
   context.restore();
 }
 
-export async function waitForOpenCvReady() {
-  if (!window.openCvReadyPromise) {
-    throw new Error("OpenCV.js の読み込み設定が見つかりません。");
-  }
+function createOpenCvPromise() {
+  return new Promise((resolve, reject) => {
+    if (window.cv && typeof window.cv.getBuildInformation === "function") {
+      resolve(window.cv);
+      return;
+    }
 
-  return window.openCvReadyPromise;
+    const existingScript = document.querySelector('script[data-opencv-loader="true"]');
+    if (existingScript) {
+      window.__resolveOpenCv = resolve;
+      window.__rejectOpenCv = reject;
+      return;
+    }
+
+    window.__resolveOpenCv = resolve;
+    window.__rejectOpenCv = reject;
+
+    window.onOpenCvReady = function onOpenCvReady() {
+      if (!window.cv) {
+        reject(new Error("OpenCV.js の読み込みに失敗しました。"));
+        return;
+      }
+
+      if (typeof window.cv.getBuildInformation === "function") {
+        resolve(window.cv);
+        return;
+      }
+
+      window.cv.onRuntimeInitialized = () => resolve(window.cv);
+    };
+
+    const script = document.createElement("script");
+    script.async = true;
+    script.type = "text/javascript";
+    script.dataset.opencvLoader = "true";
+    script.src = OPEN_CV_URL;
+    script.onload = () => window.onOpenCvReady();
+    script.onerror = () => reject(new Error("OpenCV.js の読み込みに失敗しました。"));
+    document.head.appendChild(script);
+  });
+}
+
+export async function ensureOpenCvReady() {
+  if (!openCvPromise) {
+    openCvPromise = createOpenCvPromise();
+  }
+  return openCvPromise;
 }
 
 export async function detectSudokuBoard(sourceCanvas, outputCanvas) {
-  const cv = await waitForOpenCvReady();
+  const cv = await ensureOpenCvReady();
   const source = cv.imread(sourceCanvas);
   const gray = new cv.Mat();
   const blurred = new cv.Mat();

@@ -8,18 +8,18 @@ function isDigitInRange(value) {
 
 export function normalizeBoard(board) {
   if (!Array.isArray(board) || board.length !== 9) {
-    throw new Error("盤面は9x9である必要があります。");
+    throw new Error("盤面は 9x9 である必要があります。");
   }
 
   return board.map((row) => {
     if (!Array.isArray(row) || row.length !== 9) {
-      throw new Error("盤面は9x9である必要があります。");
+      throw new Error("盤面は 9x9 である必要があります。");
     }
 
     return row.map((value) => {
       const normalized = Number(value) || 0;
       if (!isDigitInRange(normalized)) {
-        throw new Error("盤面には0から9の数字だけを入れてください。");
+        throw new Error("盤面には 0 から 9 の数字だけを入れてください。");
       }
       return normalized;
     });

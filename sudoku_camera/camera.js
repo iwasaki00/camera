@@ -21,7 +21,7 @@ export function isCameraSupported() {
 export async function initializeCamera(videoElement) {
   if (!isCameraSupported()) {
     throw new Error(
-      "このブラウザではカメラ機能を利用できません。iPhoneのSafariでHTTPS配信されているページを開いてください。"
+      "このブラウザではカメラ機能を利用できません。iPhone の Safari で HTTPS 配信されているページを開いてください。"
     );
   }
 
@@ -48,7 +48,7 @@ export async function initializeCamera(videoElement) {
       const originalMessage = error instanceof Error ? error.message : "";
       const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : "";
       throw new Error(
-        "カメラを起動できませんでした。SafariでHTTPSのページを開き、カメラ権限を許可しているか確認してください。" +
+        "カメラを起動できませんでした。Safari で HTTPS のページを開き、カメラ権限を許可しているか確認してください。" +
           (originalMessage || fallbackMessage ? ` (${originalMessage || fallbackMessage})` : "")
       );
     }

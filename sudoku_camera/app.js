@@ -1,6 +1,6 @@
 import { solveSudoku } from "./sudokuSolver.js";
 import { initializeCamera, captureBoardImage, shutdownCamera } from "./camera.js";
-import { detectSudokuBoard, waitForOpenCvReady } from "./imageProcessor.js";
+import { detectSudokuBoard, ensureOpenCvReady } from "./imageProcessor.js";
 
 const GRID_SIZE = 9;
 
@@ -146,9 +146,9 @@ function clearBoard() {
   setMessage("盤面をクリアしました。");
 }
 
-function drawPlaceholder(canvas, title, subtitle) {
+function drawPlaceholder(canvas, title, subtitle, ratio = 1) {
   const width = 900;
-  const height = 900;
+  const height = Math.round(width / ratio);
   canvas.width = width;
   canvas.height = height;
 
@@ -175,17 +175,6 @@ function initializeCanvasPlaceholders() {
     "補正後の盤面はここに表示されます",
     "撮影後に「盤面検出」を押してください"
   );
-}
-
-async function initializeOpenCvState() {
-  try {
-    await waitForOpenCvReady();
-    setCameraMessage("OpenCV.js の準備ができました。撮影後に盤面検出を実行できます。");
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "OpenCV.js の読み込みに失敗しました。";
-    setCameraMessage(errorMessage, "is-error");
-  }
 }
 
 async function handleStartCamera() {
@@ -224,19 +213,22 @@ function handleCapture() {
 
 async function handleDetectBoard() {
   detectBoardButton.disabled = true;
-  setCameraState("検出中");
-  setCameraMessage("盤面の外枠を検出しています。");
+  setCameraState("検出準備中");
+  setCameraMessage("盤面検出エンジンを読み込んでいます。初回は少し時間がかかります。");
 
   try {
+    await ensureOpenCvReady();
+    setCameraState("検出中");
+    setCameraMessage("盤面の外枠を検出しています。");
     await detectSudokuBoard(capturedCanvas, detectedBoardCanvas);
     detectedBoardCanvas.classList.remove("is-empty");
     setCameraState("検出完了");
-    setCameraMessage("盤面を検出し、正方形へ補正しました。", "is-success");
+    setCameraMessage("盤面を検出し、正方形に補正しました。", "is-success");
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "盤面を検出できませんでした";
     setCameraState("検出失敗");
-    setCameraMessage(errorMessage || "盤面を検出できませんでした", "is-error");
+    setCameraMessage(errorMessage, "is-error");
   } finally {
     detectBoardButton.disabled = false;
   }
@@ -261,7 +253,6 @@ function handleSolve(event) {
 
 buildGrid();
 initializeCanvasPlaceholders();
-initializeOpenCvState();
 
 sudokuForm.addEventListener("submit", handleSolve);
 clearButton.addEventListener("click", clearBoard);
