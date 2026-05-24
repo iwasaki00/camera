@@ -279,6 +279,11 @@ async function handleDetectBoard() {
   setOpenCvStatus("取得中", "OpenCV.js のスクリプトをダウンロードしています。", "loading");
 
   const slowLoadTimer = window.setTimeout(() => {
+    setOpenCvStatus(
+      "停滞中",
+      "OpenCV.js の初期化が長時間終わっていません。WASM の取得や初期化で止まっている可能性があります。",
+      "error"
+    );
     setCameraMessage(
       "OpenCV.js の読み込みに時間がかかっています。通信状況、CDN への接続、または iPhone 側の省電力設定を確認してください。",
       "is-error"
