@@ -9,21 +9,21 @@
     <main>
       <section>
         <h1>Camera Menu</h1>
-        <p>`camera` 配下の iPhone 向けカメラ実験を選ぶメニューです。</p>
+        <p>`camera` 配下の iPhone 向けカメラ検証メニューです。</p>
         <ul>
           <li>
-            <strong>sub001</strong>
-            <p>既存のカメラ検証ページです。</p>
-            <a href="./sub001/index.html">sub001 を開く</a>
+            <strong>sudoku_camera</strong>
+            <p>9x9 の盤面を入力してナンプレを解く試作アプリです。</p>
+            <a href="./sudoku_camera/index.html">sudoku_camera を開く</a>
           </li>
           <li>
-            <strong>sub002</strong>
-            <p>インカメラ映像の両目に白目フィルターを重ねる既存版です。</p>
-            <a href="./sub002/index.html">sub002 を開く</a>
+            <strong>browser_camera</strong>
+            <p>純粋なブラウザカメラ確認ページです。</p>
+            <a href="./browser_camera/index.html">browser_camera を開く</a>
           </li>
           <li>
             <strong>face_effect</strong>
-            <p>白目、つながり眉、頭上の数式を切り替えられる顔エフェクトカメラです。</p>
+            <p>顔上に数値やエフェクトを重ねて試せるカメラです。</p>
             <a href="./face_effect/index.html">face_effect を開く</a>
           </li>
         </ul>

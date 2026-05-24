@@ -125,11 +125,6 @@
       font-weight: 700;
     }
 
-    .sub-link {
-      color: var(--accent-2);
-      background: rgba(25, 74, 99, 0.08);
-    }
-
     @media (max-width: 720px) {
       .grid {
         grid-template-columns: 1fr;
@@ -141,19 +136,31 @@
   <main>
     <section class="hero">
       <p class="eyebrow">CAMERA APPS</p>
-      <h1>iPhone向けカメラアプリ集</h1>
+      <h1>iPhone向けカメラ実験アプリ集</h1>
       <p class="lead">
-        GitHub Pages で公開しているカメラアプリの入口です。下のカードから
-        `顔エフェクトカメラ` と `変顔メーカー` を選べます。
+        GitHub Pages で公開しているカメラ系アプリの入口です。
+        現在は顔エフェクト、変顔メーカー、ナンプレ解答アプリを用意しています。
       </p>
     </section>
 
     <section class="grid">
       <article class="app-card">
+        <span class="tag">HTML + CSS + JavaScript</span>
+        <h2>ナンプレ解答カメラ</h2>
+        <p>
+          9x9 の盤面を手入力してバックトラック法で解答する試作版です。
+          将来のカメラ OCR 追加を見据えて、静的なモジュール構成で分離しています。
+        </p>
+        <div class="actions">
+          <a href="./sudoku_camera/">ナンプレ解答カメラを開く</a>
+        </div>
+      </article>
+
+      <article class="app-card">
         <span class="tag">React + Vite</span>
         <h2>顔エフェクトカメラ</h2>
         <p>
-          `天才風 / 白目 / つながり眉` を切り替えながら、顔にリアルタイムのエフェクトを重ねるアプリです。
+          顔の検出結果に応じて数値やエフェクトを重ねて試せるカメラアプリです。
         </p>
         <div class="actions">
           <a href="./face_effect/">顔エフェクトカメラを開く</a>
@@ -164,7 +171,7 @@
         <span class="tag">React + Vite + TypeScript</span>
         <h2>変顔メーカー</h2>
         <p>
-          眉、目、耳、頬、鼻、口、頭、顎を個別に変形し、ランダム事故やプリセットでも遊べるアプリです。
+          眉、目、白目、口などのパーツを組み合わせてランダム生成もできるアプリです。
         </p>
         <div class="actions">
           <a href="./henface_maker/">変顔メーカーを開く</a>

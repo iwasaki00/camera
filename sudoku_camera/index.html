@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Sudoku Camera Solver</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section class="hero">
+      <p class="eyebrow">Sudoku Camera Solver</p>
+      <h1>iPhoneで使えるナンプレ解答アプリ</h1>
+      <p class="lead">
+        試作1では盤面を手入力し、ブラウザ内のバックトラック法で解答します。
+        将来のカメラOCR追加に備えて、処理はモジュール分割しています。
+      </p>
+    </section>
+
+    <section class="workspace">
+      <div class="board-panel">
+        <div class="panel-header">
+          <div>
+            <h2>9x9 盤面</h2>
+            <p>空欄は未入力のままで構いません。</p>
+          </div>
+          <span class="status-chip" id="boardState">入力待ち</span>
+        </div>
+
+        <form id="sudokuForm" novalidate>
+          <div id="sudokuGrid" class="sudoku-grid" aria-label="数独の入力盤面"></div>
+          <div class="actions">
+            <button id="solveButton" class="primary" type="submit">解く</button>
+            <button id="clearButton" class="secondary" type="button">クリア</button>
+          </div>
+        </form>
+      </div>
+
+      <aside class="side-panel">
+        <section class="info-card">
+          <h2>状態</h2>
+          <p id="message" class="message" role="status" aria-live="polite">
+            数字を入力して「解く」を押してください。
+          </p>
+        </section>
+
+        <section class="info-card">
+          <h2>今後追加する機能</h2>
+          <ul>
+            <li>カメラ起動</li>
+            <li>盤面検出</li>
+            <li>OCRでの数字読み取り</li>
+          </ul>
+          <p class="muted">`camera.js` と `ocr.js` は試作1ではダミー実装です。</p>
+        </section>
+      </aside>
+    </section>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
