@@ -65,6 +65,46 @@ function setOpenCvStatus(label, detail, tone = "idle") {
   }
 }
 
+function getOpenCvUiCopy(status) {
+  if (status === "fetching-script") {
+    return {
+      label: "取得中",
+      detail: "OpenCV.js のスクリプトをダウンロードしています。",
+      message: "OpenCV.js をダウンロードしています。通信状況によっては少し時間がかかります。"
+    };
+  }
+
+  if (status === "initializing-runtime") {
+    return {
+      label: "初期化中",
+      detail: "ダウンロードは完了しました。WASM ランタイムを初期化しています。",
+      message: "OpenCV.js を初期化しています。ここで少し待つことがあります。"
+    };
+  }
+
+  if (status === "ready") {
+    return {
+      label: "準備完了",
+      detail: "OpenCV.js の読み込みが完了しました。",
+      message: "OpenCV.js の準備ができました。盤面の外枠を検出しています。"
+    };
+  }
+
+  if (status === "error") {
+    return {
+      label: "失敗",
+      detail: "OpenCV.js の読み込みに失敗しました。",
+      message: "OpenCV.js の読み込みに失敗しました。"
+    };
+  }
+
+  return {
+    label: "未開始",
+    detail: "盤面検出を押すと読み込みを開始します。",
+    message: "盤面検出を押すと OpenCV.js の読み込みを開始します。"
+  };
+}
+
 function sanitizeCellValue(value) {
   return value.replace(/[^1-9]/g, "").slice(0, 1);
 }
@@ -238,14 +278,20 @@ async function handleDetectBoard() {
   setCameraMessage("OpenCV.js を読み込んでいます。");
   setOpenCvStatus("取得中", "OpenCV.js のスクリプトをダウンロードしています。", "loading");
 
+  const slowLoadTimer = window.setTimeout(() => {
+    setCameraMessage(
+      "OpenCV.js の読み込みに時間がかかっています。通信状況、CDN への接続、または iPhone 側の省電力設定を確認してください。",
+      "is-error"
+    );
+  }, 12000);
+
   try {
     await ensureOpenCvReady((status) => {
-      if (status === "fetching-script") {
-        setOpenCvStatus("取得中", "OpenCV.js のスクリプトをダウンロードしています。", "loading");
-      } else if (status === "initializing-runtime") {
-        setOpenCvStatus("初期化中", "ダウンロードは完了しました。WASM ランタイムを初期化しています。", "loading");
-      } else if (status === "ready") {
-        setOpenCvStatus("準備完了", "OpenCV.js の読み込みが完了しました。", "ready");
+      const copy = getOpenCvUiCopy(status);
+      const tone = status === "ready" ? "ready" : "loading";
+      setOpenCvStatus(copy.label, copy.detail, tone);
+      if (status !== "error") {
+        setCameraMessage(copy.message);
       }
     });
 
@@ -262,6 +308,7 @@ async function handleDetectBoard() {
     setCameraMessage(errorMessage, "is-error");
     setOpenCvStatus("失敗", errorMessage, "error");
   } finally {
+    window.clearTimeout(slowLoadTimer);
     detectBoardButton.disabled = false;
   }
 }
