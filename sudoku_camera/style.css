@@ -165,15 +165,19 @@ h3 {
 .camera-canvas {
   display: block;
   width: 100%;
-  aspect-ratio: 1;
   border: 1px solid rgba(35, 23, 16, 0.16);
   border-radius: 18px;
   background: linear-gradient(135deg, rgba(35, 23, 16, 0.9), rgba(78, 56, 42, 0.92));
-  object-fit: cover;
 }
 
 .camera-preview {
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 3 / 4;
+  object-fit: contain;
+}
+
+.camera-canvas {
+  aspect-ratio: 1;
+  object-fit: contain;
 }
 
 .camera-canvas.is-empty {
