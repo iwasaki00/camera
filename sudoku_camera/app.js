@@ -1,5 +1,6 @@
 import { solveSudoku } from "./sudokuSolver.js";
 import { initializeCamera, captureBoardImage, shutdownCamera } from "./camera.js";
+import { detectSudokuBoard, waitForOpenCvReady } from "./imageProcessor.js";
 
 const GRID_SIZE = 9;
 
@@ -10,8 +11,10 @@ const message = document.getElementById("message");
 const boardState = document.getElementById("boardState");
 const startCameraButton = document.getElementById("startCameraButton");
 const captureButton = document.getElementById("captureButton");
+const detectBoardButton = document.getElementById("detectBoardButton");
 const cameraPreview = document.getElementById("cameraPreview");
 const capturedCanvas = document.getElementById("capturedCanvas");
+const detectedBoardCanvas = document.getElementById("detectedBoardCanvas");
 const cameraMessage = document.getElementById("cameraMessage");
 const cameraState = document.getElementById("cameraState");
 
@@ -31,7 +34,7 @@ function setBoardState(text) {
 
 function setCameraMessage(text, tone = "") {
   cameraMessage.textContent = text;
-  cameraMessage.classList.remove("is-error");
+  cameraMessage.classList.remove("is-error", "is-success");
   if (tone) {
     cameraMessage.classList.add(tone);
   }
@@ -143,22 +146,46 @@ function clearBoard() {
   setMessage("盤面をクリアしました。");
 }
 
-function initializeCanvasPlaceholder() {
-  const width = 960;
-  const height = 720;
-  capturedCanvas.width = width;
-  capturedCanvas.height = height;
+function drawPlaceholder(canvas, title, subtitle) {
+  const width = 900;
+  const height = 900;
+  canvas.width = width;
+  canvas.height = height;
 
-  const context = capturedCanvas.getContext("2d");
+  const context = canvas.getContext("2d");
   context.fillStyle = "#f3e4d7";
   context.fillRect(0, 0, width, height);
   context.fillStyle = "#866655";
-  context.font = "bold 34px 'Hiragino Sans', 'Yu Gothic', sans-serif";
   context.textAlign = "center";
-  context.fillText("撮影画像はここに表示されます", width / 2, height / 2 - 8);
+  context.font = "bold 34px 'Hiragino Sans', 'Yu Gothic', sans-serif";
+  context.fillText(title, width / 2, height / 2 - 18);
   context.font = "24px 'Hiragino Sans', 'Yu Gothic', sans-serif";
-  context.fillText("カメラ起動後に「撮影」を押してください", width / 2, height / 2 + 40);
-  capturedCanvas.classList.add("is-empty");
+  context.fillText(subtitle, width / 2, height / 2 + 30);
+  canvas.classList.add("is-empty");
+}
+
+function initializeCanvasPlaceholders() {
+  drawPlaceholder(
+    capturedCanvas,
+    "撮影画像はここに表示されます",
+    "カメラ起動後に「撮影」を押してください"
+  );
+  drawPlaceholder(
+    detectedBoardCanvas,
+    "補正後の盤面はここに表示されます",
+    "撮影後に「盤面検出」を押してください"
+  );
+}
+
+async function initializeOpenCvState() {
+  try {
+    await waitForOpenCvReady();
+    setCameraMessage("OpenCV.js の準備ができました。撮影後に盤面検出を実行できます。");
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "OpenCV.js の読み込みに失敗しました。";
+    setCameraMessage(errorMessage, "is-error");
+  }
 }
 
 async function handleStartCamera() {
@@ -185,12 +212,33 @@ function handleCapture() {
   try {
     captureBoardImage(cameraPreview, capturedCanvas);
     capturedCanvas.classList.remove("is-empty");
+    detectBoardButton.disabled = false;
     setCameraState("撮影完了");
-    setCameraMessage("撮影画像を表示しました。手入力や解答機能はそのまま利用できます。");
+    setCameraMessage("撮影画像を表示しました。続けて「盤面検出」を実行できます。", "is-success");
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "撮影に失敗しました。";
     setCameraState("撮影失敗");
     setCameraMessage(errorMessage, "is-error");
+  }
+}
+
+async function handleDetectBoard() {
+  detectBoardButton.disabled = true;
+  setCameraState("検出中");
+  setCameraMessage("盤面の外枠を検出しています。");
+
+  try {
+    await detectSudokuBoard(capturedCanvas, detectedBoardCanvas);
+    detectedBoardCanvas.classList.remove("is-empty");
+    setCameraState("検出完了");
+    setCameraMessage("盤面を検出し、正方形へ補正しました。", "is-success");
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "盤面を検出できませんでした";
+    setCameraState("検出失敗");
+    setCameraMessage(errorMessage || "盤面を検出できませんでした", "is-error");
+  } finally {
+    detectBoardButton.disabled = false;
   }
 }
 
@@ -212,12 +260,14 @@ function handleSolve(event) {
 }
 
 buildGrid();
-initializeCanvasPlaceholder();
+initializeCanvasPlaceholders();
+initializeOpenCvState();
 
 sudokuForm.addEventListener("submit", handleSolve);
 clearButton.addEventListener("click", clearBoard);
 startCameraButton.addEventListener("click", handleStartCamera);
 captureButton.addEventListener("click", handleCapture);
+detectBoardButton.addEventListener("click", handleDetectBoard);
 
 window.addEventListener("beforeunload", () => {
   shutdownCamera(cameraPreview);

@@ -29,7 +29,7 @@ body {
 }
 
 .app-shell {
-  width: min(100%, 1080px);
+  width: min(100%, 1120px);
   margin: 0 auto;
   padding: calc(20px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom));
 }
@@ -59,6 +59,7 @@ body {
 
 h1,
 h2,
+h3,
 p,
 ul {
   margin: 0;
@@ -67,6 +68,11 @@ ul {
 h1 {
   font-size: clamp(2rem, 7vw, 3.1rem);
   line-height: 1.05;
+}
+
+h3 {
+  margin-bottom: 10px;
+  font-size: 1rem;
 }
 
 .lead,
@@ -80,7 +86,7 @@ h1 {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
   gap: 16px;
   margin-top: 18px;
   align-items: start;
@@ -143,23 +149,34 @@ h1 {
 
 .camera-stage {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-top: 14px;
 }
 
+.camera-card {
+  padding: 12px;
+  border: 1px solid rgba(54, 36, 23, 0.1);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
 .camera-preview,
-.captured-canvas {
+.camera-canvas {
   display: block;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 1;
   border: 1px solid rgba(35, 23, 16, 0.16);
-  border-radius: 20px;
-  background:
-    linear-gradient(135deg, rgba(35, 23, 16, 0.9), rgba(78, 56, 42, 0.92));
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(35, 23, 16, 0.9), rgba(78, 56, 42, 0.92));
   object-fit: cover;
 }
 
-.captured-canvas.is-empty {
+.camera-preview {
+  aspect-ratio: 4 / 3;
+}
+
+.camera-canvas.is-empty {
   opacity: 0.55;
 }
 
@@ -178,6 +195,10 @@ h1 {
 
 .camera-message.is-error {
   color: #8d1d1d;
+}
+
+.camera-message.is-success {
+  color: #15543d;
 }
 
 .sudoku-grid {
@@ -294,8 +315,12 @@ button.secondary {
   padding-left: 18px;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 920px) {
   .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .camera-stage {
     grid-template-columns: 1fr;
   }
 }
