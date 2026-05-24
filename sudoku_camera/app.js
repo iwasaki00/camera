@@ -1,6 +1,5 @@
 import { solveSudoku } from "./sudokuSolver.js";
-import { initializeCamera, captureBoardImage } from "./camera.js";
-import { recognizeSudokuGrid, extractSudokuDigits } from "./ocr.js";
+import { initializeCamera, captureBoardImage, shutdownCamera } from "./camera.js";
 
 const GRID_SIZE = 9;
 
@@ -9,6 +8,12 @@ const sudokuForm = document.getElementById("sudokuForm");
 const clearButton = document.getElementById("clearButton");
 const message = document.getElementById("message");
 const boardState = document.getElementById("boardState");
+const startCameraButton = document.getElementById("startCameraButton");
+const captureButton = document.getElementById("captureButton");
+const cameraPreview = document.getElementById("cameraPreview");
+const capturedCanvas = document.getElementById("capturedCanvas");
+const cameraMessage = document.getElementById("cameraMessage");
+const cameraState = document.getElementById("cameraState");
 
 const cells = [];
 
@@ -22,6 +27,18 @@ function setMessage(text, tone = "") {
 
 function setBoardState(text) {
   boardState.textContent = text;
+}
+
+function setCameraMessage(text, tone = "") {
+  cameraMessage.textContent = text;
+  cameraMessage.classList.remove("is-error");
+  if (tone) {
+    cameraMessage.classList.add(tone);
+  }
+}
+
+function setCameraState(text) {
+  cameraState.textContent = text;
 }
 
 function sanitizeCellValue(value) {
@@ -126,11 +143,56 @@ function clearBoard() {
   setMessage("盤面をクリアしました。");
 }
 
-function initializeStubs() {
-  initializeCamera();
-  captureBoardImage();
-  recognizeSudokuGrid();
-  extractSudokuDigits();
+function initializeCanvasPlaceholder() {
+  const width = 960;
+  const height = 720;
+  capturedCanvas.width = width;
+  capturedCanvas.height = height;
+
+  const context = capturedCanvas.getContext("2d");
+  context.fillStyle = "#f3e4d7";
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = "#866655";
+  context.font = "bold 34px 'Hiragino Sans', 'Yu Gothic', sans-serif";
+  context.textAlign = "center";
+  context.fillText("撮影画像はここに表示されます", width / 2, height / 2 - 8);
+  context.font = "24px 'Hiragino Sans', 'Yu Gothic', sans-serif";
+  context.fillText("カメラ起動後に「撮影」を押してください", width / 2, height / 2 + 40);
+  capturedCanvas.classList.add("is-empty");
+}
+
+async function handleStartCamera() {
+  startCameraButton.disabled = true;
+  setCameraState("起動中");
+  setCameraMessage("カメラを起動しています。初回は権限許可が必要です。");
+
+  try {
+    await initializeCamera(cameraPreview);
+    captureButton.disabled = false;
+    setCameraState("プレビュー中");
+    setCameraMessage("カメラ映像を表示しています。「撮影」で静止画を取得できます。");
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "カメラを起動できませんでした。";
+    setCameraState("利用不可");
+    setCameraMessage(errorMessage, "is-error");
+  } finally {
+    startCameraButton.disabled = false;
+  }
+}
+
+function handleCapture() {
+  try {
+    captureBoardImage(cameraPreview, capturedCanvas);
+    capturedCanvas.classList.remove("is-empty");
+    setCameraState("撮影完了");
+    setCameraMessage("撮影画像を表示しました。手入力や解答機能はそのまま利用できます。");
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "撮影に失敗しました。";
+    setCameraState("撮影失敗");
+    setCameraMessage(errorMessage, "is-error");
+  }
 }
 
 function handleSolve(event) {
@@ -151,7 +213,13 @@ function handleSolve(event) {
 }
 
 buildGrid();
-initializeStubs();
+initializeCanvasPlaceholder();
 
 sudokuForm.addEventListener("submit", handleSolve);
 clearButton.addEventListener("click", clearBoard);
+startCameraButton.addEventListener("click", handleStartCamera);
+captureButton.addEventListener("click", handleCapture);
+
+window.addEventListener("beforeunload", () => {
+  shutdownCamera(cameraPreview);
+});

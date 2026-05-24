@@ -9,6 +9,7 @@
   --accent: #c9582e;
   --accent-strong: #9f3f1d;
   --accent-soft: rgba(201, 88, 46, 0.12);
+  --info-soft: rgba(31, 85, 111, 0.12);
   --shadow: 0 22px 44px rgba(77, 50, 30, 0.14);
 }
 
@@ -70,6 +71,7 @@ h1 {
 
 .lead,
 .panel-header p,
+.camera-header p,
 .muted,
 .info-card li {
   color: var(--muted);
@@ -100,18 +102,82 @@ h1 {
   margin-bottom: 16px;
 }
 
-.status-chip {
+.status-chip,
+.camera-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: 34px;
   padding: 0 14px;
   border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
   font-size: 0.92rem;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.status-chip {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.camera-chip {
+  background: var(--info-soft);
+  color: #1f556f;
+}
+
+.camera-panel {
+  margin-bottom: 22px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.camera-header,
+.camera-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.camera-stage {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.camera-preview,
+.captured-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: 1px solid rgba(35, 23, 16, 0.16);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(35, 23, 16, 0.9), rgba(78, 56, 42, 0.92));
+  object-fit: cover;
+}
+
+.captured-canvas.is-empty {
+  opacity: 0.55;
+}
+
+.camera-actions {
+  margin-top: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.camera-message {
+  min-height: 3.5em;
+  margin-top: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.camera-message.is-error {
+  color: #8d1d1d;
 }
 
 .sudoku-grid {
@@ -182,6 +248,10 @@ button {
   font-weight: 700;
 }
 
+button:disabled {
+  opacity: 0.45;
+}
+
 button.primary {
   color: #fff8f3;
   background: linear-gradient(135deg, #e07a55, var(--accent-strong));
@@ -242,11 +312,13 @@ button.secondary {
     border-radius: 24px;
   }
 
-  .board-panel {
+  .board-panel,
+  .camera-panel {
     padding: 14px;
   }
 
-  .panel-header {
+  .panel-header,
+  .camera-header {
     align-items: flex-start;
     flex-direction: column;
   }

@@ -12,8 +12,8 @@
       <p class="eyebrow">Sudoku Camera Solver</p>
       <h1>iPhoneで使えるナンプレ解答アプリ</h1>
       <p class="lead">
-        試作1では盤面を手入力し、ブラウザ内のバックトラック法で解答します。
-        将来のカメラOCR追加に備えて、処理はモジュール分割しています。
+        盤面を手入力して解答できる試作版です。今回はカメラ起動と撮影画像の表示まで追加し、
+        将来のOCR読み取りを組み込みやすい構成にしています。
       </p>
     </section>
 
@@ -26,6 +26,40 @@
           </div>
           <span class="status-chip" id="boardState">入力待ち</span>
         </div>
+
+        <section class="camera-panel" aria-labelledby="cameraHeading">
+          <div class="camera-header">
+            <div>
+              <h2 id="cameraHeading">カメラ撮影</h2>
+              <p>iPhoneでは背面カメラを優先して起動します。</p>
+            </div>
+            <span class="camera-chip" id="cameraState">未起動</span>
+          </div>
+
+          <div class="camera-stage">
+            <video
+              id="cameraPreview"
+              class="camera-preview"
+              playsinline
+              autoplay
+              muted
+            ></video>
+            <canvas
+              id="capturedCanvas"
+              class="captured-canvas"
+              aria-label="撮影画像"
+            ></canvas>
+          </div>
+
+          <div class="camera-actions">
+            <button id="startCameraButton" class="primary" type="button">カメラを起動</button>
+            <button id="captureButton" class="secondary" type="button" disabled>撮影</button>
+          </div>
+
+          <p id="cameraMessage" class="camera-message" role="status" aria-live="polite">
+            カメラを起動すると、ここにプレビューと撮影画像が表示されます。
+          </p>
+        </section>
 
         <form id="sudokuForm" novalidate>
           <div id="sudokuGrid" class="sudoku-grid" aria-label="数独の入力盤面"></div>
@@ -45,13 +79,14 @@
         </section>
 
         <section class="info-card">
-          <h2>今後追加する機能</h2>
+          <h2>今回の範囲</h2>
           <ul>
-            <li>カメラ起動</li>
-            <li>盤面検出</li>
-            <li>OCRでの数字読み取り</li>
+            <li>9x9の手入力</li>
+            <li>バックトラック法での解答</li>
+            <li>iPhoneブラウザ向けカメラ起動</li>
+            <li>撮影画像のcanvas表示</li>
           </ul>
-          <p class="muted">`camera.js` と `ocr.js` は試作1ではダミー実装です。</p>
+          <p class="muted">OCRや自動読み取りはまだ実装していません。</p>
         </section>
       </aside>
     </section>
