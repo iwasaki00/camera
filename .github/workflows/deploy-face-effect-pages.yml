@@ -7,8 +7,11 @@ on:
       - master
     paths:
       - "index.html"
+      - "index.xml"
+      - "browser_camera/**"
       - "face_effect/**"
       - "henface_maker/**"
+      - "sudoku_camera/**"
       - ".github/workflows/deploy-face-effect-pages.yml"
   workflow_dispatch:
 
@@ -52,11 +55,16 @@ jobs:
       - name: Assemble Pages site
         shell: bash
         run: |
+          mkdir -p site/browser_camera
           mkdir -p site/face_effect
           mkdir -p site/henface_maker
+          mkdir -p site/sudoku_camera
           cp index.html site/index.html
+          cp index.xml site/index.xml
+          cp -r browser_camera/. site/browser_camera/
           cp -r face_effect/dist/. site/face_effect/
           cp -r henface_maker/dist/. site/henface_maker/
+          cp -r sudoku_camera/. site/sudoku_camera/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
