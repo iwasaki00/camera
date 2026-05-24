@@ -17,6 +17,9 @@ const capturedCanvas = document.getElementById("capturedCanvas");
 const detectedBoardCanvas = document.getElementById("detectedBoardCanvas");
 const cameraMessage = document.getElementById("cameraMessage");
 const cameraState = document.getElementById("cameraState");
+const openCvLoadState = document.getElementById("openCvLoadState");
+const openCvLoadBar = document.getElementById("openCvLoadBar");
+const openCvLoadDetail = document.getElementById("openCvLoadDetail");
 
 const cells = [];
 
@@ -42,6 +45,24 @@ function setCameraMessage(text, tone = "") {
 
 function setCameraState(text) {
   cameraState.textContent = text;
+}
+
+function setOpenCvStatus(label, detail, tone = "idle") {
+  openCvLoadState.textContent = label;
+  openCvLoadDetail.textContent = detail;
+  openCvLoadState.classList.remove("is-loading", "is-ready", "is-error");
+  openCvLoadBar.classList.remove("is-loading", "is-ready", "is-error");
+
+  if (tone === "loading") {
+    openCvLoadState.classList.add("is-loading");
+    openCvLoadBar.classList.add("is-loading");
+  } else if (tone === "ready") {
+    openCvLoadState.classList.add("is-ready");
+    openCvLoadBar.classList.add("is-ready");
+  } else if (tone === "error") {
+    openCvLoadState.classList.add("is-error");
+    openCvLoadBar.classList.add("is-error");
+  }
 }
 
 function sanitizeCellValue(value) {
@@ -214,10 +235,20 @@ function handleCapture() {
 async function handleDetectBoard() {
   detectBoardButton.disabled = true;
   setCameraState("検出準備中");
-  setCameraMessage("OpenCV.js を読み込んでいます。初回は少し時間がかかります。");
+  setCameraMessage("OpenCV.js を読み込んでいます。");
+  setOpenCvStatus("取得中", "OpenCV.js のスクリプトをダウンロードしています。", "loading");
 
   try {
-    await ensureOpenCvReady();
+    await ensureOpenCvReady((status) => {
+      if (status === "fetching-script") {
+        setOpenCvStatus("取得中", "OpenCV.js のスクリプトをダウンロードしています。", "loading");
+      } else if (status === "initializing-runtime") {
+        setOpenCvStatus("初期化中", "ダウンロードは完了しました。WASM ランタイムを初期化しています。", "loading");
+      } else if (status === "ready") {
+        setOpenCvStatus("準備完了", "OpenCV.js の読み込みが完了しました。", "ready");
+      }
+    });
+
     setCameraState("検出中");
     setCameraMessage("盤面の外枠を検出しています。");
     await detectSudokuBoard(capturedCanvas, detectedBoardCanvas);
@@ -229,6 +260,7 @@ async function handleDetectBoard() {
       error instanceof Error ? error.message : "盤面を検出できませんでした。";
     setCameraState("検出失敗");
     setCameraMessage(errorMessage, "is-error");
+    setOpenCvStatus("失敗", errorMessage, "error");
   } finally {
     detectBoardButton.disabled = false;
   }
@@ -253,6 +285,7 @@ function handleSolve(event) {
 
 buildGrid();
 initializeCanvasPlaceholders();
+setOpenCvStatus("未開始", "盤面検出を押すと読み込みを開始します。");
 
 sudokuForm.addEventListener("submit", handleSolve);
 clearButton.addEventListener("click", clearBoard);

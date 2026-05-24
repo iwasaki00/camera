@@ -2,6 +2,15 @@ const OPEN_CV_URL = "https://docs.opencv.org/4.x/opencv.js";
 const WARPED_BOARD_SIZE = 450;
 
 let openCvPromise = null;
+let openCvStatus = "idle";
+const statusListeners = new Set();
+
+function notifyStatus(status) {
+  openCvStatus = status;
+  for (const listener of statusListeners) {
+    listener(status);
+  }
+}
 
 function sortCorners(points) {
   const bySum = [...points].sort((a, b) => a.x + a.y - (b.x + b.y));
@@ -84,29 +93,48 @@ function drawGridOverlay(context, size) {
   context.restore();
 }
 
+function attachListener(listener) {
+  if (!listener) {
+    return () => {};
+  }
+  statusListeners.add(listener);
+  listener(openCvStatus);
+  return () => statusListeners.delete(listener);
+}
+
 function loadOpenCvScript(resolve, reject) {
   if (window.cv && typeof window.cv.getBuildInformation === "function") {
+    notifyStatus("ready");
     resolve(window.cv);
     return;
   }
 
   const existing = document.querySelector('script[data-opencv-loader="true"]');
   if (existing) {
+    notifyStatus("fetching-script");
     existing.addEventListener("load", () => {
       if (window.cv && typeof window.cv.getBuildInformation === "function") {
+        notifyStatus("ready");
         resolve(window.cv);
       } else if (window.cv) {
-        window.cv.onRuntimeInitialized = () => resolve(window.cv);
+        notifyStatus("initializing-runtime");
+        window.cv.onRuntimeInitialized = () => {
+          notifyStatus("ready");
+          resolve(window.cv);
+        };
       } else {
+        notifyStatus("error");
         reject(new Error("OpenCV.js の読み込みに失敗しました。"));
       }
     }, { once: true });
     existing.addEventListener("error", () => {
+      notifyStatus("error");
       reject(new Error("OpenCV.js の読み込みに失敗しました。"));
     }, { once: true });
     return;
   }
 
+  notifyStatus("fetching-script");
   const script = document.createElement("script");
   script.async = true;
   script.type = "text/javascript";
@@ -114,28 +142,43 @@ function loadOpenCvScript(resolve, reject) {
   script.src = OPEN_CV_URL;
   script.onload = () => {
     if (!window.cv) {
+      notifyStatus("error");
       reject(new Error("OpenCV.js の読み込みに失敗しました。"));
       return;
     }
 
     if (typeof window.cv.getBuildInformation === "function") {
+      notifyStatus("ready");
       resolve(window.cv);
       return;
     }
 
-    window.cv.onRuntimeInitialized = () => resolve(window.cv);
+    notifyStatus("initializing-runtime");
+    window.cv.onRuntimeInitialized = () => {
+      notifyStatus("ready");
+      resolve(window.cv);
+    };
   };
   script.onerror = () => {
+    notifyStatus("error");
     reject(new Error("OpenCV.js の読み込みに失敗しました。"));
   };
 
   document.head.appendChild(script);
 }
 
-export function ensureOpenCvReady() {
+export function ensureOpenCvReady(onStatus) {
+  const detach = attachListener(onStatus);
+
   if (!openCvPromise) {
     openCvPromise = new Promise((resolve, reject) => {
       loadOpenCvScript(resolve, reject);
+    }).finally(() => {
+      detach();
+    });
+  } else {
+    openCvPromise = openCvPromise.finally(() => {
+      detach();
     });
   }
 

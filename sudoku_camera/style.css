@@ -10,6 +10,8 @@
   --accent-strong: #9f3f1d;
   --accent-soft: rgba(201, 88, 46, 0.12);
   --info-soft: rgba(31, 85, 111, 0.12);
+  --ok-soft: rgba(24, 116, 63, 0.12);
+  --error-soft: rgba(141, 29, 29, 0.12);
   --shadow: 0 22px 44px rgba(77, 50, 30, 0.14);
 }
 
@@ -79,7 +81,8 @@ h3 {
 .camera-header p,
 .camera-card-copy,
 .muted,
-.info-card li {
+.info-card li,
+.opencv-detail {
   color: var(--muted);
   line-height: 1.75;
 }
@@ -109,7 +112,8 @@ h3 {
 }
 
 .status-chip,
-.camera-chip {
+.camera-chip,
+.opencv-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -196,6 +200,95 @@ h3 {
 
 .camera-canvas.is-empty {
   opacity: 0.55;
+}
+
+.opencv-status {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(54, 36, 23, 0.1);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.opencv-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.opencv-label {
+  font-weight: 700;
+}
+
+.opencv-badge {
+  background: var(--info-soft);
+  color: #1f556f;
+}
+
+.opencv-badge.is-loading {
+  background: rgba(203, 91, 50, 0.12);
+  color: var(--accent-strong);
+}
+
+.opencv-badge.is-ready {
+  background: var(--ok-soft);
+  color: #18743f;
+}
+
+.opencv-badge.is-error {
+  background: var(--error-soft);
+  color: #8d1d1d;
+}
+
+.opencv-progress {
+  position: relative;
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(54, 36, 23, 0.08);
+}
+
+.opencv-progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 35%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #e07a55, var(--accent-strong));
+  transform: translateX(-110%);
+  opacity: 0;
+}
+
+.opencv-progress.is-loading::after {
+  opacity: 1;
+  animation: open-cv-loading 1.1s linear infinite;
+}
+
+.opencv-progress.is-ready::after {
+  width: 100%;
+  transform: translateX(0);
+  opacity: 1;
+  animation: none;
+  background: linear-gradient(90deg, #2d9b63, #18743f);
+}
+
+.opencv-progress.is-error::after {
+  width: 100%;
+  transform: translateX(0);
+  opacity: 1;
+  animation: none;
+  background: linear-gradient(90deg, #cf5f5f, #8d1d1d);
+}
+
+@keyframes open-cv-loading {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(320%);
+  }
 }
 
 .camera-message {
@@ -356,7 +449,8 @@ button.secondary {
 
   .panel-header,
   .camera-header,
-  .camera-card-header {
+  .camera-card-header,
+  .opencv-status-row {
     align-items: flex-start;
     flex-direction: column;
   }

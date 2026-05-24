@@ -13,7 +13,7 @@
       <h1>iPhoneで使えるナンプレ解答アプリ</h1>
       <p class="lead">
         手入力での解答に加えて、カメラ撮影と盤面検出まで行う試作版です。
-        OCR はまだ入れておらず、今回は工程ごとに状態を確認しやすい UI にしています。
+        OpenCV.js の読み込み状況も見えるようにしています。
       </p>
     </section>
 
@@ -71,6 +71,18 @@
                 <button id="detectBoardButton" class="secondary stage-button" type="button" disabled>盤面検出</button>
               </div>
               <p class="camera-card-copy">撮影画像から盤面外枠を検出し、正方形へ補正します。</p>
+
+              <div class="opencv-status" aria-live="polite">
+                <div class="opencv-status-row">
+                  <span class="opencv-label">OpenCV.js</span>
+                  <span id="openCvLoadState" class="opencv-badge">未開始</span>
+                </div>
+                <div id="openCvLoadBar" class="opencv-progress"></div>
+                <p id="openCvLoadDetail" class="opencv-detail">
+                  盤面検出を押すと読み込みを開始します。
+                </p>
+              </div>
+
               <canvas
                 id="detectedBoardCanvas"
                 class="camera-canvas"
