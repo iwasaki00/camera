@@ -1,6 +1,6 @@
-let stream = null;
+let activeStream = null;
 
-function stopCurrentStream() {
+function stopTracks(stream) {
   if (!stream) {
     return;
   }
@@ -8,7 +8,6 @@ function stopCurrentStream() {
   for (const track of stream.getTracks()) {
     track.stop();
   }
-  stream = null;
 }
 
 export function isCameraSupported() {
@@ -18,16 +17,15 @@ export function isCameraSupported() {
   );
 }
 
-export async function initializeCamera(videoElement) {
+export async function startCamera(videoElement) {
   if (!isCameraSupported()) {
-    throw new Error(
-      "このブラウザではカメラ機能を利用できません。iPhone の Safari で HTTPS 配信されているページを開いてください。"
-    );
+    throw new Error("Camera is not available. Open this page in iPhone Safari over HTTPS.");
   }
 
-  stopCurrentStream();
+  stopTracks(activeStream);
+  activeStream = null;
 
-  const preferredConstraints = {
+  const constraints = {
     audio: false,
     video: {
       facingMode: { ideal: "environment" },
@@ -36,39 +34,28 @@ export async function initializeCamera(videoElement) {
     }
   };
 
+  console.log("[camera] requesting camera", constraints);
+
   try {
-    stream = await navigator.mediaDevices.getUserMedia(preferredConstraints);
+    activeStream = await navigator.mediaDevices.getUserMedia(constraints);
   } catch (error) {
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: true
-      });
-    } catch (fallbackError) {
-      const originalMessage = error instanceof Error ? error.message : "";
-      const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : "";
-      throw new Error(
-        "カメラを起動できませんでした。Safari で HTTPS のページを開き、カメラ権限を許可しているか確認してください。" +
-          (originalMessage || fallbackMessage ? ` (${originalMessage || fallbackMessage})` : "")
-      );
-    }
+    console.warn("[camera] preferred constraints failed", error);
+    activeStream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: true
+    });
   }
 
-  videoElement.srcObject = stream;
+  videoElement.srcObject = activeStream;
+  await videoElement.play();
+  console.log("[camera] stream started", activeStream);
 
-  try {
-    await videoElement.play();
-  } catch {
-    stopCurrentStream();
-    throw new Error("カメラ映像の再生を開始できませんでした。");
-  }
-
-  return stream;
+  return activeStream;
 }
 
-export function captureBoardImage(videoElement, canvasElement) {
-  if (!stream || !videoElement.videoWidth || !videoElement.videoHeight) {
-    throw new Error("カメラ映像の準備ができていません。カメラ起動後にもう一度試してください。");
+export function captureFrame(videoElement, canvasElement) {
+  if (!videoElement.videoWidth || !videoElement.videoHeight) {
+    throw new Error("Camera video is not ready yet.");
   }
 
   canvasElement.width = videoElement.videoWidth;
@@ -77,14 +64,21 @@ export function captureBoardImage(videoElement, canvasElement) {
   const context = canvasElement.getContext("2d");
   context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
 
+  console.log("[camera] frame captured", {
+    width: canvasElement.width,
+    height: canvasElement.height
+  });
+
   return canvasElement.toDataURL("image/png");
 }
 
-export function shutdownCamera(videoElement) {
+export function stopCamera(videoElement) {
   if (videoElement) {
     videoElement.pause();
     videoElement.srcObject = null;
   }
 
-  stopCurrentStream();
+  stopTracks(activeStream);
+  activeStream = null;
+  console.log("[camera] stream stopped");
 }

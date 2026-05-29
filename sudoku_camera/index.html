@@ -3,117 +3,53 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Sudoku Camera Solver</title>
+  <title>Sudoku OCR Camera Test</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <main class="app-shell">
-    <section class="hero">
-      <p class="eyebrow">Sudoku Camera Solver</p>
-      <h1>iPhoneで使えるナンプレ解答アプリ</h1>
+  <main class="app">
+    <header class="hero">
+      <p class="eyebrow">Sudoku OCR Test</p>
+      <h1>Camera to OCR only</h1>
       <p class="lead">
-        手入力の解答に加えて、カメラ撮影から盤面の四隅を手で合わせて補正できる試作版です。
-        OCR はまだ入れておらず、まずは安定して盤面を正方形化できることを優先しています。
+        Test whether iPhone camera images of a Sudoku puzzle can be read as digits.
+      </p>
+    </header>
+
+    <section class="panel">
+      <h2>1. Start camera</h2>
+      <video id="cameraPreview" class="preview" playsinline autoplay muted></video>
+      <button id="startCameraButton" class="primary" type="button">Start camera</button>
+    </section>
+
+    <section class="panel">
+      <h2>2. Capture image</h2>
+      <canvas id="captureCanvas" class="captureCanvas" aria-label="Captured image preview"></canvas>
+      <button id="captureButton" class="secondary" type="button" disabled>Capture</button>
+    </section>
+
+    <section class="panel">
+      <h2>3. Run OCR</h2>
+      <button id="runOcrButton" class="primary" type="button" disabled>Run OCR</button>
+      <p id="statusMessage" class="status" role="status" aria-live="polite">
+        Follow this order: Start camera -> Capture -> Run OCR
       </p>
     </section>
 
-    <section class="workspace">
-      <div class="board-panel">
-        <div class="panel-header">
-          <div>
-            <h2>9x9 盤面</h2>
-            <p>空欄は未入力のままで構いません。</p>
-          </div>
-          <span class="status-chip" id="boardState">入力待ち</span>
-        </div>
-
-        <section class="camera-panel" aria-labelledby="cameraHeading">
-          <div class="camera-header">
-            <div>
-              <h2 id="cameraHeading">カメラ工程</h2>
-              <p>ライブ映像、撮影画像、四隅調整、補正後の盤面を順に確認できます。</p>
-            </div>
-            <span class="camera-chip" id="cameraState">未起動</span>
-          </div>
-
-          <div class="camera-stage">
-            <section class="camera-card">
-              <div class="camera-card-header">
-                <h3>1. ライブ映像</h3>
-                <button id="startCameraButton" class="primary stage-button" type="button">カメラ起動</button>
-              </div>
-              <p class="camera-card-copy">iPhone では背面カメラを優先して起動します。</p>
-              <video id="cameraPreview" class="camera-preview" playsinline autoplay muted></video>
-            </section>
-
-            <section class="camera-card">
-              <div class="camera-card-header">
-                <h3>2. 撮影画像</h3>
-                <button id="captureButton" class="secondary stage-button" type="button" disabled>撮影</button>
-              </div>
-              <p class="camera-card-copy">ライブ映像から静止画を取得します。</p>
-              <div class="canvas-stack">
-                <canvas id="capturedCanvas" class="camera-canvas" aria-label="撮影画像"></canvas>
-                <canvas id="capturedOverlayCanvas" class="camera-overlay" aria-label="四隅調整用オーバーレイ"></canvas>
-              </div>
-            </section>
-
-            <section class="camera-card">
-              <div class="camera-card-header">
-                <h3>3. 補正後の盤面</h3>
-                <button id="rectifyBoardButton" class="secondary stage-button" type="button" disabled>補正する</button>
-              </div>
-              <p class="camera-card-copy">オレンジの四隅をドラッグして盤面に合わせてから補正します。</p>
-              <div class="manual-status">
-                <div class="manual-status-row">
-                  <span class="manual-label">四隅調整</span>
-                  <span id="manualAdjustState" class="manual-badge">未調整</span>
-                </div>
-                <p id="manualAdjustDetail" class="manual-detail">
-                  撮影後に四隅ハンドルが表示されます。盤面の角へ合わせてください。
-                </p>
-              </div>
-              <canvas id="detectedBoardCanvas" class="camera-canvas" aria-label="補正後の盤面"></canvas>
-            </section>
-          </div>
-
-          <p id="cameraMessage" class="camera-message" role="status" aria-live="polite">
-            まず「カメラ起動」を押してください。
-          </p>
-        </section>
-
-        <form id="sudokuForm" novalidate>
-          <div id="sudokuGrid" class="sudoku-grid" aria-label="数独の入力盤面"></div>
-          <div class="actions">
-            <button id="solveButton" class="primary" type="submit">解く</button>
-            <button id="clearButton" class="secondary" type="button">クリア</button>
-          </div>
-        </form>
+    <section class="panel results">
+      <h2>OCR results</h2>
+      <div class="resultBlock">
+        <h3>Raw OCR</h3>
+        <pre id="rawOcrResult" class="resultText">Not run yet.</pre>
       </div>
-
-      <aside class="side-panel">
-        <section class="info-card">
-          <h2>状態</h2>
-          <p id="message" class="message" role="status" aria-live="polite">
-            数字を入力して「解く」を押してください。
-          </p>
-        </section>
-
-        <section class="info-card">
-          <h2>今回の範囲</h2>
-          <ul>
-            <li>9x9 の手入力</li>
-            <li>バックトラック法での解答</li>
-            <li>iPhone ブラウザ向けカメラ起動と撮影</li>
-            <li>四隅を手で指定しての透視補正</li>
-            <li>補正後画像への 9x9 グリッド描画</li>
-          </ul>
-          <p class="muted">OCR や数字読み取りはまだ実装していません。</p>
-        </section>
-      </aside>
+      <div class="resultBlock">
+        <h3>Digits only</h3>
+        <pre id="digitsOnlyResult" class="resultText">Not run yet.</pre>
+      </div>
     </section>
   </main>
 
+  <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
