@@ -97,10 +97,13 @@ export async function startCamera(videoElement) {
     console.warn("[camera] play() threw synchronously", error);
   }
 
-  const becameReady = await waitForVideoReady(videoElement);
-  if (!becameReady) {
-    console.warn("[camera] video readiness timeout; continuing because stream is active");
-  }
+  waitForVideoReady(videoElement).then((becameReady) => {
+    if (!becameReady) {
+      console.warn("[camera] video readiness timeout; stream is active but metadata is delayed");
+      return;
+    }
+    console.log("[camera] video metadata became ready");
+  });
 
   console.log("[camera] stream started", activeStream);
 
