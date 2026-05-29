@@ -19,7 +19,7 @@ export function isCameraSupported() {
 
 export async function startCamera(videoElement) {
   if (!isCameraSupported()) {
-    throw new Error("カメラを利用できません。iPhone Safari で HTTPS ページとして開いてください。");
+    throw new Error("\u30ab\u30e1\u30e9\u3092\u5229\u7528\u3067\u304d\u307e\u305b\u3093\u3002iPhone Safari \u3067 HTTPS \u30da\u30fc\u30b8\u3068\u3057\u3066\u958b\u3044\u3066\u304f\u3060\u3055\u3044\u3002");
   }
 
   stopTracks(activeStream);
@@ -55,7 +55,7 @@ export async function startCamera(videoElement) {
 
 export function captureFrame(videoElement, canvasElement) {
   if (!videoElement.videoWidth || !videoElement.videoHeight) {
-    throw new Error("カメラ映像の準備がまだ完了していません。");
+    throw new Error("\u30ab\u30e1\u30e9\u6620\u50cf\u306e\u6e96\u5099\u304c\u307e\u3060\u5b8c\u4e86\u3057\u3066\u3044\u307e\u305b\u3093\u3002");
   }
 
   canvasElement.width = videoElement.videoWidth;
