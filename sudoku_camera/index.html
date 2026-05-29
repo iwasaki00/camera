@@ -9,42 +9,43 @@
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">Sudoku OCR Test</p>
-      <h1>Camera to OCR only</h1>
+      <p class="eyebrow">ナンプレ OCR テスト</p>
+      <h1>iPhoneカメラで数字OCRを検証</h1>
       <p class="lead">
-        Test whether iPhone camera images of a Sudoku puzzle can be read as digits.
+        ナンプレ問題を撮影し、数字がどこまで読めるかを確認するための最小構成アプリです。
       </p>
     </header>
 
     <section class="panel">
-      <h2>1. Start camera</h2>
+      <h2>1. カメラ開始</h2>
       <video id="cameraPreview" class="preview" playsinline autoplay muted></video>
-      <button id="startCameraButton" class="primary" type="button">Start camera</button>
+      <button id="startCameraButton" class="primary" type="button">カメラ開始</button>
+      <button id="captureButton" class="secondary" type="button" disabled>撮影</button>
     </section>
 
     <section class="panel">
-      <h2>2. Capture image</h2>
-      <canvas id="captureCanvas" class="captureCanvas" aria-label="Captured image preview"></canvas>
-      <button id="captureButton" class="secondary" type="button" disabled>Capture</button>
+      <h2>2. 撮影画像</h2>
+      <canvas id="captureCanvas" class="captureCanvas" aria-label="撮影画像"></canvas>
     </section>
 
     <section class="panel">
-      <h2>3. Run OCR</h2>
-      <button id="runOcrButton" class="primary" type="button" disabled>Run OCR</button>
+      <h2>3. OCR前処理画像</h2>
+      <canvas id="processedCanvas" class="captureCanvas" aria-label="OCR前処理画像"></canvas>
+      <button id="runOcrButton" class="primary" type="button" disabled>OCR実行</button>
       <p id="statusMessage" class="status" role="status" aria-live="polite">
-        Follow this order: Start camera -> Capture -> Run OCR
+        1. カメラ開始 → 2. 撮影 → 3. OCR実行 の順で試してください。
       </p>
     </section>
 
     <section class="panel results">
-      <h2>OCR results</h2>
+      <h2>OCR結果</h2>
       <div class="resultBlock">
-        <h3>Raw OCR</h3>
-        <pre id="rawOcrResult" class="resultText">Not run yet.</pre>
+        <h3>生OCR結果</h3>
+        <pre id="rawOcrResult" class="resultText">まだ実行していません。</pre>
       </div>
       <div class="resultBlock">
-        <h3>Digits only</h3>
-        <pre id="digitsOnlyResult" class="resultText">Not run yet.</pre>
+        <h3>数字だけ抽出結果</h3>
+        <pre id="digitsOnlyResult" class="resultText">まだ実行していません。</pre>
       </div>
     </section>
   </main>

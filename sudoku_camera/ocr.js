@@ -34,15 +34,53 @@ function getDigitsOnlyLines(text) {
     .join("\n");
 }
 
-export async function runOcrFromCanvas(canvasElement) {
+function preprocessForOcr(sourceCanvas, outputCanvas) {
+  outputCanvas.width = sourceCanvas.width;
+  outputCanvas.height = sourceCanvas.height;
+
+  const sourceContext = sourceCanvas.getContext("2d");
+  const outputContext = outputCanvas.getContext("2d");
+  const imageData = sourceContext.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+  const { data } = imageData;
+
+  let total = 0;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const gray = Math.round(data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114);
+    total += gray;
+  }
+
+  const pixelCount = data.length / 4;
+  const average = pixelCount > 0 ? total / pixelCount : 128;
+  const threshold = Math.max(90, Math.min(190, average * 0.92));
+  const contrast = 1.45;
+
+  console.log("[ocr] preprocess settings", { average, threshold, contrast });
+
+  for (let index = 0; index < data.length; index += 4) {
+    const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
+    const contrasted = Math.max(0, Math.min(255, (gray - 128) * contrast + 128));
+    const binary = contrasted >= threshold ? 255 : 0;
+    data[index] = binary;
+    data[index + 1] = binary;
+    data[index + 2] = binary;
+    data[index + 3] = 255;
+  }
+
+  outputContext.putImageData(imageData, 0, 0);
+  return outputCanvas;
+}
+
+export async function runOcrFromCanvas(sourceCanvas, processedCanvas) {
   const worker = await getWorker();
+  const targetCanvas = preprocessForOcr(sourceCanvas, processedCanvas);
 
   console.log("[ocr] starting OCR", {
-    width: canvasElement.width,
-    height: canvasElement.height
+    width: targetCanvas.width,
+    height: targetCanvas.height
   });
 
-  const result = await worker.recognize(canvasElement);
+  const result = await worker.recognize(targetCanvas);
   const rawText = result.data.text || "";
   const digitsOnly = getDigitsOnlyLines(rawText);
 

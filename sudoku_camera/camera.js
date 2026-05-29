@@ -19,7 +19,7 @@ export function isCameraSupported() {
 
 export async function startCamera(videoElement) {
   if (!isCameraSupported()) {
-    throw new Error("Camera is not available. Open this page in iPhone Safari over HTTPS.");
+    throw new Error("カメラを利用できません。iPhone Safari で HTTPS ページとして開いてください。");
   }
 
   stopTracks(activeStream);
@@ -55,7 +55,7 @@ export async function startCamera(videoElement) {
 
 export function captureFrame(videoElement, canvasElement) {
   if (!videoElement.videoWidth || !videoElement.videoHeight) {
-    throw new Error("Camera video is not ready yet.");
+    throw new Error("カメラ映像の準備がまだ完了していません。");
   }
 
   canvasElement.width = videoElement.videoWidth;
