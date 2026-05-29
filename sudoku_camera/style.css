@@ -190,7 +190,7 @@ button.secondary {
   padding: 6px;
   border: 3px solid var(--text);
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .cellInput {
