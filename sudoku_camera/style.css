@@ -194,6 +194,13 @@ button.secondary {
   accent-color: var(--accent);
 }
 
+.stepList {
+  margin: 0;
+  padding-left: 1.4rem;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
 .status {
   min-height: 4.8em;
 }
