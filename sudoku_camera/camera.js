@@ -1,5 +1,34 @@
 let activeStream = null;
 
+function waitForVideoMetadata(videoElement, timeoutMs = 4000) {
+  if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("\u30ab\u30e1\u30e9\u6620\u50cf\u306e\u6e96\u5099\u304c\u5b8c\u4e86\u3057\u307e\u305b\u3093\u3002"));
+    }, timeoutMs);
+
+    const handleReady = () => {
+      cleanup();
+      resolve();
+    };
+
+    const cleanup = () => {
+      window.clearTimeout(timeoutId);
+      videoElement.removeEventListener("loadedmetadata", handleReady);
+      videoElement.removeEventListener("loadeddata", handleReady);
+      videoElement.removeEventListener("canplay", handleReady);
+    };
+
+    videoElement.addEventListener("loadedmetadata", handleReady, { once: true });
+    videoElement.addEventListener("loadeddata", handleReady, { once: true });
+    videoElement.addEventListener("canplay", handleReady, { once: true });
+  });
+}
+
 function stopTracks(stream) {
   if (!stream) {
     return;
@@ -47,7 +76,18 @@ export async function startCamera(videoElement) {
   }
 
   videoElement.srcObject = activeStream;
-  await videoElement.play();
+  try {
+    const playPromise = videoElement.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch((error) => {
+        console.warn("[camera] play() rejected but continuing with metadata wait", error);
+      });
+    }
+  } catch (error) {
+    console.warn("[camera] play() threw synchronously", error);
+  }
+
+  await waitForVideoMetadata(videoElement);
   console.log("[camera] stream started", activeStream);
 
   return activeStream;
