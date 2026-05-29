@@ -7,7 +7,6 @@
   --muted: #6b5f52;
   --accent: #b85c38;
   --accent-dark: #8f4528;
-  --overlay: rgba(17, 12, 8, 0.48);
   --shadow: 0 14px 28px rgba(73, 52, 34, 0.12);
 }
 
@@ -26,7 +25,7 @@ body {
 }
 
 .app {
-  width: min(100%, 760px);
+  width: min(100%, 820px);
   margin: 0 auto;
   padding: calc(16px + env(safe-area-inset-top)) 14px calc(24px + env(safe-area-inset-bottom));
 }
@@ -57,7 +56,7 @@ h1,
 h2,
 h3,
 p,
-pre {
+ol {
   margin: 0;
 }
 
@@ -70,13 +69,10 @@ h2 {
   font-size: 1.15rem;
 }
 
-h3 {
-  font-size: 1rem;
-}
-
 .lead,
 .status,
-.panelCopy {
+.panelCopy,
+.stepList {
   color: var(--muted);
   line-height: 1.7;
 }
@@ -86,6 +82,10 @@ h3 {
   gap: 12px;
   padding: 16px;
   margin-bottom: 14px;
+}
+
+.stepList {
+  padding-left: 1.4rem;
 }
 
 .preview,
@@ -106,6 +106,10 @@ h3 {
 .captureCanvas,
 .overlayCanvas {
   aspect-ratio: 3 / 4;
+}
+
+.squareCanvas {
+  aspect-ratio: 1;
 }
 
 .canvasStack {
@@ -155,27 +159,6 @@ button.secondary {
   border: 1px solid var(--line);
 }
 
-.results {
-  gap: 14px;
-}
-
-.resultBlock {
-  display: grid;
-  gap: 8px;
-}
-
-.resultText {
-  min-height: 120px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: #fff;
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.6;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-
 .sliderGroup {
   display: grid;
   gap: 8px;
@@ -194,15 +177,89 @@ button.secondary {
   accent-color: var(--accent);
 }
 
-.stepList {
-  margin: 0;
-  padding-left: 1.4rem;
-  color: var(--muted);
-  line-height: 1.8;
-}
-
 .status {
   min-height: 4.8em;
+}
+
+.resultGrid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 0;
+  width: min(100%, 640px);
+  margin: 0 auto;
+  padding: 6px;
+  border: 3px solid var(--text);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.cellInput {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid rgba(35, 23, 16, 0.16);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+  font-size: clamp(1rem, 3.8vw, 1.45rem);
+  font-weight: 700;
+  text-align: center;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.cellInput:focus {
+  position: relative;
+  z-index: 1;
+  outline: 3px solid rgba(184, 92, 56, 0.28);
+  outline-offset: -2px;
+}
+
+.cellInput.boxRight {
+  border-right-width: 3px;
+  border-right-color: var(--text);
+}
+
+.cellInput.boxBottom {
+  border-bottom-width: 3px;
+  border-bottom-color: var(--text);
+}
+
+.debugGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.debugCard {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.debugCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.debugCanvas {
+  width: 100%;
+  aspect-ratio: 1;
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  image-rendering: pixelated;
+}
+
+.debugValue {
+  font-weight: 700;
+  color: var(--text);
 }
 
 @media (max-width: 520px) {
@@ -213,6 +270,11 @@ button.secondary {
 
   .hero,
   .panel {
+    border-radius: 18px;
+  }
+
+  .resultGrid {
+    padding: 4px;
     border-radius: 18px;
   }
 }

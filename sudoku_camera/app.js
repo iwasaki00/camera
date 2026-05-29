@@ -1,5 +1,11 @@
 import { startCamera, captureFrame, stopCamera } from "./camera.js";
-import { preprocessToBinaryCanvas, removeGridLinesFromCanvas, runOcrFromCanvas } from "./ocr.js";
+import { recognizeSingleDigit } from "./ocr.js";
+import { createEmptyBoard, drawCellCrop, extractSquareBoard, splitBoardIntoCells } from "./gridOcr.js";
+
+const GRID_SIZE = 9;
+const MIN_CROP_SIZE = 120;
+const HANDLE_RADIUS = 28;
+const EDGE_THRESHOLD = 26;
 
 const startCameraButton = document.getElementById("startCameraButton");
 const captureButton = document.getElementById("captureButton");
@@ -9,28 +15,19 @@ const cameraPreview = document.getElementById("cameraPreview");
 const captureCanvas = document.getElementById("captureCanvas");
 const cropOverlayCanvas = document.getElementById("cropOverlayCanvas");
 const croppedCanvas = document.getElementById("croppedCanvas");
-const processedCanvas = document.getElementById("processedCanvas");
-const lineRemovedCanvas = document.getElementById("lineRemovedCanvas");
-const verticalThresholdRange = document.getElementById("verticalThresholdRange");
-const horizontalThresholdRange = document.getElementById("horizontalThresholdRange");
-const eraseRadiusRange = document.getElementById("eraseRadiusRange");
-const verticalThresholdValue = document.getElementById("verticalThresholdValue");
-const horizontalThresholdValue = document.getElementById("horizontalThresholdValue");
-const eraseRadiusValue = document.getElementById("eraseRadiusValue");
+const innerCropRange = document.getElementById("innerCropRange");
+const innerCropValue = document.getElementById("innerCropValue");
 const statusMessage = document.getElementById("statusMessage");
-const rawOcrResult = document.getElementById("rawOcrResult");
-const digitsOnlyResult = document.getElementById("digitsOnlyResult");
-
-const MIN_CROP_SIZE = 120;
-const HANDLE_RADIUS = 28;
-const EDGE_THRESHOLD = 26;
+const resultGrid = document.getElementById("resultGrid");
+const debugGrid = document.getElementById("debugGrid");
 
 let hasCapturedImage = false;
-let hasCroppedImage = false;
+let hasCroppedBoard = false;
 let cropRect = null;
 let dragState = null;
 let lastTouchTimestamp = 0;
-let hasLineRemovedPreview = false;
+let resultInputs = [];
+let debugCanvases = [];
 
 function t(text) {
   return text;
@@ -41,28 +38,87 @@ function setStatus(message) {
   console.log("[app] status", message);
 }
 
-function setResultPlaceholders() {
-  rawOcrResult.textContent = t("\u307e\u3060\u5b9f\u884c\u3057\u3066\u3044\u307e\u305b\u3093\u3002");
-  digitsOnlyResult.textContent = t("\u307e\u3060\u5b9f\u884c\u3057\u3066\u3044\u307e\u305b\u3093\u3002");
+function updateInnerCropLabel() {
+  innerCropValue.textContent = `${innerCropRange.value}%`;
 }
 
-function updateSliderLabels() {
-  verticalThresholdValue.textContent = `${verticalThresholdRange.value}%`;
-  horizontalThresholdValue.textContent = `${horizontalThresholdRange.value}%`;
-  eraseRadiusValue.textContent = `${eraseRadiusRange.value}px`;
+function sanitizeCellValue(value) {
+  return value.replace(/[^1-9]/g, "").slice(0, 1);
 }
 
-function getLineRemovalSettings() {
-  return {
-    verticalThreshold: Number(verticalThresholdRange.value) / 100,
-    horizontalThreshold: Number(horizontalThresholdRange.value) / 100,
-    eraseRadius: Number(eraseRadiusRange.value)
-  };
+function buildResultGrid() {
+  const inputs = [];
+
+  for (let row = 0; row < GRID_SIZE; row += 1) {
+    const rowInputs = [];
+    for (let col = 0; col < GRID_SIZE; col += 1) {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.inputMode = "numeric";
+      input.maxLength = 1;
+      input.autocomplete = "off";
+      input.className = "cellInput";
+      input.setAttribute("aria-label", `${row + 1} ${col + 1}`);
+      if ((col + 1) % 3 === 0 && col !== GRID_SIZE - 1) {
+        input.classList.add("boxRight");
+      }
+      if ((row + 1) % 3 === 0 && row !== GRID_SIZE - 1) {
+        input.classList.add("boxBottom");
+      }
+      input.addEventListener("input", () => {
+        input.value = sanitizeCellValue(input.value);
+      });
+      resultGrid.appendChild(input);
+      rowInputs.push(input);
+    }
+    inputs.push(rowInputs);
+  }
+
+  resultInputs = inputs;
 }
 
-function drawPlaceholder(canvas, title, subtitle) {
-  const width = 720;
-  const height = 960;
+function buildDebugGrid() {
+  const canvases = [];
+
+  for (let row = 0; row < GRID_SIZE; row += 1) {
+    for (let col = 0; col < GRID_SIZE; col += 1) {
+      const card = document.createElement("div");
+      card.className = "debugCard";
+
+      const header = document.createElement("div");
+      header.className = "debugCardHeader";
+
+      const label = document.createElement("span");
+      label.textContent = `R${row + 1} C${col + 1}`;
+
+      const value = document.createElement("span");
+      value.className = "debugValue";
+      value.textContent = "-";
+
+      const canvas = document.createElement("canvas");
+      canvas.className = "debugCanvas";
+      canvas.width = 64;
+      canvas.height = 64;
+
+      header.append(label, value);
+      card.append(header, canvas);
+      debugGrid.appendChild(card);
+
+      canvases.push({
+        row,
+        col,
+        canvas,
+        value
+      });
+    }
+  }
+
+  debugCanvases = canvases;
+}
+
+function drawPlaceholder(canvas, title, subtitle, square = false) {
+  const width = square ? 720 : 720;
+  const height = square ? 720 : 960;
   canvas.width = width;
   canvas.height = height;
 
@@ -77,6 +133,25 @@ function drawPlaceholder(canvas, title, subtitle) {
   context.fillText(subtitle, width / 2, height / 2 + 28);
 }
 
+function resetResultGrid() {
+  for (const row of resultInputs) {
+    for (const input of row) {
+      input.value = "";
+    }
+  }
+}
+
+function resetDebugGrid() {
+  for (const item of debugCanvases) {
+    item.canvas.width = 64;
+    item.canvas.height = 64;
+    const context = item.canvas.getContext("2d");
+    context.fillStyle = "#f4ede4";
+    context.fillRect(0, 0, item.canvas.width, item.canvas.height);
+    item.value.textContent = "-";
+  }
+}
+
 function drawInitialPlaceholders() {
   drawPlaceholder(
     captureCanvas,
@@ -85,23 +160,16 @@ function drawInitialPlaceholders() {
   );
   drawPlaceholder(
     croppedCanvas,
-    t("\u5207\u308a\u51fa\u3057\u753b\u50cf\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059"),
-    t("\u300c\u3053\u306e\u7bc4\u56f2\u3092\u78ba\u5b9a\u300d\u3092\u62bc\u3059\u3068\u751f\u6210\u3055\u308c\u307e\u3059")
-  );
-  drawPlaceholder(
-    processedCanvas,
-    t("OCR\u524d\u51e6\u7406\u753b\u50cf\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059"),
-    t("\u7bc4\u56f2\u78ba\u5b9a\u5f8c\u306b\u767d\u9ed2\u5316\u30d7\u30ec\u30d3\u30e5\u30fc\u304c\u8868\u793a\u3055\u308c\u307e\u3059")
-  );
-  drawPlaceholder(
-    lineRemovedCanvas,
-    t("\u7f6b\u7dda\u9664\u53bb\u30d7\u30ec\u30d3\u30e5\u30fc\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059"),
-    t("\u5207\u308a\u51fa\u3057\u5f8c\u306b\u300c\u7f6b\u7dda\u9664\u53bb\u3057\u3066OCR\u300d\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044")
+    t("\u78ba\u5b9a\u5f8c\u306e\u6b63\u65b9\u5f62\u76e4\u9762\u304c\u3053\u3053\u306b\u51fa\u307e\u3059"),
+    t("\u300c\u3053\u306e\u7bc4\u56f2\u3092\u78ba\u5b9a\u300d\u3092\u62bc\u3059\u3068\u66f4\u65b0\u3055\u308c\u307e\u3059"),
+    true
   );
   cropOverlayCanvas.width = captureCanvas.width;
   cropOverlayCanvas.height = captureCanvas.height;
   cropOverlayCanvas.style.pointerEvents = "none";
   cropOverlayCanvas.getContext("2d").clearRect(0, 0, cropOverlayCanvas.width, cropOverlayCanvas.height);
+  resetResultGrid();
+  resetDebugGrid();
 }
 
 function getClientPoint(event) {
@@ -230,11 +298,6 @@ function drawCropOverlay() {
   context.strokeStyle = "#fff7ef";
   context.lineWidth = 4;
   context.strokeRect(x, y, width, height);
-
-  context.setLineDash([12, 10]);
-  context.strokeStyle = "rgba(255, 247, 239, 0.85)";
-  context.lineWidth = 2;
-  context.strokeRect(x + 10, y + 10, Math.max(0, width - 20), Math.max(0, height - 20));
   context.restore();
 
   for (const handle of getHandlePositions()) {
@@ -246,99 +309,27 @@ function drawCropOverlay() {
     context.fill();
     context.stroke();
   }
-
-  console.log("[app] crop overlay drawn", cropRect);
 }
 
-function resetCropOutputs() {
-  hasCroppedImage = false;
-  hasLineRemovedPreview = false;
+function resetOutputsAfterCropEdit() {
+  hasCroppedBoard = false;
   runOcrButton.disabled = true;
   drawPlaceholder(
     croppedCanvas,
-    t("\u5207\u308a\u51fa\u3057\u753b\u50cf\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059"),
-    t("\u30c8\u30ea\u30df\u30f3\u30b0\u7bc4\u56f2\u3092\u78ba\u5b9a\u3059\u308b\u3068\u66f4\u65b0\u3055\u308c\u307e\u3059")
+    t("\u78ba\u5b9a\u5f8c\u306e\u6b63\u65b9\u5f62\u76e4\u9762\u304c\u3053\u3053\u306b\u51fa\u307e\u3059"),
+    t("\u7bc4\u56f2\u3092\u78ba\u5b9a\u3059\u308b\u3068\u66f4\u65b0\u3055\u308c\u307e\u3059"),
+    true
   );
-  drawPlaceholder(
-    processedCanvas,
-    t("OCR\u524d\u51e6\u7406\u753b\u50cf\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059"),
-    t("\u300c\u3053\u306e\u7bc4\u56f2\u3092\u78ba\u5b9a\u300d\u5f8c\u306b\u767d\u9ed2\u5316\u753b\u50cf\u304c\u8868\u793a\u3055\u308c\u307e\u3059")
-  );
-  drawPlaceholder(
-    lineRemovedCanvas,
-    t("\u7f6b\u7dda\u9664\u53bb\u30d7\u30ec\u30d3\u30e5\u30fc\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059"),
-    t("\u7f6b\u7dda\u9664\u53bb\u5f8c\u306eOCR\u5bfe\u8c61\u753b\u50cf\u304c\u3053\u3053\u306b\u51fa\u307e\u3059")
-  );
-  setResultPlaceholders();
+  resetResultGrid();
+  resetDebugGrid();
 }
 
-function applyCrop() {
-  if (!cropRect || !hasCapturedImage) {
-    setStatus(t("\u5148\u306b\u64ae\u5f71\u3057\u3066\u30c8\u30ea\u30df\u30f3\u30b0\u7bc4\u56f2\u3092\u8868\u793a\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
-    return;
+function writeBoardToInputs(board) {
+  for (let row = 0; row < GRID_SIZE; row += 1) {
+    for (let col = 0; col < GRID_SIZE; col += 1) {
+      resultInputs[row][col].value = board[row][col];
+    }
   }
-
-  const sourceX = Math.round(cropRect.x);
-  const sourceY = Math.round(cropRect.y);
-  const sourceWidth = Math.round(cropRect.width);
-  const sourceHeight = Math.round(cropRect.height);
-
-  croppedCanvas.width = sourceWidth;
-  croppedCanvas.height = sourceHeight;
-
-  const context = croppedCanvas.getContext("2d");
-  context.clearRect(0, 0, sourceWidth, sourceHeight);
-  context.drawImage(
-    captureCanvas,
-    sourceX,
-    sourceY,
-    sourceWidth,
-    sourceHeight,
-    0,
-    0,
-    sourceWidth,
-    sourceHeight
-  );
-
-  console.log("[app] crop applied", { sourceX, sourceY, sourceWidth, sourceHeight });
-  preprocessToBinaryCanvas(croppedCanvas, processedCanvas);
-  hasCroppedImage = true;
-  hasLineRemovedPreview = false;
-  runOcrButton.disabled = false;
-  drawPlaceholder(
-    lineRemovedCanvas,
-    t("\u7f6b\u7dda\u9664\u53bb\u30d7\u30ec\u30d3\u30e5\u30fc\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059"),
-    t("\u30b9\u30e9\u30a4\u30c0\u30fc\u8a2d\u5b9a\u5f8c\u306b\u300c\u7f6b\u7dda\u9664\u53bb\u3057\u3066OCR\u300d\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044")
-  );
-  setResultPlaceholders();
-  setStatus(t("\u7bc4\u56f2\u3092\u78ba\u5b9a\u3057\u307e\u3057\u305f\u3002 3\u3068 4\u304c\u66f4\u65b0\u3055\u308c\u307e\u3057\u305f\u3002\u6b21\u306f\u5fc5\u8981\u306a\u3089 5 \u306e\u30b9\u30e9\u30a4\u30c0\u30fc\u3092\u8abf\u6574\u3057\u3001\u6700\u5f8c\u306b\u300c\u7f6b\u7dda\u9664\u53bb\u3057\u3066OCR\u5b9f\u884c\u300d\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
-}
-
-function invalidateLineRemovalPreview() {
-  if (!hasCroppedImage) {
-    return;
-  }
-
-  hasLineRemovedPreview = false;
-  setResultPlaceholders();
-  drawPlaceholder(
-    lineRemovedCanvas,
-    t("\u7f6b\u7dda\u9664\u53bb\u30d7\u30ec\u30d3\u30e5\u30fc\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059"),
-    t("\u30b9\u30e9\u30a4\u30c0\u30fc\u5024\u304c\u5909\u308f\u3063\u305f\u306e\u3067\u518d\u5b9f\u884c\u3057\u3066\u304f\u3060\u3055\u3044")
-  );
-  setStatus(t("\u7f6b\u7dda\u9664\u53bb\u8a2d\u5b9a\u304c\u5909\u66f4\u3055\u308c\u307e\u3057\u305f\u3002\u300c\u7f6b\u7dda\u9664\u53bb\u3057\u3066OCR\u5b9f\u884c\u300d\u3092\u62bc\u3059\u3068 6 \u304c\u66f4\u65b0\u3055\u308c\u307e\u3059\u3002"));
-}
-
-function buildLineRemovalPreview() {
-  if (!hasCroppedImage) {
-    throw new Error("\u5148\u306b\u5207\u308a\u51fa\u3057\u753b\u50cf\u3092\u4f5c\u6210\u3057\u3066\u304f\u3060\u3055\u3044\u3002");
-  }
-
-  const settings = getLineRemovalSettings();
-  preprocessToBinaryCanvas(croppedCanvas, processedCanvas);
-  removeGridLinesFromCanvas(croppedCanvas, lineRemovedCanvas, settings);
-  hasLineRemovedPreview = true;
-  console.log("[app] line removal preview ready", settings);
 }
 
 function updateCropRect(mode, point) {
@@ -405,7 +396,6 @@ function handleOverlayPointerDown(event) {
   const point = getCanvasPoint(event, cropOverlayCanvas);
   const mode = getDragMode(point);
   if (!mode) {
-    console.log("[app] no drag mode hit", point);
     return;
   }
 
@@ -414,7 +404,6 @@ function handleOverlayPointerDown(event) {
     startPoint: point,
     startRect: { ...cropRect }
   };
-  console.log("[app] crop drag start", dragState);
 }
 
 function handleOverlayPointerMove(event) {
@@ -447,9 +436,8 @@ function finishOverlayDrag(event) {
   }
 
   event.preventDefault();
-  console.log("[app] crop drag end", cropRect);
   dragState = null;
-  resetCropOutputs();
+  resetOutputsAfterCropEdit();
 }
 
 async function handleStartCamera() {
@@ -470,7 +458,7 @@ async function handleStartCamera() {
 
 function handleCapture() {
   try {
-    const imageDataUrl = captureFrame(cameraPreview, captureCanvas);
+    captureFrame(cameraPreview, captureCanvas);
     cropOverlayCanvas.width = captureCanvas.width;
     cropOverlayCanvas.height = captureCanvas.height;
     cropOverlayCanvas.style.pointerEvents = "auto";
@@ -478,59 +466,78 @@ function handleCapture() {
     cropButton.disabled = false;
     initializeCropRect();
     drawCropOverlay();
-    resetCropOutputs();
-    console.log("[app] captured image data url length", imageDataUrl.length);
-    setStatus(t("\u64ae\u5f71\u3057\u307e\u3057\u305f\u3002\u6b21\u306f 2 \u306e\u67a0\u3092\u52d5\u304b\u3057\u3066\u7bc4\u56f2\u3092\u6c7a\u3081\u3001\u300c\u3053\u306e\u7bc4\u56f2\u3092\u78ba\u5b9a\u300d\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
+    resetOutputsAfterCropEdit();
+    setStatus(t("\u64ae\u5f71\u3057\u307e\u3057\u305f\u3002\u67a0\u3092\u8abf\u6574\u3057\u3066\u300c\u3053\u306e\u7bc4\u56f2\u3092\u78ba\u5b9a\u300d\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
   } catch (error) {
     console.error("[app] capture failed", error);
     setStatus(error instanceof Error ? error.message : t("\u64ae\u5f71\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002"));
   }
 }
 
-async function handleRunOcr() {
-  if (!hasCroppedImage) {
-    setStatus(t("\u5148\u306b\u300c\u3053\u306e\u7bc4\u56f2\u3067OCR\u300d\u3092\u62bc\u3057\u3066\u5207\u308a\u51fa\u3057\u753b\u50cf\u3092\u4f5c\u6210\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
+function handleApplyCrop() {
+  if (!hasCapturedImage || !cropRect) {
+    setStatus(t("\u5148\u306b\u64ae\u5f71\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
+    return;
+  }
+
+  extractSquareBoard(captureCanvas, croppedCanvas, cropRect);
+  hasCroppedBoard = true;
+  runOcrButton.disabled = false;
+  resetResultGrid();
+  resetDebugGrid();
+  setStatus(t("\u6b63\u65b9\u5f62\u76e4\u9762\u3092\u78ba\u5b9a\u3057\u307e\u3057\u305f\u3002\u6b21\u306f\u5916\u5468\u30ab\u30c3\u30c8\u7387\u3092\u78ba\u8a8d\u3057\u3001\u300c9\u00d79\u5206\u5272OCR\u5b9f\u884c\u300d\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
+}
+
+async function handleRunGridOcr() {
+  if (!hasCroppedBoard) {
+    setStatus(t("\u5148\u306b\u300c\u3053\u306e\u7bc4\u56f2\u3092\u78ba\u5b9a\u300d\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
     return;
   }
 
   runOcrButton.disabled = true;
-  setStatus(t("\u7f6b\u7dda\u9664\u53bb\u3068OCR\u3092\u5b9f\u884c\u3057\u3066\u3044\u307e\u3059\u3002"));
+  const board = createEmptyBoard();
+  const cells = splitBoardIntoCells(croppedCanvas, Number(innerCropRange.value) / 100);
 
   try {
-    buildLineRemovalPreview();
-    const { rawText, digitsOnly } = await runOcrFromCanvas(lineRemovedCanvas);
-    rawOcrResult.textContent = rawText.trim() || t("\uff08\u8a8d\u8b58\u6587\u5b57\u306a\u3057\uff09");
-    digitsOnlyResult.textContent = digitsOnly || t("\uff08\u6570\u5b57\u62bd\u51fa\u306a\u3057\uff09");
-    setStatus(t("\u7f6b\u7dda\u9664\u53bb\u5f8c\u306e\u753b\u50cf\u3067OCR\u304c\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002\u7d50\u679c\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
+    for (let index = 0; index < cells.length; index += 1) {
+      const cell = cells[index];
+      const debugItem = debugCanvases[index];
+      drawCellCrop(croppedCanvas, cell, debugItem.canvas);
+      setStatus(`${index + 1} / 81 \u30de\u30b9\u51e6\u7406\u4e2d`);
+
+      const { digit } = await recognizeSingleDigit(debugItem.canvas);
+      const normalized = digit || "";
+      board[cell.row][cell.col] = normalized;
+      debugItem.value.textContent = normalized || "0";
+      resultInputs[cell.row][cell.col].value = normalized;
+    }
+
+    writeBoardToInputs(board);
+    setStatus(t("81\u30de\u30b9\u306eOCR\u304c\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002\u7d50\u679c\u30929\u00d79\u5165\u529b\u6b04\u3067\u624b\u4fee\u6b63\u3067\u304d\u307e\u3059\u3002"));
   } catch (error) {
-    console.error("[app] OCR failed", error);
-    rawOcrResult.textContent = t("\uff08OCR\u5931\u6557\uff09");
-    digitsOnlyResult.textContent = t("\uff08OCR\u5931\u6557\uff09");
+    console.error("[app] grid OCR failed", error);
     setStatus(error instanceof Error ? error.message : t("OCR\u306e\u5b9f\u884c\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002"));
   } finally {
     runOcrButton.disabled = false;
   }
 }
 
+buildResultGrid();
+buildDebugGrid();
 drawInitialPlaceholders();
-setResultPlaceholders();
-updateSliderLabels();
+updateInnerCropLabel();
 
 startCameraButton.addEventListener("click", handleStartCamera);
 captureButton.addEventListener("click", handleCapture);
-cropButton.addEventListener("click", applyCrop);
-runOcrButton.addEventListener("click", handleRunOcr);
-verticalThresholdRange.addEventListener("input", () => {
-  updateSliderLabels();
-  invalidateLineRemovalPreview();
-});
-horizontalThresholdRange.addEventListener("input", () => {
-  updateSliderLabels();
-  invalidateLineRemovalPreview();
-});
-eraseRadiusRange.addEventListener("input", () => {
-  updateSliderLabels();
-  invalidateLineRemovalPreview();
+cropButton.addEventListener("click", handleApplyCrop);
+runOcrButton.addEventListener("click", handleRunGridOcr);
+innerCropRange.addEventListener("input", () => {
+  updateInnerCropLabel();
+  if (hasCroppedBoard) {
+    resetResultGrid();
+    resetDebugGrid();
+    setStatus(t("\u5916\u5468\u30ab\u30c3\u30c8\u7387\u3092\u5909\u66f4\u3057\u307e\u3057\u305f\u3002\u518d\u5ea6\u300c9\u00d79\u5206\u5272OCR\u5b9f\u884c\u300d\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
+  }
 });
 cropOverlayCanvas.addEventListener("pointerdown", handleOverlayPointerDown);
 cropOverlayCanvas.addEventListener("pointermove", handleOverlayPointerMove);
