@@ -1,5 +1,5 @@
 import { startCamera, captureFrame, stopCamera } from "./camera.js";
-import { runOcrFromCanvas } from "./ocr.js";
+import { preprocessToBinaryCanvas, removeGridLinesFromCanvas, runOcrFromCanvas } from "./ocr.js";
 
 const startCameraButton = document.getElementById("startCameraButton");
 const captureButton = document.getElementById("captureButton");
@@ -10,6 +10,13 @@ const captureCanvas = document.getElementById("captureCanvas");
 const cropOverlayCanvas = document.getElementById("cropOverlayCanvas");
 const croppedCanvas = document.getElementById("croppedCanvas");
 const processedCanvas = document.getElementById("processedCanvas");
+const lineRemovedCanvas = document.getElementById("lineRemovedCanvas");
+const verticalThresholdRange = document.getElementById("verticalThresholdRange");
+const horizontalThresholdRange = document.getElementById("horizontalThresholdRange");
+const eraseRadiusRange = document.getElementById("eraseRadiusRange");
+const verticalThresholdValue = document.getElementById("verticalThresholdValue");
+const horizontalThresholdValue = document.getElementById("horizontalThresholdValue");
+const eraseRadiusValue = document.getElementById("eraseRadiusValue");
 const statusMessage = document.getElementById("statusMessage");
 const rawOcrResult = document.getElementById("rawOcrResult");
 const digitsOnlyResult = document.getElementById("digitsOnlyResult");
@@ -23,6 +30,7 @@ let hasCroppedImage = false;
 let cropRect = null;
 let dragState = null;
 let lastTouchTimestamp = 0;
+let hasLineRemovedPreview = false;
 
 function t(text) {
   return text;
@@ -36,6 +44,20 @@ function setStatus(message) {
 function setResultPlaceholders() {
   rawOcrResult.textContent = t("\u307e\u3060\u5b9f\u884c\u3057\u3066\u3044\u307e\u305b\u3093\u3002");
   digitsOnlyResult.textContent = t("\u307e\u3060\u5b9f\u884c\u3057\u3066\u3044\u307e\u305b\u3093\u3002");
+}
+
+function updateSliderLabels() {
+  verticalThresholdValue.textContent = `${verticalThresholdRange.value}%`;
+  horizontalThresholdValue.textContent = `${horizontalThresholdRange.value}%`;
+  eraseRadiusValue.textContent = `${eraseRadiusRange.value}px`;
+}
+
+function getLineRemovalSettings() {
+  return {
+    verticalThreshold: Number(verticalThresholdRange.value) / 100,
+    horizontalThreshold: Number(horizontalThresholdRange.value) / 100,
+    eraseRadius: Number(eraseRadiusRange.value)
+  };
 }
 
 function drawPlaceholder(canvas, title, subtitle) {
@@ -70,6 +92,11 @@ function drawInitialPlaceholders() {
     processedCanvas,
     t("OCR\u524d\u51e6\u7406\u753b\u50cf\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059"),
     t("OCR\u5b9f\u884c\u6642\u306b\u767d\u9ed2\u5316\u3055\u308c\u307e\u3059")
+  );
+  drawPlaceholder(
+    lineRemovedCanvas,
+    t("\u7f6b\u7dda\u9664\u53bb\u30d7\u30ec\u30d3\u30e5\u30fc\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059"),
+    t("\u5207\u308a\u51fa\u3057\u5f8c\u306b\u300c\u7f6b\u7dda\u9664\u53bb\u3057\u3066OCR\u300d\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044")
   );
   cropOverlayCanvas.width = captureCanvas.width;
   cropOverlayCanvas.height = captureCanvas.height;
@@ -225,6 +252,7 @@ function drawCropOverlay() {
 
 function resetCropOutputs() {
   hasCroppedImage = false;
+  hasLineRemovedPreview = false;
   runOcrButton.disabled = true;
   drawPlaceholder(
     croppedCanvas,
@@ -235,6 +263,11 @@ function resetCropOutputs() {
     processedCanvas,
     t("OCR\u524d\u51e6\u7406\u753b\u50cf\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059"),
     t("OCR\u5b9f\u884c\u6642\u306b\u5207\u308a\u51fa\u3057\u753b\u50cf\u304b\u3089\u751f\u6210\u3055\u308c\u307e\u3059")
+  );
+  drawPlaceholder(
+    lineRemovedCanvas,
+    t("\u7f6b\u7dda\u9664\u53bb\u30d7\u30ec\u30d3\u30e5\u30fc\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059"),
+    t("\u7f6b\u7dda\u9664\u53bb\u5f8c\u306eOCR\u5bfe\u8c61\u753b\u50cf\u304c\u3053\u3053\u306b\u51fa\u307e\u3059")
   );
   setResultPlaceholders();
 }
@@ -269,14 +302,46 @@ function applyCrop() {
 
   console.log("[app] crop applied", { sourceX, sourceY, sourceWidth, sourceHeight });
   hasCroppedImage = true;
+  hasLineRemovedPreview = false;
   runOcrButton.disabled = false;
   drawPlaceholder(
     processedCanvas,
     t("OCR\u524d\u51e6\u7406\u753b\u50cf\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059"),
     t("OCR\u5b9f\u884c\u6642\u306b\u5207\u308a\u51fa\u3057\u753b\u50cf\u304b\u3089\u751f\u6210\u3055\u308c\u307e\u3059")
   );
+  drawPlaceholder(
+    lineRemovedCanvas,
+    t("\u7f6b\u7dda\u9664\u53bb\u30d7\u30ec\u30d3\u30e5\u30fc\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059"),
+    t("\u30b9\u30e9\u30a4\u30c0\u30fc\u8a2d\u5b9a\u5f8c\u306b\u300c\u7f6b\u7dda\u9664\u53bb\u3057\u3066OCR\u300d\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044")
+  );
   setResultPlaceholders();
-  setStatus(t("\u30c8\u30ea\u30df\u30f3\u30b0\u7bc4\u56f2\u3092\u78ba\u5b9a\u3057\u307e\u3057\u305f\u3002OCR\u5b9f\u884c\u306b\u9032\u3093\u3067\u304f\u3060\u3055\u3044\u3002"));
+  setStatus(t("\u30c8\u30ea\u30df\u30f3\u30b0\u7bc4\u56f2\u3092\u78ba\u5b9a\u3057\u307e\u3057\u305f\u3002\u7f6b\u7dda\u9664\u53bb\u8a2d\u5b9a\u3092\u78ba\u8a8d\u3057\u3066\u304b\u3089OCR\u3092\u5b9f\u884c\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
+}
+
+function invalidateLineRemovalPreview() {
+  if (!hasCroppedImage) {
+    return;
+  }
+
+  hasLineRemovedPreview = false;
+  setResultPlaceholders();
+  drawPlaceholder(
+    lineRemovedCanvas,
+    t("\u7f6b\u7dda\u9664\u53bb\u30d7\u30ec\u30d3\u30e5\u30fc\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059"),
+    t("\u30b9\u30e9\u30a4\u30c0\u30fc\u5024\u304c\u5909\u308f\u3063\u305f\u306e\u3067\u518d\u5b9f\u884c\u3057\u3066\u304f\u3060\u3055\u3044")
+  );
+}
+
+function buildLineRemovalPreview() {
+  if (!hasCroppedImage) {
+    throw new Error("\u5148\u306b\u5207\u308a\u51fa\u3057\u753b\u50cf\u3092\u4f5c\u6210\u3057\u3066\u304f\u3060\u3055\u3044\u3002");
+  }
+
+  const settings = getLineRemovalSettings();
+  preprocessToBinaryCanvas(croppedCanvas, processedCanvas);
+  removeGridLinesFromCanvas(croppedCanvas, lineRemovedCanvas, settings);
+  hasLineRemovedPreview = true;
+  console.log("[app] line removal preview ready", settings);
 }
 
 function updateCropRect(mode, point) {
@@ -432,13 +497,14 @@ async function handleRunOcr() {
   }
 
   runOcrButton.disabled = true;
-  setStatus(t("OCR\u3092\u5b9f\u884c\u3057\u3066\u3044\u307e\u3059\u3002\u5207\u308a\u51fa\u3057\u753b\u50cf\u306b\u5bfe\u3057\u3066\u524d\u51e6\u7406\u3092\u884c\u3063\u305f\u5f8c\u306b\u8a8d\u8b58\u3057\u307e\u3059\u3002"));
+  setStatus(t("\u7f6b\u7dda\u9664\u53bb\u3068OCR\u3092\u5b9f\u884c\u3057\u3066\u3044\u307e\u3059\u3002"));
 
   try {
-    const { rawText, digitsOnly } = await runOcrFromCanvas(croppedCanvas, processedCanvas);
+    buildLineRemovalPreview();
+    const { rawText, digitsOnly } = await runOcrFromCanvas(lineRemovedCanvas);
     rawOcrResult.textContent = rawText.trim() || t("\uff08\u8a8d\u8b58\u6587\u5b57\u306a\u3057\uff09");
     digitsOnlyResult.textContent = digitsOnly || t("\uff08\u6570\u5b57\u62bd\u51fa\u306a\u3057\uff09");
-    setStatus(t("OCR\u304c\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002\u751fOCR\u7d50\u679c\u3068\u6570\u5b57\u62bd\u51fa\u7d50\u679c\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
+    setStatus(t("\u7f6b\u7dda\u9664\u53bb\u5f8c\u306e\u753b\u50cf\u3067OCR\u304c\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002\u7d50\u679c\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
   } catch (error) {
     console.error("[app] OCR failed", error);
     rawOcrResult.textContent = t("\uff08OCR\u5931\u6557\uff09");
@@ -451,11 +517,24 @@ async function handleRunOcr() {
 
 drawInitialPlaceholders();
 setResultPlaceholders();
+updateSliderLabels();
 
 startCameraButton.addEventListener("click", handleStartCamera);
 captureButton.addEventListener("click", handleCapture);
 cropButton.addEventListener("click", applyCrop);
 runOcrButton.addEventListener("click", handleRunOcr);
+verticalThresholdRange.addEventListener("input", () => {
+  updateSliderLabels();
+  invalidateLineRemovalPreview();
+});
+horizontalThresholdRange.addEventListener("input", () => {
+  updateSliderLabels();
+  invalidateLineRemovalPreview();
+});
+eraseRadiusRange.addEventListener("input", () => {
+  updateSliderLabels();
+  invalidateLineRemovalPreview();
+});
 cropOverlayCanvas.addEventListener("pointerdown", handleOverlayPointerDown);
 cropOverlayCanvas.addEventListener("pointermove", handleOverlayPointerMove);
 cropOverlayCanvas.addEventListener("pointerup", finishOverlayDrag);

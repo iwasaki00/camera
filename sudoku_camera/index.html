@@ -43,9 +43,39 @@
     <section class="panel">
       <h2>4. OCR&#21069;&#20966;&#29702;&#30011;&#20687;</h2>
       <canvas id="processedCanvas" class="captureCanvas" aria-label="OCR&#21069;&#20966;&#29702;&#30011;&#20687;"></canvas>
-      <button id="runOcrButton" class="primary" type="button" disabled>OCR&#23455;&#34892;</button>
+    </section>
+
+    <section class="panel">
+      <h2>5. &#32597;&#32218;&#38500;&#21435;&#35373;&#23450;</h2>
+      <div class="sliderGroup">
+        <label class="sliderLabel" for="verticalThresholdRange">
+          &#32294;&#32218;&#21028;&#23450;&#12375;&#12365;&#12356;&#20516;
+          <span id="verticalThresholdValue">85%</span>
+        </label>
+        <input id="verticalThresholdRange" class="slider" type="range" min="60" max="95" step="1" value="85">
+      </div>
+      <div class="sliderGroup">
+        <label class="sliderLabel" for="horizontalThresholdRange">
+          &#27178;&#32218;&#21028;&#23450;&#12375;&#12365;&#12356;&#20516;
+          <span id="horizontalThresholdValue">85%</span>
+        </label>
+        <input id="horizontalThresholdRange" class="slider" type="range" min="60" max="95" step="1" value="85">
+      </div>
+      <div class="sliderGroup">
+        <label class="sliderLabel" for="eraseRadiusRange">
+          &#28040;&#21435;&#24133;
+          <span id="eraseRadiusValue">2px</span>
+        </label>
+        <input id="eraseRadiusRange" class="slider" type="range" min="1" max="6" step="1" value="2">
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>6. &#32597;&#32218;&#38500;&#21435;&#12503;&#12524;&#12499;&#12517;&#12540;</h2>
+      <canvas id="lineRemovedCanvas" class="captureCanvas" aria-label="&#32597;&#32218;&#38500;&#21435;&#12503;&#12524;&#12499;&#12517;&#12540;"></canvas>
+      <button id="runOcrButton" class="primary" type="button" disabled>&#32597;&#32218;&#38500;&#21435;&#12375;&#12390;OCR</button>
       <p id="statusMessage" class="status" role="status" aria-live="polite">
-        1. &#12459;&#12513;&#12521;&#38283;&#22987; -> 2. &#25774;&#24433; -> 3. &#31684;&#22258;&#12434;&#35519;&#25972; -> 4. &#12371;&#12398;&#31684;&#22258;&#12391;OCR -> 5. OCR&#23455;&#34892;
+        1. &#12459;&#12513;&#12521;&#38283;&#22987; -> 2. &#25774;&#24433; -> 3. &#31684;&#22258;&#12434;&#35519;&#25972; -> 4. &#12371;&#12398;&#31684;&#22258;&#12391;OCR -> 5. &#32597;&#32218;&#38500;&#21435;&#35373;&#23450; -> 6. &#32597;&#32218;&#38500;&#21435;&#12375;&#12390;OCR
       </p>
     </section>
 

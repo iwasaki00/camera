@@ -176,6 +176,24 @@ button.secondary {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+.sliderGroup {
+  display: grid;
+  gap: 8px;
+}
+
+.sliderLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 700;
+}
+
+.slider {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
 .status {
   min-height: 4.8em;
 }
