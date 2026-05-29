@@ -408,9 +408,16 @@ async function handleStartCamera() {
 
   try {
     await startCamera(cameraPreview);
-    await waitForOpenCv();
     captureButton.disabled = false;
-    setStatus(t("\u30ab\u30e1\u30e9\u3068 OpenCV.js \u306e\u6e96\u5099\u304c\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002\u30ca\u30f3\u30d7\u30ec\u554f\u984c\u3092\u64ae\u5f71\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
+    setStatus(t("\u30ab\u30e1\u30e9\u3092\u8d77\u52d5\u3057\u307e\u3057\u305f\u3002\u64ae\u5f71\u306f\u3059\u3050\u306b\u3067\u304d\u307e\u3059\u3002OpenCV.js \u306f\u80cc\u666f\u3067\u8aad\u307f\u8fbc\u307f\u307e\u3059\u3002"));
+    waitForOpenCv()
+      .then(() => {
+        setStatus(t("\u30ab\u30e1\u30e9\u3068 OpenCV.js \u306e\u6e96\u5099\u304c\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002\u30ca\u30f3\u30d7\u30ec\u554f\u984c\u3092\u64ae\u5f71\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
+      })
+      .catch((error) => {
+        console.error("[app] opencv background load failed", error);
+        setStatus(error instanceof Error ? error.message : t("OpenCV.js \u306e\u8aad\u307f\u8fbc\u307f\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002"));
+      });
   } catch (error) {
     console.error("[app] failed to initialize camera/opencv", error);
     setStatus(error instanceof Error ? error.message : t("\u521d\u671f\u5316\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002"));
@@ -581,9 +588,6 @@ cornerOverlayCanvas.addEventListener("touchend", finishCornerDrag, { passive: fa
 cornerOverlayCanvas.addEventListener("mousedown", handleCornerPointerDown);
 window.addEventListener("mousemove", handleCornerPointerMove);
 window.addEventListener("mouseup", finishCornerDrag);
-window.addEventListener("touchmove", handleCornerPointerMove, { passive: false });
-window.addEventListener("touchend", finishCornerDrag, { passive: false });
-window.addEventListener("touchcancel", finishCornerDrag, { passive: false });
 
 window.addEventListener("beforeunload", () => {
   stopCamera(cameraPreview);
