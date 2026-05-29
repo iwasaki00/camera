@@ -110,15 +110,22 @@ h3 {
 
 .canvasStack {
   position: relative;
+  isolation: isolate;
 }
 
 .canvasStack canvas {
   width: 100%;
 }
 
+.captureCanvas {
+  position: relative;
+  z-index: 1;
+}
+
 .overlayCanvas {
   position: absolute;
   inset: 0;
+  z-index: 2;
   background: transparent;
   touch-action: none;
 }

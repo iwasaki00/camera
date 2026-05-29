@@ -22,6 +22,7 @@ let hasCapturedImage = false;
 let hasCroppedImage = false;
 let cropRect = null;
 let dragState = null;
+let lastTouchTimestamp = 0;
 
 function t(text) {
   return text;
@@ -72,16 +73,39 @@ function drawInitialPlaceholders() {
   );
   cropOverlayCanvas.width = captureCanvas.width;
   cropOverlayCanvas.height = captureCanvas.height;
+  cropOverlayCanvas.style.pointerEvents = "none";
   cropOverlayCanvas.getContext("2d").clearRect(0, 0, cropOverlayCanvas.width, cropOverlayCanvas.height);
 }
 
+function getClientPoint(event) {
+  if (event.touches && event.touches.length > 0) {
+    return {
+      clientX: event.touches[0].clientX,
+      clientY: event.touches[0].clientY
+    };
+  }
+
+  if (event.changedTouches && event.changedTouches.length > 0) {
+    return {
+      clientX: event.changedTouches[0].clientX,
+      clientY: event.changedTouches[0].clientY
+    };
+  }
+
+  return {
+    clientX: event.clientX,
+    clientY: event.clientY
+  };
+}
+
 function getCanvasPoint(event, canvas) {
+  const clientPoint = getClientPoint(event);
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
   return {
-    x: (event.clientX - rect.left) * scaleX,
-    y: (event.clientY - rect.top) * scaleY
+    x: (clientPoint.clientX - rect.left) * scaleX,
+    y: (clientPoint.clientY - rect.top) * scaleY
   };
 }
 
@@ -195,6 +219,8 @@ function drawCropOverlay() {
     context.fill();
     context.stroke();
   }
+
+  console.log("[app] crop overlay drawn", cropRect);
 }
 
 function resetCropOutputs() {
@@ -306,9 +332,18 @@ function handleOverlayPointerDown(event) {
     return;
   }
 
+  if (event.type === "mousedown" && Date.now() - lastTouchTimestamp < 700) {
+    return;
+  }
+  if (event.type === "touchstart") {
+    lastTouchTimestamp = Date.now();
+  }
+
+  event.preventDefault();
   const point = getCanvasPoint(event, cropOverlayCanvas);
   const mode = getDragMode(point);
   if (!mode) {
+    console.log("[app] no drag mode hit", point);
     return;
   }
 
@@ -317,7 +352,6 @@ function handleOverlayPointerDown(event) {
     startPoint: point,
     startRect: { ...cropRect }
   };
-  cropOverlayCanvas.setPointerCapture(event.pointerId);
   console.log("[app] crop drag start", dragState);
 }
 
@@ -326,6 +360,14 @@ function handleOverlayPointerMove(event) {
     return;
   }
 
+  if (event.type === "mousemove" && Date.now() - lastTouchTimestamp < 700) {
+    return;
+  }
+  if (event.type === "touchmove") {
+    lastTouchTimestamp = Date.now();
+  }
+
+  event.preventDefault();
   const point = getCanvasPoint(event, cropOverlayCanvas);
   updateCropRect(dragState.mode, point);
 }
@@ -335,10 +377,14 @@ function finishOverlayDrag(event) {
     return;
   }
 
-  if (event.pointerId !== undefined && cropOverlayCanvas.hasPointerCapture(event.pointerId)) {
-    cropOverlayCanvas.releasePointerCapture(event.pointerId);
+  if (event.type === "mouseup" && Date.now() - lastTouchTimestamp < 700) {
+    return;
+  }
+  if (event.type === "touchend") {
+    lastTouchTimestamp = Date.now();
   }
 
+  event.preventDefault();
   console.log("[app] crop drag end", cropRect);
   dragState = null;
   resetCropOutputs();
@@ -365,6 +411,7 @@ function handleCapture() {
     const imageDataUrl = captureFrame(cameraPreview, captureCanvas);
     cropOverlayCanvas.width = captureCanvas.width;
     cropOverlayCanvas.height = captureCanvas.height;
+    cropOverlayCanvas.style.pointerEvents = "auto";
     hasCapturedImage = true;
     cropButton.disabled = false;
     initializeCropRect();
@@ -413,6 +460,15 @@ cropOverlayCanvas.addEventListener("pointerdown", handleOverlayPointerDown);
 cropOverlayCanvas.addEventListener("pointermove", handleOverlayPointerMove);
 cropOverlayCanvas.addEventListener("pointerup", finishOverlayDrag);
 cropOverlayCanvas.addEventListener("pointercancel", finishOverlayDrag);
+cropOverlayCanvas.addEventListener("touchstart", handleOverlayPointerDown, { passive: false });
+cropOverlayCanvas.addEventListener("touchmove", handleOverlayPointerMove, { passive: false });
+cropOverlayCanvas.addEventListener("touchend", finishOverlayDrag, { passive: false });
+cropOverlayCanvas.addEventListener("mousedown", handleOverlayPointerDown);
+window.addEventListener("mousemove", handleOverlayPointerMove);
+window.addEventListener("mouseup", finishOverlayDrag);
+window.addEventListener("touchmove", handleOverlayPointerMove, { passive: false });
+window.addEventListener("touchend", finishOverlayDrag, { passive: false });
+window.addEventListener("touchcancel", finishOverlayDrag, { passive: false });
 
 window.addEventListener("beforeunload", () => {
   stopCamera(cameraPreview);
