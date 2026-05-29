@@ -1,19 +1,19 @@
 let activeStream = null;
 
-function waitForVideoMetadata(videoElement, timeoutMs = 4000) {
+function waitForVideoReady(videoElement, timeoutMs = 4000) {
   if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
-    return Promise.resolve();
+    return Promise.resolve(true);
   }
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const timeoutId = window.setTimeout(() => {
       cleanup();
-      reject(new Error("\u30ab\u30e1\u30e9\u6620\u50cf\u306e\u6e96\u5099\u304c\u5b8c\u4e86\u3057\u307e\u305b\u3093\u3002"));
+      resolve(false);
     }, timeoutMs);
 
     const handleReady = () => {
       cleanup();
-      resolve();
+      resolve(true);
     };
 
     const cleanup = () => {
@@ -21,11 +21,13 @@ function waitForVideoMetadata(videoElement, timeoutMs = 4000) {
       videoElement.removeEventListener("loadedmetadata", handleReady);
       videoElement.removeEventListener("loadeddata", handleReady);
       videoElement.removeEventListener("canplay", handleReady);
+      videoElement.removeEventListener("playing", handleReady);
     };
 
     videoElement.addEventListener("loadedmetadata", handleReady, { once: true });
     videoElement.addEventListener("loadeddata", handleReady, { once: true });
     videoElement.addEventListener("canplay", handleReady, { once: true });
+    videoElement.addEventListener("playing", handleReady, { once: true });
   });
 }
 
@@ -75,7 +77,15 @@ export async function startCamera(videoElement) {
     });
   }
 
+  videoElement.autoplay = true;
+  videoElement.muted = true;
+  videoElement.playsInline = true;
+  videoElement.setAttribute("autoplay", "");
+  videoElement.setAttribute("muted", "");
+  videoElement.setAttribute("playsinline", "");
+  videoElement.setAttribute("webkit-playsinline", "");
   videoElement.srcObject = activeStream;
+
   try {
     const playPromise = videoElement.play();
     if (playPromise && typeof playPromise.catch === "function") {
@@ -87,7 +97,11 @@ export async function startCamera(videoElement) {
     console.warn("[camera] play() threw synchronously", error);
   }
 
-  await waitForVideoMetadata(videoElement);
+  const becameReady = await waitForVideoReady(videoElement);
+  if (!becameReady) {
+    console.warn("[camera] video readiness timeout; continuing because stream is active");
+  }
+
   console.log("[camera] stream started", activeStream);
 
   return activeStream;
