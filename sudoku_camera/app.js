@@ -1,38 +1,36 @@
 import { startCamera, captureFrame, stopCamera } from "./camera.js";
 import { recognizeSingleDigit } from "./ocr.js";
-import { createEmptyBoard, drawBoardGridOverlay, drawCellCrop, splitBoardIntoCells } from "./gridOcr.js";
+import { createEmptyBoard, drawCellCrop, extractSquareBoard, splitBoardIntoCells } from "./gridOcr.js";
+import { solveSudoku } from "./sudokuSolver.js";
 
 const GRID_SIZE = 9;
-const BOARD_SIZE = 900;
-const HANDLE_RADIUS = 34;
+const MIN_CROP_SIZE = 120;
+const HANDLE_RADIUS = 28;
+const EDGE_THRESHOLD = 26;
 
 const startCameraButton = document.getElementById("startCameraButton");
 const captureButton = document.getElementById("captureButton");
-const correctBoardButton = document.getElementById("correctBoardButton");
+const cropButton = document.getElementById("cropButton");
 const runOcrButton = document.getElementById("runOcrButton");
+const solveButton = document.getElementById("solveButton");
+const clearButton = document.getElementById("clearButton");
 const cameraPreview = document.getElementById("cameraPreview");
 const captureCanvas = document.getElementById("captureCanvas");
-const cornerOverlayCanvas = document.getElementById("cornerOverlayCanvas");
-const correctedCanvas = document.getElementById("correctedCanvas");
-const gridOverlayCanvas = document.getElementById("gridOverlayCanvas");
+const cropOverlayCanvas = document.getElementById("cropOverlayCanvas");
+const croppedCanvas = document.getElementById("croppedCanvas");
 const innerCropRange = document.getElementById("innerCropRange");
 const innerCropValue = document.getElementById("innerCropValue");
 const statusMessage = document.getElementById("statusMessage");
 const resultGrid = document.getElementById("resultGrid");
 const debugGrid = document.getElementById("debugGrid");
 
-let cvReadyPromise = null;
 let hasCapturedImage = false;
-let hasCorrectedBoard = false;
-let cornerPoints = [];
-let activeCornerIndex = -1;
+let hasCroppedBoard = false;
+let cropRect = null;
+let dragState = null;
 let lastTouchTimestamp = 0;
 let resultInputs = [];
 let debugCanvases = [];
-
-function t(text) {
-  return text;
-}
 
 function setStatus(message) {
   statusMessage.textContent = message;
@@ -45,37 +43,6 @@ function updateInnerCropLabel() {
 
 function sanitizeCellValue(value) {
   return value.replace(/[^1-9]/g, "").slice(0, 1);
-}
-
-function waitForOpenCv() {
-  if (window.cv && typeof window.cv.getPerspectiveTransform === "function") {
-    return Promise.resolve(window.cv);
-  }
-
-  if (!cvReadyPromise) {
-    cvReadyPromise = new Promise((resolve, reject) => {
-      const startedAt = Date.now();
-
-      const poll = () => {
-        if (window.cv && typeof window.cv.getPerspectiveTransform === "function") {
-          console.log("[opencv] ready");
-          resolve(window.cv);
-          return;
-        }
-
-        if (Date.now() - startedAt > 15000) {
-          reject(new Error("OpenCV.js \u306e\u8aad\u307f\u8fbc\u307f\u304c\u5b8c\u4e86\u3057\u307e\u305b\u3093\u3002"));
-          return;
-        }
-
-        window.setTimeout(poll, 120);
-      };
-
-      poll();
-    });
-  }
-
-  return cvReadyPromise;
 }
 
 function buildResultGrid() {
@@ -149,8 +116,8 @@ function buildDebugGrid() {
 }
 
 function drawPlaceholder(canvas, title, subtitle, square = false) {
-  const width = square ? BOARD_SIZE : 720;
-  const height = square ? BOARD_SIZE : 960;
+  const width = 720;
+  const height = square ? 720 : 960;
   canvas.width = width;
   canvas.height = height;
 
@@ -187,88 +154,21 @@ function resetDebugGrid() {
 function drawInitialPlaceholders() {
   drawPlaceholder(
     captureCanvas,
-    t("\u64ae\u5f71\u753b\u50cf\u304c\u3053\u3053\u306b\u8868\u793a\u3055\u308c\u307e\u3059"),
-    t("\u30ab\u30e1\u30e9\u958b\u59cb\u5f8c\u306b\u64ae\u5f71\u3057\u3066\u304f\u3060\u3055\u3044")
+    "撮影画像がここに表示されます",
+    "カメラ開始後に撮影してください"
   );
   drawPlaceholder(
-    correctedCanvas,
-    t("\u56db\u9685\u88dc\u6b63\u5f8c\u306e\u76e4\u9762\u304c\u3053\u3053\u306b\u51fa\u307e\u3059"),
-    t("\u300c\u56db\u9685\u88dc\u6b63\u300d\u3092\u62bc\u3059\u3068\u66f4\u65b0\u3055\u308c\u307e\u3059"),
+    croppedCanvas,
+    "切り出し画像がここに表示されます",
+    "この範囲を確定すると更新されます",
     true
   );
-  cornerOverlayCanvas.width = captureCanvas.width;
-  cornerOverlayCanvas.height = captureCanvas.height;
-  cornerOverlayCanvas.style.pointerEvents = "none";
-  cornerOverlayCanvas.getContext("2d").clearRect(0, 0, cornerOverlayCanvas.width, cornerOverlayCanvas.height);
-  gridOverlayCanvas.width = BOARD_SIZE;
-  gridOverlayCanvas.height = BOARD_SIZE;
-  gridOverlayCanvas.style.pointerEvents = "none";
-  gridOverlayCanvas.getContext("2d").clearRect(0, 0, BOARD_SIZE, BOARD_SIZE);
+  cropOverlayCanvas.width = captureCanvas.width;
+  cropOverlayCanvas.height = captureCanvas.height;
+  cropOverlayCanvas.style.pointerEvents = "none";
+  cropOverlayCanvas.getContext("2d").clearRect(0, 0, cropOverlayCanvas.width, cropOverlayCanvas.height);
   resetResultGrid();
   resetDebugGrid();
-}
-
-function createDefaultCornerPoints() {
-  const insetX = captureCanvas.width * 0.18;
-  const insetY = captureCanvas.height * 0.18;
-  const width = captureCanvas.width - insetX * 2;
-  const height = captureCanvas.height - insetY * 2;
-
-  return [
-    { x: insetX, y: insetY, label: "LT" },
-    { x: insetX + width, y: insetY, label: "RT" },
-    { x: insetX + width, y: insetY + height, label: "RB" },
-    { x: insetX, y: insetY + height, label: "LB" }
-  ];
-}
-
-function drawCornerOverlay() {
-  const context = cornerOverlayCanvas.getContext("2d");
-  context.clearRect(0, 0, cornerOverlayCanvas.width, cornerOverlayCanvas.height);
-
-  if (!cornerPoints.length) {
-    return;
-  }
-
-  context.fillStyle = "rgba(17, 12, 8, 0.42)";
-  context.fillRect(0, 0, cornerOverlayCanvas.width, cornerOverlayCanvas.height);
-
-  context.save();
-  context.beginPath();
-  context.moveTo(cornerPoints[0].x, cornerPoints[0].y);
-  for (let index = 1; index < cornerPoints.length; index += 1) {
-    context.lineTo(cornerPoints[index].x, cornerPoints[index].y);
-  }
-  context.closePath();
-  context.clip();
-  context.clearRect(0, 0, cornerOverlayCanvas.width, cornerOverlayCanvas.height);
-  context.restore();
-
-  context.beginPath();
-  context.moveTo(cornerPoints[0].x, cornerPoints[0].y);
-  for (let index = 1; index < cornerPoints.length; index += 1) {
-    context.lineTo(cornerPoints[index].x, cornerPoints[index].y);
-  }
-  context.closePath();
-  context.strokeStyle = "#fff7ef";
-  context.lineWidth = 4;
-  context.stroke();
-
-  for (let index = 0; index < cornerPoints.length; index += 1) {
-    const point = cornerPoints[index];
-    context.beginPath();
-    context.fillStyle = index === activeCornerIndex ? "#f79f62" : "#b85c38";
-    context.strokeStyle = "#fff8f2";
-    context.lineWidth = 4;
-    context.arc(point.x, point.y, 18, 0, Math.PI * 2);
-    context.fill();
-    context.stroke();
-
-    context.fillStyle = "#fff8f2";
-    context.font = "bold 16px sans-serif";
-    context.textAlign = "center";
-    context.fillText(point.label, point.x, point.y + 5);
-  }
 }
 
 function getClientPoint(event) {
@@ -307,32 +207,189 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-function pickCornerIndex(point) {
-  for (let index = 0; index < cornerPoints.length; index += 1) {
-    const corner = cornerPoints[index];
-    if (Math.hypot(point.x - corner.x, point.y - corner.y) <= HANDLE_RADIUS) {
-      return index;
-    }
-  }
-  return -1;
+function initializeCropRect() {
+  const insetX = captureCanvas.width * 0.12;
+  const insetY = captureCanvas.height * 0.12;
+  cropRect = {
+    x: insetX,
+    y: insetY,
+    width: captureCanvas.width - insetX * 2,
+    height: captureCanvas.height - insetY * 2
+  };
 }
 
-function resetOutputsAfterCornerEdit() {
-  hasCorrectedBoard = false;
+function getHandlePositions() {
+  if (!cropRect) {
+    return [];
+  }
+
+  const { x, y, width, height } = cropRect;
+  const right = x + width;
+  const bottom = y + height;
+  const centerX = x + width / 2;
+  const centerY = y + height / 2;
+
+  return [
+    { mode: "nw", x, y },
+    { mode: "n", x: centerX, y },
+    { mode: "ne", x: right, y },
+    { mode: "e", x: right, y: centerY },
+    { mode: "se", x: right, y: bottom },
+    { mode: "s", x: centerX, y: bottom },
+    { mode: "sw", x, y: bottom },
+    { mode: "w", x, y: centerY }
+  ];
+}
+
+function getDragMode(point) {
+  if (!cropRect) {
+    return null;
+  }
+
+  for (const handle of getHandlePositions()) {
+    const dx = point.x - handle.x;
+    const dy = point.y - handle.y;
+    if (Math.hypot(dx, dy) <= HANDLE_RADIUS) {
+      return handle.mode;
+    }
+  }
+
+  const left = cropRect.x;
+  const right = cropRect.x + cropRect.width;
+  const top = cropRect.y;
+  const bottom = cropRect.y + cropRect.height;
+  const insideX = point.x >= left && point.x <= right;
+  const insideY = point.y >= top && point.y <= bottom;
+
+  if (insideX && Math.abs(point.y - top) <= EDGE_THRESHOLD) {
+    return "n";
+  }
+  if (insideX && Math.abs(point.y - bottom) <= EDGE_THRESHOLD) {
+    return "s";
+  }
+  if (insideY && Math.abs(point.x - left) <= EDGE_THRESHOLD) {
+    return "w";
+  }
+  if (insideY && Math.abs(point.x - right) <= EDGE_THRESHOLD) {
+    return "e";
+  }
+  if (insideX && insideY) {
+    return "move";
+  }
+
+  return null;
+}
+
+function drawCropOverlay() {
+  const context = cropOverlayCanvas.getContext("2d");
+  context.clearRect(0, 0, cropOverlayCanvas.width, cropOverlayCanvas.height);
+
+  if (!cropRect) {
+    return;
+  }
+
+  const { x, y, width, height } = cropRect;
+  context.fillStyle = "rgba(17, 12, 8, 0.48)";
+  context.fillRect(0, 0, cropOverlayCanvas.width, cropOverlayCanvas.height);
+  context.clearRect(x, y, width, height);
+
+  context.save();
+  context.strokeStyle = "#fff7ef";
+  context.lineWidth = 4;
+  context.strokeRect(x, y, width, height);
+  context.restore();
+
+  for (const handle of getHandlePositions()) {
+    context.beginPath();
+    context.fillStyle = "#b85c38";
+    context.strokeStyle = "#fff8f2";
+    context.lineWidth = 3;
+    context.arc(handle.x, handle.y, 12, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+  }
+}
+
+function resetOutputsAfterCropEdit() {
+  hasCroppedBoard = false;
   runOcrButton.disabled = true;
   drawPlaceholder(
-    correctedCanvas,
-    t("\u56db\u9685\u88dc\u6b63\u5f8c\u306e\u76e4\u9762\u304c\u3053\u3053\u306b\u51fa\u307e\u3059"),
-    t("\u518d\u5ea6\u300c\u56db\u9685\u88dc\u6b63\u300d\u3092\u62bc\u3059\u3068\u66f4\u65b0\u3055\u308c\u307e\u3059"),
+    croppedCanvas,
+    "切り出し画像がここに表示されます",
+    "この範囲を確定すると更新されます",
     true
   );
-  gridOverlayCanvas.getContext("2d").clearRect(0, 0, gridOverlayCanvas.width, gridOverlayCanvas.height);
   resetResultGrid();
   resetDebugGrid();
 }
 
-function handleCornerPointerDown(event) {
-  if (!cornerPoints.length) {
+function writeBoardToInputs(board) {
+  for (let row = 0; row < GRID_SIZE; row += 1) {
+    for (let col = 0; col < GRID_SIZE; col += 1) {
+      resultInputs[row][col].value = board[row][col];
+    }
+  }
+}
+
+function readBoardFromInputs() {
+  return resultInputs.map((row) =>
+    row.map((input) => {
+      const value = Number(input.value);
+      return Number.isInteger(value) && value >= 1 && value <= 9 ? value : 0;
+    })
+  );
+}
+
+function updateCropRect(mode, point) {
+  if (!dragState || !cropRect) {
+    return;
+  }
+
+  const maxWidth = captureCanvas.width;
+  const maxHeight = captureCanvas.height;
+  const start = dragState.startRect;
+  const dx = point.x - dragState.startPoint.x;
+  const dy = point.y - dragState.startPoint.y;
+
+  let nextX = start.x;
+  let nextY = start.y;
+  let nextWidth = start.width;
+  let nextHeight = start.height;
+
+  if (mode === "move") {
+    nextX = clamp(start.x + dx, 0, maxWidth - start.width);
+    nextY = clamp(start.y + dy, 0, maxHeight - start.height);
+  }
+
+  if (mode.includes("e")) {
+    nextWidth = clamp(start.width + dx, MIN_CROP_SIZE, maxWidth - start.x);
+  }
+  if (mode.includes("s")) {
+    nextHeight = clamp(start.height + dy, MIN_CROP_SIZE, maxHeight - start.y);
+  }
+  if (mode.includes("w")) {
+    const nextLeft = clamp(start.x + dx, 0, start.x + start.width - MIN_CROP_SIZE);
+    nextWidth = start.width + (start.x - nextLeft);
+    nextX = nextLeft;
+  }
+  if (mode.includes("n")) {
+    const nextTop = clamp(start.y + dy, 0, start.y + start.height - MIN_CROP_SIZE);
+    nextHeight = start.height + (start.y - nextTop);
+    nextY = nextTop;
+  }
+
+  cropRect = {
+    x: nextX,
+    y: nextY,
+    width: nextWidth,
+    height: nextHeight
+  };
+
+  drawCropOverlay();
+}
+
+function handleOverlayPointerDown(event) {
+  if (!cropRect) {
     return;
   }
 
@@ -343,19 +400,22 @@ function handleCornerPointerDown(event) {
     lastTouchTimestamp = Date.now();
   }
 
-  event.preventDefault();
-  const point = getCanvasPoint(event, cornerOverlayCanvas);
-  const pickedIndex = pickCornerIndex(point);
-  if (pickedIndex === -1) {
+  const point = getCanvasPoint(event, cropOverlayCanvas);
+  const mode = getDragMode(point);
+  if (!mode) {
     return;
   }
 
-  activeCornerIndex = pickedIndex;
-  drawCornerOverlay();
+  event.preventDefault();
+  dragState = {
+    mode,
+    startPoint: point,
+    startRect: { ...cropRect }
+  };
 }
 
-function handleCornerPointerMove(event) {
-  if (activeCornerIndex === -1 || !cornerPoints.length) {
+function handleOverlayPointerMove(event) {
+  if (!dragState) {
     return;
   }
 
@@ -367,17 +427,12 @@ function handleCornerPointerMove(event) {
   }
 
   event.preventDefault();
-  const point = getCanvasPoint(event, cornerOverlayCanvas);
-  cornerPoints[activeCornerIndex] = {
-    ...cornerPoints[activeCornerIndex],
-    x: clamp(point.x, 0, cornerOverlayCanvas.width),
-    y: clamp(point.y, 0, cornerOverlayCanvas.height)
-  };
-  drawCornerOverlay();
+  const point = getCanvasPoint(event, cropOverlayCanvas);
+  updateCropRect(dragState.mode, point);
 }
 
-function finishCornerDrag(event) {
-  if (activeCornerIndex === -1) {
+function finishOverlayDrag(event) {
+  if (!dragState) {
     return;
   }
 
@@ -389,38 +444,21 @@ function finishCornerDrag(event) {
   }
 
   event.preventDefault();
-  activeCornerIndex = -1;
-  drawCornerOverlay();
-  resetOutputsAfterCornerEdit();
-}
-
-function writeBoardToInputs(board) {
-  for (let row = 0; row < GRID_SIZE; row += 1) {
-    for (let col = 0; col < GRID_SIZE; col += 1) {
-      resultInputs[row][col].value = board[row][col];
-    }
-  }
+  dragState = null;
+  resetOutputsAfterCropEdit();
 }
 
 async function handleStartCamera() {
   startCameraButton.disabled = true;
-  setStatus(t("\u30ab\u30e1\u30e9\u3092\u8d77\u52d5\u3057\u3066\u3044\u307e\u3059..."));
+  setStatus("カメラを起動しています...");
 
   try {
     await startCamera(cameraPreview);
     captureButton.disabled = false;
-    setStatus(t("\u30ab\u30e1\u30e9\u3092\u8d77\u52d5\u3057\u307e\u3057\u305f\u3002\u64ae\u5f71\u306f\u3059\u3050\u306b\u3067\u304d\u307e\u3059\u3002OpenCV.js \u306f\u80cc\u666f\u3067\u8aad\u307f\u8fbc\u307f\u307e\u3059\u3002"));
-    waitForOpenCv()
-      .then(() => {
-        setStatus(t("\u30ab\u30e1\u30e9\u3068 OpenCV.js \u306e\u6e96\u5099\u304c\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002\u30ca\u30f3\u30d7\u30ec\u554f\u984c\u3092\u64ae\u5f71\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
-      })
-      .catch((error) => {
-        console.error("[app] opencv background load failed", error);
-        setStatus(error instanceof Error ? error.message : t("OpenCV.js \u306e\u8aad\u307f\u8fbc\u307f\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002"));
-      });
+    setStatus("カメラを起動しました。撮影できます。");
   } catch (error) {
-    console.error("[app] failed to initialize camera/opencv", error);
-    setStatus(error instanceof Error ? error.message : t("\u521d\u671f\u5316\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002"));
+    console.error("[app] start camera failed", error);
+    setStatus(error instanceof Error ? error.message : "カメラの起動に失敗しました。");
   } finally {
     startCameraButton.disabled = false;
   }
@@ -429,120 +467,51 @@ async function handleStartCamera() {
 function handleCapture() {
   try {
     captureFrame(cameraPreview, captureCanvas);
-    cornerOverlayCanvas.width = captureCanvas.width;
-    cornerOverlayCanvas.height = captureCanvas.height;
-    cornerOverlayCanvas.style.pointerEvents = "auto";
+    cropOverlayCanvas.width = captureCanvas.width;
+    cropOverlayCanvas.height = captureCanvas.height;
+    cropOverlayCanvas.style.pointerEvents = "auto";
     hasCapturedImage = true;
-    correctBoardButton.disabled = false;
-    cornerPoints = createDefaultCornerPoints();
-    activeCornerIndex = -1;
-    drawCornerOverlay();
-    resetOutputsAfterCornerEdit();
-    setStatus(t("\u64ae\u5f71\u3057\u307e\u3057\u305f\u30024\u3064\u306e\u70b9\u3092\u76e4\u9762\u306e\u56db\u9685\u306b\u5408\u308f\u305b\u3066\u300c\u56db\u9685\u88dc\u6b63\u300d\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
+    cropButton.disabled = false;
+    initializeCropRect();
+    drawCropOverlay();
+    resetOutputsAfterCropEdit();
+    setStatus("撮影しました。枠を調整して「この範囲を確定」を押してください。");
   } catch (error) {
     console.error("[app] capture failed", error);
-    setStatus(error instanceof Error ? error.message : t("\u64ae\u5f71\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002"));
+    setStatus(error instanceof Error ? error.message : "撮影に失敗しました。");
   }
 }
 
-async function handleCorrectBoard() {
-  if (!hasCapturedImage || cornerPoints.length !== 4) {
-    setStatus(t("\u5148\u306b\u64ae\u5f71\u3057\u3066\u56db\u9685\u3092\u8868\u793a\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
+function handleApplyCrop() {
+  if (!hasCapturedImage || !cropRect) {
+    setStatus("先に撮影してください。");
     return;
   }
 
-  correctBoardButton.disabled = true;
-  setStatus(t("\u56db\u9685\u88dc\u6b63\u3092\u5b9f\u884c\u3057\u3066\u3044\u307e\u3059..."));
-
-  let src = null;
-  let dst = null;
-  let srcTri = null;
-  let dstTri = null;
-  let transform = null;
-  let sourceMat = null;
-
-  try {
-    const cv = await waitForOpenCv();
-    sourceMat = cv.imread(captureCanvas);
-    src = new cv.Mat(4, 1, cv.CV_32FC2);
-    dst = new cv.Mat(BOARD_SIZE, BOARD_SIZE, cv.CV_8UC4);
-
-    src.data32F.set([
-      cornerPoints[0].x, cornerPoints[0].y,
-      cornerPoints[1].x, cornerPoints[1].y,
-      cornerPoints[2].x, cornerPoints[2].y,
-      cornerPoints[3].x, cornerPoints[3].y
-    ]);
-
-    dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
-      0, 0,
-      BOARD_SIZE - 1, 0,
-      BOARD_SIZE - 1, BOARD_SIZE - 1,
-      0, BOARD_SIZE - 1
-    ]);
-
-    transform = cv.getPerspectiveTransform(src, dstTri);
-    cv.warpPerspective(
-      sourceMat,
-      dst,
-      transform,
-      new cv.Size(BOARD_SIZE, BOARD_SIZE),
-      cv.INTER_LINEAR,
-      cv.BORDER_REPLICATE,
-      new cv.Scalar()
-    );
-
-    cv.imshow(correctedCanvas, dst);
-    gridOverlayCanvas.width = BOARD_SIZE;
-    gridOverlayCanvas.height = BOARD_SIZE;
-    drawBoardGridOverlay(gridOverlayCanvas);
-    hasCorrectedBoard = true;
-    runOcrButton.disabled = false;
-    resetResultGrid();
-    resetDebugGrid();
-    setStatus(t("\u56db\u9685\u88dc\u6b63\u304c\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002\u5916\u5468\u30ab\u30c3\u30c8\u7387\u3092\u78ba\u8a8d\u3057\u3066\u300c9\u00d79\u5206\u5272OCR\u5b9f\u884c\u300d\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
-  } catch (error) {
-    console.error("[app] perspective correction failed", error);
-    setStatus(error instanceof Error ? error.message : t("\u56db\u9685\u88dc\u6b63\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002"));
-  } finally {
-    correctBoardButton.disabled = false;
-    if (src) {
-      src.delete();
-    }
-    if (dst) {
-      dst.delete();
-    }
-    if (srcTri) {
-      srcTri.delete();
-    }
-    if (dstTri) {
-      dstTri.delete();
-    }
-    if (transform) {
-      transform.delete();
-    }
-    if (sourceMat) {
-      sourceMat.delete();
-    }
-  }
+  extractSquareBoard(captureCanvas, croppedCanvas, cropRect);
+  hasCroppedBoard = true;
+  runOcrButton.disabled = false;
+  resetResultGrid();
+  resetDebugGrid();
+  setStatus("切り出しを確定しました。次は「9×9分割OCR実行」を押してください。");
 }
 
 async function handleRunGridOcr() {
-  if (!hasCorrectedBoard) {
-    setStatus(t("\u5148\u306b\u300c\u56db\u9685\u88dc\u6b63\u300d\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
+  if (!hasCroppedBoard) {
+    setStatus("先に「この範囲を確定」を押してください。");
     return;
   }
 
   runOcrButton.disabled = true;
   const board = createEmptyBoard();
-  const cells = splitBoardIntoCells(correctedCanvas, Number(innerCropRange.value) / 100);
+  const cells = splitBoardIntoCells(croppedCanvas, Number(innerCropRange.value) / 100);
 
   try {
     for (let index = 0; index < cells.length; index += 1) {
       const cell = cells[index];
       const debugItem = debugCanvases[index];
-      drawCellCrop(correctedCanvas, cell, debugItem.canvas);
-      setStatus(`${index + 1} / 81 \u30de\u30b9\u51e6\u7406\u4e2d`);
+      drawCellCrop(croppedCanvas, cell, debugItem.canvas);
+      setStatus(`${index + 1} / 81 マス処理中`);
 
       const { digit } = await recognizeSingleDigit(debugItem.canvas);
       const normalized = digit || "";
@@ -552,13 +521,38 @@ async function handleRunGridOcr() {
     }
 
     writeBoardToInputs(board);
-    setStatus(t("81\u30de\u30b9\u306eOCR\u304c\u5b8c\u4e86\u3057\u307e\u3057\u305f\u3002\u7d50\u679c\u30929\u00d79\u5165\u529b\u6b04\u3067\u624b\u4fee\u6b63\u3067\u304d\u307e\u3059\u3002"));
+    setStatus("OCRが完了しました。必要なら数値を手修正してから「解く」を押してください。");
   } catch (error) {
     console.error("[app] grid OCR failed", error);
-    setStatus(error instanceof Error ? error.message : t("OCR\u306e\u5b9f\u884c\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002"));
+    setStatus(error instanceof Error ? error.message : "OCRの実行に失敗しました。");
   } finally {
     runOcrButton.disabled = false;
   }
+}
+
+function handleSolve() {
+  const board = readBoardFromInputs();
+  const solvedBoard = solveSudoku(board);
+
+  if (!solvedBoard) {
+    setStatus("この盤面は解けません。入力値を見直してください。");
+    return;
+  }
+
+  writeBoardToInputs(solvedBoard.map((row) => row.map((value) => (value === 0 ? "" : String(value)))));
+  setStatus("盤面を解きました。");
+}
+
+function handleClear() {
+  hasCapturedImage = false;
+  hasCroppedBoard = false;
+  cropRect = null;
+  dragState = null;
+  captureButton.disabled = true;
+  cropButton.disabled = true;
+  runOcrButton.disabled = true;
+  drawInitialPlaceholders();
+  setStatus("クリアしました。もう一度カメラ開始から試してください。");
 }
 
 buildResultGrid();
@@ -568,26 +562,28 @@ updateInnerCropLabel();
 
 startCameraButton.addEventListener("click", handleStartCamera);
 captureButton.addEventListener("click", handleCapture);
-correctBoardButton.addEventListener("click", handleCorrectBoard);
+cropButton.addEventListener("click", handleApplyCrop);
 runOcrButton.addEventListener("click", handleRunGridOcr);
+solveButton.addEventListener("click", handleSolve);
+clearButton.addEventListener("click", handleClear);
 innerCropRange.addEventListener("input", () => {
   updateInnerCropLabel();
-  if (hasCorrectedBoard) {
+  if (hasCroppedBoard) {
     resetResultGrid();
     resetDebugGrid();
-    setStatus(t("\u5916\u5468\u30ab\u30c3\u30c8\u7387\u3092\u5909\u66f4\u3057\u307e\u3057\u305f\u3002\u518d\u5ea6\u300c9\u00d79\u5206\u5272OCR\u5b9f\u884c\u300d\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044\u3002"));
+    setStatus("外周カット率を変更しました。再度「9×9分割OCR実行」を押してください。");
   }
 });
-cornerOverlayCanvas.addEventListener("pointerdown", handleCornerPointerDown);
-cornerOverlayCanvas.addEventListener("pointermove", handleCornerPointerMove);
-cornerOverlayCanvas.addEventListener("pointerup", finishCornerDrag);
-cornerOverlayCanvas.addEventListener("pointercancel", finishCornerDrag);
-cornerOverlayCanvas.addEventListener("touchstart", handleCornerPointerDown, { passive: false });
-cornerOverlayCanvas.addEventListener("touchmove", handleCornerPointerMove, { passive: false });
-cornerOverlayCanvas.addEventListener("touchend", finishCornerDrag, { passive: false });
-cornerOverlayCanvas.addEventListener("mousedown", handleCornerPointerDown);
-window.addEventListener("mousemove", handleCornerPointerMove);
-window.addEventListener("mouseup", finishCornerDrag);
+cropOverlayCanvas.addEventListener("pointerdown", handleOverlayPointerDown);
+cropOverlayCanvas.addEventListener("pointermove", handleOverlayPointerMove);
+cropOverlayCanvas.addEventListener("pointerup", finishOverlayDrag);
+cropOverlayCanvas.addEventListener("pointercancel", finishOverlayDrag);
+cropOverlayCanvas.addEventListener("touchstart", handleOverlayPointerDown, { passive: false });
+cropOverlayCanvas.addEventListener("touchmove", handleOverlayPointerMove, { passive: false });
+cropOverlayCanvas.addEventListener("touchend", finishOverlayDrag, { passive: false });
+cropOverlayCanvas.addEventListener("mousedown", handleOverlayPointerDown);
+window.addEventListener("mousemove", handleOverlayPointerMove);
+window.addEventListener("mouseup", finishOverlayDrag);
 
 window.addEventListener("beforeunload", () => {
   stopCamera(cameraPreview);

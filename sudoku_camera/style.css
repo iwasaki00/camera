@@ -223,6 +223,16 @@ button.secondary {
   border-bottom-color: var(--text);
 }
 
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.actions button {
+  flex: 1 1 180px;
+}
+
 .debugGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

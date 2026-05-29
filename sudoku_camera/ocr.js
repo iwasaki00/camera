@@ -2,7 +2,7 @@ let workerPromise = null;
 
 async function getWorker() {
   if (!window.Tesseract) {
-    throw new Error("\u30e9\u30a4\u30d6\u30e9\u30ea Tesseract.js \u306e\u8aad\u307f\u8fbc\u307f\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002");
+    throw new Error("Tesseract.js の読み込みに失敗しました。");
   }
 
   if (!workerPromise) {
