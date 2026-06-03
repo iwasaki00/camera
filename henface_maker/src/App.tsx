@@ -76,12 +76,12 @@ const DIAGNOSIS_CLASSES = [
 
 const PART_INDEXES: Record<PartId, number[][]> = {
   brows: [
-    [70, 63, 105, 66, 107, 55],
-    [336, 296, 334, 293, 300, 285]
+    [46, 53, 52, 65, 55, 70, 63, 105, 66, 107],
+    [276, 283, 282, 295, 285, 300, 293, 334, 296, 336]
   ],
   eyes: [
-    [33, 133, 159, 145, 158, 153, 160, 144],
-    [362, 263, 386, 374, 387, 373, 385, 380]
+    [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246],
+    [362, 398, 384, 385, 386, 387, 388, 466, 263, 249, 390, 373, 374, 380, 381, 382]
   ],
   ears: [
     [127, 234, 93, 132, 58],
@@ -178,6 +178,30 @@ function boundsFromIndexes(
   };
 }
 
+function expandRectTowardPoint(rect: Rect, point: Point, amount: number, width: number, height: number): Rect {
+  const next = { ...rect };
+  const centerX = rect.x + rect.width / 2;
+  const centerY = rect.y + rect.height / 2;
+
+  if (point.x < centerX) {
+    const newX = Math.max(0, rect.x - amount);
+    next.width += next.x - newX;
+    next.x = newX;
+  } else {
+    next.width = Math.min(width, rect.x + rect.width + amount) - rect.x;
+  }
+
+  if (point.y < centerY) {
+    const newY = Math.max(0, rect.y - amount * 0.3);
+    next.height += next.y - newY;
+    next.y = newY;
+  } else {
+    next.height = Math.min(height, rect.y + rect.height + amount * 0.3) - rect.y;
+  }
+
+  return next;
+}
+
 function getFaceCenter(landmarks: { x: number; y: number }[], width: number, height: number): Point {
   const nose = mirrorPoint(landmarks[1], width, height);
   const brow = mirrorPoint(landmarks[168], width, height);
@@ -208,6 +232,25 @@ function applyPartFilter(ctx: CanvasRenderingContext2D, opacity: number): void {
 
 function amplifyAroundOne(value: number, strength: number, min: number, max: number): number {
   return clamp(1 + (value - 1) * strength, min, max);
+}
+
+function drawBlurredBase(ctx: CanvasRenderingContext2D, source: HTMLCanvasElement, rect: Rect, blurRadius: number): void {
+  const padding = blurRadius * 3;
+  const x = clamp(rect.x - padding, 0, source.width);
+  const y = clamp(rect.y - padding, 0, source.height);
+  const maxX = clamp(rect.x + rect.width + padding, 0, source.width);
+  const maxY = clamp(rect.y + rect.height + padding, 0, source.height);
+  const width = maxX - x;
+  const height = maxY - y;
+
+  if (width <= 0 || height <= 0) {
+    return;
+  }
+
+  ctx.save();
+  ctx.filter = `blur(${blurRadius}px)`;
+  ctx.drawImage(source, x, y, width, height, x, y, width, height);
+  ctx.restore();
 }
 
 function drawTransformedPart(
@@ -252,6 +295,11 @@ function drawTransformedPart(
     ctx.drawImage(source, restoreX, restoreY, restoreWidth, restoreHeight, restoreX, restoreY, restoreWidth, restoreHeight);
   }
 
+  const isShrunkOrMoved = amplifiedSize * amplifiedScaleX < 0.94 || amplifiedSize * amplifiedScaleY < 0.94 || Math.abs(shiftX) > 1 || Math.abs(shiftY) > 1;
+  if (isShrunkOrMoved) {
+    drawBlurredBase(ctx, source, rect, Math.max(6, Math.min(16, Math.max(rect.width, rect.height) * 0.08)));
+  }
+
   ctx.save();
   ctx.globalAlpha = amplifiedOpacity;
   applyPartFilter(ctx, amplifiedOpacity);
@@ -287,10 +335,22 @@ function drawPartSet(
 ): void {
   const definitions = PART_INDEXES[partId];
   const faceCenter = getFaceCenter(landmarks, width, height);
-  const padding = partId === "head" ? 40 : partId === "jaw" ? 30 : partId === "mouth" ? 24 : 20;
+  const padding =
+    partId === "head"
+      ? 40
+      : partId === "jaw"
+        ? 30
+        : partId === "eyes"
+          ? 32
+          : partId === "brows"
+            ? 28
+            : partId === "mouth" || partId === "nose"
+              ? 24
+              : 20;
 
   definitions.forEach((indexes, index) => {
-    const rect = boundsFromIndexes(landmarks, indexes, width, height, padding);
+    const baseRect = boundsFromIndexes(landmarks, indexes, width, height, padding);
+    const rect = partId === "eyes" ? expandRectTowardPoint(baseRect, faceCenter, 28, width, height) : baseRect;
     const pairDirection = definitions.length === 2 ? (index === 0 ? -1 : 1) : 0;
     drawTransformedPart(ctx, source, rect, config, faceCenter, pairDirection, ACTIVE_PART_IDS.includes(partId));
   });
