@@ -47,6 +47,8 @@ const PART_DEFS: PartDefinition[] = [
 ];
 
 const PART_IDS = PART_DEFS.map((part) => part.id);
+const ACTIVE_PART_IDS: PartId[] = ["brows", "eyes", "nose", "mouth"];
+const ACTIVE_PART_DEFS = PART_DEFS.filter((part) => ACTIVE_PART_IDS.includes(part.id));
 
 const DEFAULT_PART: PartConfig = {
   size: 1,
@@ -290,7 +292,7 @@ function drawPartSet(
   definitions.forEach((indexes, index) => {
     const rect = boundsFromIndexes(landmarks, indexes, width, height, padding);
     const pairDirection = definitions.length === 2 ? (index === 0 ? -1 : 1) : 0;
-    drawTransformedPart(ctx, source, rect, config, faceCenter, pairDirection, partId === "mouth");
+    drawTransformedPart(ctx, source, rect, config, faceCenter, pairDirection, ACTIVE_PART_IDS.includes(partId));
   });
 }
 
@@ -396,7 +398,7 @@ export default function App() {
   const [status, setStatus] = useState("待機中");
   const [message, setMessage] = useState("前面カメラで起動して、顔のパーツをリアルタイムに変形できます。");
   const [error, setError] = useState("");
-  const [activePart] = useState<PartId>("mouth");
+  const [activePart, setActivePart] = useState<PartId>("mouth");
   const [effectState, setEffectState] = useState<EffectState>(createDefaultState);
   const [accidentType, setAccidentType] = useState<AccidentType>("light");
   const [accidentRate, setAccidentRate] = useState(65);
@@ -404,7 +406,7 @@ export default function App() {
   const [loadingOverlay, setLoadingOverlay] = useState("");
 
   const activePartDef = useMemo(
-    () => PART_DEFS.find((item) => item.id === activePart) ?? PART_DEFS[0],
+    () => ACTIVE_PART_DEFS.find((item) => item.id === activePart) ?? ACTIVE_PART_DEFS[0],
     [activePart]
   );
 
@@ -507,7 +509,9 @@ export default function App() {
     }
 
     const currentEffectState = effectStateRef.current;
-    drawPartSet(ctx, sourceCanvas, landmarks, canvas.width, canvas.height, "mouth", currentEffectState.mouth);
+    ACTIVE_PART_IDS.forEach((partId) => {
+      drawPartSet(ctx, sourceCanvas, landmarks, canvas.width, canvas.height, partId, currentEffectState[partId]);
+    });
 
     setStatus("顔を検出中");
     setMessage("下のパネルからパーツごとの大きさ、距離、縦横、濃さを調整できます。");
@@ -582,18 +586,19 @@ export default function App() {
     setDiagnosis(buildDiagnosis(32, "調整前の素顔"));
   }
 
-  function randomizeMouth(): void {
+  function randomizeActivePart(): void {
     const random = mulberry32(Date.now() ^ Math.floor(Math.random() * 1000000));
+    const part = activePartDef;
     setEffectState((current) =>
-      setPart(current, "mouth", {
+      setPart(current, activePart, {
         size: clamp(0.7 + random() * 0.9, 0.45, 1.8),
-        distance: 0,
+        distance: part.supportsDistance ? random() * 0.32 - 0.16 : 0,
         scaleX: clamp(0.7 + random() * 0.9, 0.45, 1.8),
         scaleY: clamp(0.7 + random() * 0.9, 0.45, 1.8),
         opacity: clamp(0.55 + random() * 0.75, 0.3, 1.45)
       })
     );
-    setDiagnosis(buildDiagnosis(45 + Math.round(random() * 35), "口だけテスト"));
+    setDiagnosis(buildDiagnosis(45 + Math.round(random() * 35), `${part.label}だけテスト`));
   }
 
   function randomizeFace(): void {
@@ -700,12 +705,12 @@ export default function App() {
 
       <section className="controls-card">
         <div className="tab-row">
-          {PART_DEFS.map((part) => (
+          {ACTIVE_PART_DEFS.map((part) => (
             <button
               key={part.id}
               className={`tab-button ${activePart === part.id ? "is-active" : ""}`}
               type="button"
-              onClick={() => undefined}
+              onClick={() => setActivePart(part.id)}
             >
               {part.label}
             </button>
@@ -815,8 +820,8 @@ export default function App() {
           <button className="minor-button" type="button" onClick={resetAll}>
             全部リセット
           </button>
-          <button className="minor-button" type="button" onClick={randomizeMouth}>
-            口をランダム
+          <button className="minor-button" type="button" onClick={randomizeActivePart}>
+            選択パーツをランダム
           </button>
         </div>
 
