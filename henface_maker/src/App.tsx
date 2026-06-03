@@ -214,7 +214,8 @@ function drawTransformedPart(
   rect: Rect,
   config: PartConfig,
   faceCenter: Point,
-  pairDirection = 0
+  pairDirection = 0,
+  useSoftClip = false
 ): void {
   const amplifiedSize = amplifyAroundOne(config.size, 1.6, 0.2, 3.2);
   const amplifiedScaleX = amplifyAroundOne(config.scaleX, 1.75, 0.2, 3.2);
@@ -238,12 +239,26 @@ function drawTransformedPart(
   const clearMaxX = Math.max(rect.x + rect.width, partCenter.x + shiftX + scaledWidth / 2) + clearPadding;
   const clearMaxY = Math.max(rect.y + rect.height, partCenter.y + shiftY + scaledHeight / 2) + clearPadding;
 
-  ctx.clearRect(clearX, clearY, clearMaxX - clearX, clearMaxY - clearY);
+  const restoreX = clamp(clearX, 0, source.width);
+  const restoreY = clamp(clearY, 0, source.height);
+  const restoreMaxX = clamp(clearMaxX, 0, source.width);
+  const restoreMaxY = clamp(clearMaxY, 0, source.height);
+  const restoreWidth = restoreMaxX - restoreX;
+  const restoreHeight = restoreMaxY - restoreY;
+
+  if (restoreWidth > 0 && restoreHeight > 0) {
+    ctx.drawImage(source, restoreX, restoreY, restoreWidth, restoreHeight, restoreX, restoreY, restoreWidth, restoreHeight);
+  }
 
   ctx.save();
   ctx.globalAlpha = amplifiedOpacity;
   applyPartFilter(ctx, amplifiedOpacity);
   ctx.translate(partCenter.x + shiftX, partCenter.y + shiftY);
+  if (useSoftClip) {
+    ctx.beginPath();
+    ctx.ellipse(0, 0, scaledWidth * 0.58, scaledHeight * 0.58, 0, 0, Math.PI * 2);
+    ctx.clip();
+  }
   ctx.scale(amplifiedSize * amplifiedScaleX, amplifiedSize * amplifiedScaleY);
   ctx.drawImage(
     source,
@@ -275,7 +290,7 @@ function drawPartSet(
   definitions.forEach((indexes, index) => {
     const rect = boundsFromIndexes(landmarks, indexes, width, height, padding);
     const pairDirection = definitions.length === 2 ? (index === 0 ? -1 : 1) : 0;
-    drawTransformedPart(ctx, source, rect, config, faceCenter, pairDirection);
+    drawTransformedPart(ctx, source, rect, config, faceCenter, pairDirection, partId === "mouth");
   });
 }
 
@@ -375,12 +390,13 @@ export default function App() {
   const animationFrameRef = useRef<number>(0);
   const timeoutRef = useRef<number | null>(null);
   const lastVideoTimeRef = useRef(-1);
+  const effectStateRef = useRef<EffectState>(createDefaultState());
 
   const [cameraActive, setCameraActive] = useState(false);
   const [status, setStatus] = useState("待機中");
   const [message, setMessage] = useState("前面カメラで起動して、顔のパーツをリアルタイムに変形できます。");
   const [error, setError] = useState("");
-  const [activePart, setActivePart] = useState<PartId>("eyes");
+  const [activePart] = useState<PartId>("mouth");
   const [effectState, setEffectState] = useState<EffectState>(createDefaultState);
   const [accidentType, setAccidentType] = useState<AccidentType>("light");
   const [accidentRate, setAccidentRate] = useState(65);
@@ -490,9 +506,8 @@ export default function App() {
       return;
     }
 
-    PART_IDS.forEach((partId) => {
-      drawPartSet(ctx, sourceCanvas, landmarks, canvas.width, canvas.height, partId, effectState[partId]);
-    });
+    const currentEffectState = effectStateRef.current;
+    drawPartSet(ctx, sourceCanvas, landmarks, canvas.width, canvas.height, "mouth", currentEffectState.mouth);
 
     setStatus("顔を検出中");
     setMessage("下のパネルからパーツごとの大きさ、距離、縦横、濃さを調整できます。");
@@ -567,6 +582,20 @@ export default function App() {
     setDiagnosis(buildDiagnosis(32, "調整前の素顔"));
   }
 
+  function randomizeMouth(): void {
+    const random = mulberry32(Date.now() ^ Math.floor(Math.random() * 1000000));
+    setEffectState((current) =>
+      setPart(current, "mouth", {
+        size: clamp(0.7 + random() * 0.9, 0.45, 1.8),
+        distance: 0,
+        scaleX: clamp(0.7 + random() * 0.9, 0.45, 1.8),
+        scaleY: clamp(0.7 + random() * 0.9, 0.45, 1.8),
+        opacity: clamp(0.55 + random() * 0.75, 0.3, 1.45)
+      })
+    );
+    setDiagnosis(buildDiagnosis(45 + Math.round(random() * 35), "口だけテスト"));
+  }
+
   function randomizeFace(): void {
     const random = mulberry32(Date.now() ^ Math.floor(Math.random() * 1000000));
     let next = createDefaultState();
@@ -607,6 +636,10 @@ export default function App() {
       timeoutRef.current = null;
     }, 500);
   }
+
+  useEffect(() => {
+    effectStateRef.current = effectState;
+  }, [effectState]);
 
   useEffect(() => {
     return () => {
@@ -672,7 +705,7 @@ export default function App() {
               key={part.id}
               className={`tab-button ${activePart === part.id ? "is-active" : ""}`}
               type="button"
-              onClick={() => setActivePart(part.id)}
+              onClick={() => undefined}
             >
               {part.label}
             </button>
@@ -782,8 +815,8 @@ export default function App() {
           <button className="minor-button" type="button" onClick={resetAll}>
             全部リセット
           </button>
-          <button className="minor-button" type="button" onClick={randomizeFace}>
-            ランダム変顔
+          <button className="minor-button" type="button" onClick={randomizeMouth}>
+            口をランダム
           </button>
         </div>
 

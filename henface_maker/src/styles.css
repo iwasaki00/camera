@@ -232,6 +232,12 @@ h1 {
   padding-bottom: 4px;
 }
 
+.tab-row,
+.preset-row,
+.accident-box {
+  display: none;
+}
+
 .tab-button {
   min-width: 68px;
   color: var(--text);
