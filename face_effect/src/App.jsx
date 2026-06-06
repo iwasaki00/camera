@@ -64,6 +64,16 @@ function distance(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+function normalizeUprightAngle(angle) {
+  if (angle > Math.PI / 2) {
+    return angle - Math.PI;
+  }
+  if (angle < -Math.PI / 2) {
+    return angle + Math.PI;
+  }
+  return angle;
+}
+
 function mirrorPoint(point, width, height) {
   return {
     x: width - point.x * width,
@@ -165,7 +175,7 @@ function getEyeBandGeometry(landmarks, width, height, scale = 1) {
   const centerY = (leftEye.y + rightEye.y) / 2;
   const eyeDistance = distance(leftEye, rightEye);
   const averageEyeHeight = (leftEye.height + rightEye.height) / 2;
-  const angle = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
+  const angle = normalizeUprightAngle(Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x));
 
   return {
     leftEye,
@@ -265,6 +275,7 @@ function drawUnibrowOverlay(ctx, landmarks, width, height, settings) {
 function drawEyeMask(ctx, landmarks, width, height, settings) {
   const band = getEyeBandGeometry(landmarks, width, height, 1);
   const maskHeight = band.height * settings.thicknessScale;
+  const maskWidth = band.width * settings.widthScale;
 
   ctx.save();
   ctx.translate(band.centerX, band.centerY);
@@ -272,7 +283,7 @@ function drawEyeMask(ctx, landmarks, width, height, settings) {
   ctx.fillStyle = "rgba(0, 0, 0, 0.94)";
   ctx.shadowColor = "rgba(0, 0, 0, 0.34)";
   ctx.shadowBlur = maskHeight * 0.35;
-  ctx.fillRect(-band.width / 2, -maskHeight / 2, band.width, maskHeight);
+  ctx.fillRect(-maskWidth / 2, -maskHeight / 2, maskWidth, maskHeight);
 
   if (settings.showText) {
     ctx.shadowBlur = 0;
@@ -650,8 +661,9 @@ export default function App() {
     },
     eyeMask: {
       thicknessScale: 1,
+      widthScale: 1,
       showText: true,
-      label: "SECRET"
+      label: "ヒミツ！"
     },
     heartEyes: {
       scale: 1,
@@ -687,6 +699,7 @@ export default function App() {
   const [unibrowThickness, setUnibrowThickness] = useState(100);
   const [unibrowLift, setUnibrowLift] = useState(18);
   const [eyeMaskThickness, setEyeMaskThickness] = useState(100);
+  const [eyeMaskWidth, setEyeMaskWidth] = useState(100);
   const [eyeMaskShowText, setEyeMaskShowText] = useState(true);
   const [eyeMosaicBlockSize, setEyeMosaicBlockSize] = useState(10);
   const [eyeMosaicAreaScale, setEyeMosaicAreaScale] = useState(100);
@@ -937,10 +950,11 @@ export default function App() {
   useEffect(() => {
     settingsRef.current.eyeMask = {
       thicknessScale: eyeMaskThickness / 100,
+      widthScale: eyeMaskWidth / 100,
       showText: eyeMaskShowText,
-      label: "SECRET"
+      label: "ヒミツ！"
     };
-  }, [eyeMaskThickness, eyeMaskShowText]);
+  }, [eyeMaskThickness, eyeMaskWidth, eyeMaskShowText]);
 
   useEffect(() => {
     settingsRef.current.eyeMosaic = {
@@ -1183,8 +1197,22 @@ export default function App() {
                 onChange={(event) => setEyeMaskThickness(Number(event.target.value))}
               />
 
+              <label className="slider-row">
+                <span>バーの長さ</span>
+                <strong>{eyeMaskWidth}%</strong>
+              </label>
+              <input
+                className="slider-input"
+                type="range"
+                min="75"
+                max="160"
+                step="5"
+                value={eyeMaskWidth}
+                onChange={(event) => setEyeMaskWidth(Number(event.target.value))}
+              />
+
               <label className="toggle-row">
-                <span>SECRET 表示</span>
+                <span>ヒミツ！ 表示</span>
                 <input
                   type="checkbox"
                   checked={eyeMaskShowText}
