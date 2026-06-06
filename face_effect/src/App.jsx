@@ -9,7 +9,10 @@ const FACE_MODEL_URL =
 const EFFECTS = [
   { value: "genius", label: "天才風" },
   { value: "white-eye", label: "白目" },
-  { value: "unibrow", label: "つながり眉" }
+  { value: "unibrow", label: "つながり眉" },
+  { value: "eye-mask", label: "目隠し" },
+  { value: "heart-eyes", label: "ハート目" },
+  { value: "eye-mosaic", label: "モザイク" }
 ];
 
 const FORMULAS = [
@@ -48,8 +51,6 @@ const LEFT_EYE_CENTER = 33;
 const RIGHT_EYE_CENTER = 263;
 const LEFT_BROW_INNER = 105;
 const RIGHT_BROW_INNER = 334;
-const UPPER_LIP = 13;
-const LOWER_LIP = 14;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -145,18 +146,36 @@ function getFaceMetrics(landmarks, width, height) {
   const rightEye = mirrorPoint(landmarks[RIGHT_EYE_CENTER], width, height);
   const browLeft = mirrorPoint(landmarks[LEFT_BROW_INNER], width, height);
   const browRight = mirrorPoint(landmarks[RIGHT_BROW_INNER], width, height);
-  const upperLip = mirrorPoint(landmarks[UPPER_LIP], width, height);
-  const lowerLip = mirrorPoint(landmarks[LOWER_LIP], width, height);
 
   const eyeDistance = distance(leftEye, rightEye);
-  const mouthOpen = distance(upperLip, lowerLip) / Math.max(eyeDistance, 1);
   const browDistance = distance(browLeft, browRight) / Math.max(eyeDistance, 1);
-  const thinking = mouthOpen < 0.055 || browDistance < 0.88;
+  const thinking = browDistance < 0.88;
 
   return {
     nose,
     eyeDistance,
     thinking
+  };
+}
+
+function getEyeBandGeometry(landmarks, width, height, scale = 1) {
+  const leftEye = getEyeGeometry(landmarks, LEFT_EYE_INDEXES, LEFT_IRIS_INDEXES, width, height);
+  const rightEye = getEyeGeometry(landmarks, RIGHT_EYE_INDEXES, RIGHT_IRIS_INDEXES, width, height);
+  const centerX = (leftEye.x + rightEye.x) / 2;
+  const centerY = (leftEye.y + rightEye.y) / 2;
+  const eyeDistance = distance(leftEye, rightEye);
+  const averageEyeHeight = (leftEye.height + rightEye.height) / 2;
+  const angle = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
+
+  return {
+    leftEye,
+    rightEye,
+    centerX,
+    centerY,
+    angle,
+    width: Math.max(eyeDistance * 1.9, (leftEye.width + rightEye.width) * 1.25) * scale,
+    height: Math.max(averageEyeHeight * 2.2, eyeDistance * 0.34) * scale,
+    eyeDistance
   };
 }
 
@@ -240,6 +259,98 @@ function drawUnibrowOverlay(ctx, landmarks, width, height, settings) {
   ctx.moveTo(left[2].x, left[2].y - browThickness * 0.1);
   ctx.quadraticCurveTo(bridge[1].x, bridge[1].y + browThickness * 0.5, right[0].x, right[0].y - browThickness * 0.1);
   ctx.stroke();
+  ctx.restore();
+}
+
+function drawEyeMask(ctx, landmarks, width, height, settings) {
+  const band = getEyeBandGeometry(landmarks, width, height, 1);
+  const maskHeight = band.height * settings.thicknessScale;
+
+  ctx.save();
+  ctx.translate(band.centerX, band.centerY);
+  ctx.rotate(band.angle);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.94)";
+  ctx.shadowColor = "rgba(0, 0, 0, 0.34)";
+  ctx.shadowBlur = maskHeight * 0.35;
+  ctx.fillRect(-band.width / 2, -maskHeight / 2, band.width, maskHeight);
+
+  if (settings.showText) {
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `800 ${Math.max(maskHeight * 0.42, 14)}px Arial, sans-serif`;
+    ctx.fillText(settings.label, 0, 0);
+  }
+
+  ctx.restore();
+}
+
+function drawHeartPath(ctx, size) {
+  const top = -size * 0.32;
+
+  ctx.beginPath();
+  ctx.moveTo(0, size * 0.38);
+  ctx.bezierCurveTo(-size * 0.72, -size * 0.05, -size * 0.52, -size * 0.72, 0, top);
+  ctx.bezierCurveTo(size * 0.52, -size * 0.72, size * 0.72, -size * 0.05, 0, size * 0.38);
+  ctx.closePath();
+}
+
+function drawHeartEyes(ctx, landmarks, width, height, now, settings) {
+  const band = getEyeBandGeometry(landmarks, width, height, 1);
+  const bob = Math.sin(now / 360) * band.eyeDistance * 0.025;
+
+  [band.leftEye, band.rightEye].forEach((eye) => {
+    const size = Math.max(eye.width * 0.82, eye.height * 1.65, 24) * settings.scale;
+
+    ctx.save();
+    ctx.translate(eye.x, eye.y + bob);
+    ctx.rotate(band.angle);
+    ctx.globalAlpha = settings.alpha;
+    ctx.fillStyle = "#ff4f8f";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
+    ctx.lineWidth = Math.max(size * 0.08, 2);
+    ctx.shadowColor = "rgba(255, 79, 143, 0.38)";
+    ctx.shadowBlur = size * 0.22;
+    drawHeartPath(ctx, size);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+
+function drawEyeMosaic(ctx, source, landmarks, width, height, settings) {
+  const band = getEyeBandGeometry(landmarks, width, height, settings.areaScale);
+  const rectWidth = Math.min(width, band.width);
+  const rectHeight = Math.min(height, band.height);
+  const sourceX = clamp(band.centerX - rectWidth / 2, 0, width - rectWidth);
+  const sourceY = clamp(band.centerY - rectHeight / 2, 0, height - rectHeight);
+  const blockSize = Math.max(4, Math.round(settings.blockSize));
+  const smallWidth = Math.max(8, Math.round(rectWidth / blockSize));
+  const smallHeight = Math.max(6, Math.round(rectHeight / blockSize));
+
+  if (!drawEyeMosaic.buffer) {
+    drawEyeMosaic.buffer = document.createElement("canvas");
+  }
+
+  const buffer = drawEyeMosaic.buffer;
+  buffer.width = smallWidth;
+  buffer.height = smallHeight;
+
+  const bufferCtx = buffer.getContext("2d");
+  if (!bufferCtx) {
+    return;
+  }
+
+  bufferCtx.imageSmoothingEnabled = true;
+  bufferCtx.drawImage(source, sourceX, sourceY, rectWidth, rectHeight, 0, 0, smallWidth, smallHeight);
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(buffer, 0, 0, smallWidth, smallHeight, sourceX, sourceY, rectWidth, rectHeight);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+  ctx.lineWidth = Math.max(2, rectHeight * 0.04);
+  ctx.strokeRect(sourceX, sourceY, rectWidth, rectHeight);
   ctx.restore();
 }
 
@@ -498,6 +609,12 @@ function describeEffect(effect, thinking) {
       return "白目エフェクトを表示しています。";
     case "unibrow":
       return "つながり眉エフェクトを表示しています。";
+    case "eye-mask":
+      return "目元に黒い目隠しバーを表示しています。";
+    case "heart-eyes":
+      return "両目にハート目エフェクトを表示しています。";
+    case "eye-mosaic":
+      return "目元周辺だけに軽量モザイクを表示しています。";
     case "genius":
     default:
       return thinking
@@ -530,6 +647,19 @@ export default function App() {
     unibrow: {
       thicknessScale: 1,
       liftScale: 0.18
+    },
+    eyeMask: {
+      thicknessScale: 1,
+      showText: true,
+      label: "SECRET"
+    },
+    heartEyes: {
+      scale: 1,
+      alpha: 0.82
+    },
+    eyeMosaic: {
+      blockSize: 10,
+      areaScale: 1
     }
   });
   const uiRef = useRef({
@@ -556,6 +686,12 @@ export default function App() {
   const [geniusMotionMode, setGeniusMotionMode] = useState("orbit");
   const [unibrowThickness, setUnibrowThickness] = useState(100);
   const [unibrowLift, setUnibrowLift] = useState(18);
+  const [eyeMaskThickness, setEyeMaskThickness] = useState(100);
+  const [eyeMaskShowText, setEyeMaskShowText] = useState(true);
+  const [eyeMosaicBlockSize, setEyeMosaicBlockSize] = useState(10);
+  const [eyeMosaicAreaScale, setEyeMosaicAreaScale] = useState(100);
+  const [heartEyeScale, setHeartEyeScale] = useState(100);
+  const [heartEyeAlpha, setHeartEyeAlpha] = useState(82);
 
   function updateUi(next) {
     const current = uiRef.current;
@@ -673,6 +809,9 @@ export default function App() {
     const geniusSettings = settingsRef.current.genius;
     const whiteEyeSettings = settingsRef.current.whiteEye;
     const unibrowSettings = settingsRef.current.unibrow;
+    const eyeMaskSettings = settingsRef.current.eyeMask;
+    const heartEyesSettings = settingsRef.current.heartEyes;
+    const eyeMosaicSettings = settingsRef.current.eyeMosaic;
 
     switch (currentEffect) {
       case "white-eye":
@@ -680,6 +819,15 @@ export default function App() {
         break;
       case "unibrow":
         drawUnibrowOverlay(ctx, faceLandmarks, canvas.width, canvas.height, unibrowSettings);
+        break;
+      case "eye-mask":
+        drawEyeMask(ctx, faceLandmarks, canvas.width, canvas.height, eyeMaskSettings);
+        break;
+      case "heart-eyes":
+        drawHeartEyes(ctx, faceLandmarks, canvas.width, canvas.height, now, heartEyesSettings);
+        break;
+      case "eye-mosaic":
+        drawEyeMosaic(ctx, canvas, faceLandmarks, canvas.width, canvas.height, eyeMosaicSettings);
         break;
       case "genius":
       default:
@@ -787,6 +935,28 @@ export default function App() {
   }, [unibrowThickness, unibrowLift]);
 
   useEffect(() => {
+    settingsRef.current.eyeMask = {
+      thicknessScale: eyeMaskThickness / 100,
+      showText: eyeMaskShowText,
+      label: "SECRET"
+    };
+  }, [eyeMaskThickness, eyeMaskShowText]);
+
+  useEffect(() => {
+    settingsRef.current.eyeMosaic = {
+      blockSize: eyeMosaicBlockSize,
+      areaScale: eyeMosaicAreaScale / 100
+    };
+  }, [eyeMosaicBlockSize, eyeMosaicAreaScale]);
+
+  useEffect(() => {
+    settingsRef.current.heartEyes = {
+      scale: heartEyeScale / 100,
+      alpha: heartEyeAlpha / 100
+    };
+  }, [heartEyeScale, heartEyeAlpha]);
+
+  useEffect(() => {
     return () => {
       stopCamera();
       if (faceLandmarkerRef.current) {
@@ -803,7 +973,7 @@ export default function App() {
         <h1>顔エフェクトカメラ</h1>
         <p className="updated-at">更新日時: {BUILD_UPDATED_AT}</p>
         <p className="lead">
-          天才風、白目、つながり眉の 3 種類を切り替えられます。
+          天才風、白目、つながり眉、目隠し、ハート目、モザイクを切り替えられます。
           iPhone Safari でも使いやすいように、エフェクト選択と調整をひとつの画面にまとめています。
         </p>
 
@@ -993,6 +1163,103 @@ export default function App() {
                 onChange={(event) => setUnibrowLift(Number(event.target.value))}
               />
             </>
+          ) : effect === "eye-mask" ? (
+            <>
+              <div className="settings-header">
+                <h2>目隠しの調整</h2>
+                <p>両目をまとめて覆う黒帯の太さと文字表示を変更できます。</p>
+              </div>
+              <label className="slider-row">
+                <span>バーの太さ</span>
+                <strong>{eyeMaskThickness}%</strong>
+              </label>
+              <input
+                className="slider-input"
+                type="range"
+                min="65"
+                max="150"
+                step="5"
+                value={eyeMaskThickness}
+                onChange={(event) => setEyeMaskThickness(Number(event.target.value))}
+              />
+
+              <label className="toggle-row">
+                <span>SECRET 表示</span>
+                <input
+                  type="checkbox"
+                  checked={eyeMaskShowText}
+                  onChange={(event) => setEyeMaskShowText(event.target.checked)}
+                />
+              </label>
+            </>
+          ) : effect === "heart-eyes" ? (
+            <>
+              <div className="settings-header">
+                <h2>ハート目の調整</h2>
+                <p>目の位置に追従するハートの大きさと透明度を変更できます。</p>
+              </div>
+              <label className="slider-row">
+                <span>ハートの大きさ</span>
+                <strong>{heartEyeScale}%</strong>
+              </label>
+              <input
+                className="slider-input"
+                type="range"
+                min="70"
+                max="170"
+                step="5"
+                value={heartEyeScale}
+                onChange={(event) => setHeartEyeScale(Number(event.target.value))}
+              />
+
+              <label className="slider-row">
+                <span>透明度</span>
+                <strong>{heartEyeAlpha}%</strong>
+              </label>
+              <input
+                className="slider-input"
+                type="range"
+                min="35"
+                max="100"
+                step="5"
+                value={heartEyeAlpha}
+                onChange={(event) => setHeartEyeAlpha(Number(event.target.value))}
+              />
+            </>
+          ) : effect === "eye-mosaic" ? (
+            <>
+              <div className="settings-header">
+                <h2>モザイクの調整</h2>
+                <p>目元だけを低解像度にして戻す軽量モザイクの粗さと範囲を変更できます。</p>
+              </div>
+              <label className="slider-row">
+                <span>モザイクの粗さ</span>
+                <strong>{eyeMosaicBlockSize}</strong>
+              </label>
+              <input
+                className="slider-input"
+                type="range"
+                min="6"
+                max="22"
+                step="1"
+                value={eyeMosaicBlockSize}
+                onChange={(event) => setEyeMosaicBlockSize(Number(event.target.value))}
+              />
+
+              <label className="slider-row">
+                <span>モザイク範囲</span>
+                <strong>{eyeMosaicAreaScale}%</strong>
+              </label>
+              <input
+                className="slider-input"
+                type="range"
+                min="80"
+                max="150"
+                step="5"
+                value={eyeMosaicAreaScale}
+                onChange={(event) => setEyeMosaicAreaScale(Number(event.target.value))}
+              />
+            </>
           ) : (
             <div className="settings-header">
               <h2>{EFFECTS.find((item) => item.value === effect)?.label} の表示</h2>
@@ -1001,6 +1268,12 @@ export default function App() {
                   ? "数式と幾何学オブジェクトを顔の周囲へ追従表示します。"
                   : effect === "unibrow"
                     ? "眉を太くつなげて表示します。"
+                    : effect === "eye-mask"
+                      ? "両目をまとめて黒帯で隠します。"
+                      : effect === "heart-eyes"
+                        ? "両目にハートを重ねて表示します。"
+                        : effect === "eye-mosaic"
+                          ? "目元周辺だけにモザイクを表示します。"
                     : "白目を強調して表示します。"}
               </p>
             </div>
@@ -1014,9 +1287,10 @@ export default function App() {
         <h2>機能</h2>
         <ul>
           <li>前面カメラと MediaPipe Face Landmarker によるリアルタイム顔追従</li>
-          <li>天才風、白目、つながり眉の 3 種類を切り替え</li>
+          <li>天才風、白目、つながり眉、目隠し、ハート目、モザイクを切り替え</li>
           <li>白目はサイズ、枠線、黒い点をスライダーで調整</li>
           <li>つながり眉は太さと持ち上げ量をスライダーで調整</li>
+          <li>目隠し、ハート目、モザイクは目元のランドマークに追従</li>
           <li>Canvas 合成結果のスクリーンショット保存</li>
           <li>GitHub Pages 公開を想定した Vite 構成</li>
         </ul>
