@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Lightsaber AR Camera</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <video id="camera" class="camera" playsinline muted autoplay></video>
+    <canvas id="overlay" class="overlay"></canvas>
+
+    <section class="hud" aria-label="操作パネル">
+      <div class="status-row">
+        <span id="statusText" class="status">待機中</span>
+        <span id="swingBadge" class="badge">SWING</span>
+      </div>
+
+      <div class="control-row">
+        <button id="startButton" type="button">START CAMERA</button>
+        <button id="offButton" type="button" class="secondary">OFF</button>
+        <button id="debugButton" type="button" class="secondary">DEBUG OFF</button>
+      </div>
+
+      <div class="color-row" aria-label="ライトセーバーの色">
+        <button type="button" class="color-button is-active" data-color="blue" style="--swatch:#2f8cff" aria-label="青"></button>
+        <button type="button" class="color-button" data-color="green" style="--swatch:#3ee96b" aria-label="緑"></button>
+        <button type="button" class="color-button" data-color="red" style="--swatch:#ff3c3c" aria-label="赤"></button>
+        <button type="button" class="color-button" data-color="purple" style="--swatch:#a56bff" aria-label="紫"></button>
+      </div>
+
+      <label class="range-line">
+        <span>感度</span>
+        <input id="sensitivityRange" type="range" min="0" max="100" value="55">
+      </label>
+
+      <label class="range-line">
+        <span>長さ</span>
+        <input id="lengthRange" type="range" min="45" max="100" value="78">
+      </label>
+    </section>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

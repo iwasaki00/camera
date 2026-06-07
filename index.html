@@ -99,6 +99,10 @@
       font-weight: 700;
     }
 
+    .app-card h2 {
+      margin-top: 12px;
+    }
+
     .app-card p {
       margin-top: 12px;
       color: var(--muted);
@@ -138,8 +142,7 @@
       <p class="eyebrow">CAMERA APPS</p>
       <h1>iPhone向けカメラ実験アプリ集</h1>
       <p class="lead">
-        GitHub Pages で公開しているカメラ系アプリの入口です。
-        現在は顔エフェクト、変顔メーカー、ナンプレ解答アプリを用意しています。
+        GitHub Pagesで公開しやすいカメラ系アプリの入口です。顔エフェクト、AR風ハンドトラッキング、ナンプレ解答などをまとめています。
       </p>
     </section>
 
@@ -147,10 +150,7 @@
       <article class="app-card">
         <span class="tag">HTML + CSS + JavaScript</span>
         <h2>ナンプレ解答カメラ</h2>
-        <p>
-          9x9 の盤面を手入力してバックトラック法で解答する試作版です。
-          将来のカメラ OCR 追加を見据えて、静的なモジュール構成で分離しています。
-        </p>
+        <p>9x9の盤面を手入力してバックトラック法で解答する試作です。将来のカメラOCR追加を見据えた構成です。</p>
         <div class="actions">
           <a href="./sudoku_camera/">ナンプレ解答カメラを開く</a>
         </div>
@@ -159,9 +159,7 @@
       <article class="app-card">
         <span class="tag">React + Vite</span>
         <h2>顔エフェクトカメラ</h2>
-        <p>
-          顔の検出結果に応じて数値やエフェクトを重ねて試せるカメラアプリです。
-        </p>
+        <p>顔の検出結果に応じて数値やエフェクトを重ねて試せるカメラアプリです。</p>
         <div class="actions">
           <a href="./face_effect/">顔エフェクトカメラを開く</a>
         </div>
@@ -170,20 +168,25 @@
       <article class="app-card">
         <span class="tag">React + Vite + MediaPipe Hands</span>
         <h2>氷の魔法ポーズAR</h2>
-        <p>
-          iPhone Safari向けのAR風カメラです。左右の手を認識し、手のひらを前に出すポーズで雪の結晶パーティクルを出します。
-        </p>
+        <p>iPhone Safari向けのAR風カメラです。左右の手を認識し、手のひらを前に出すポーズで雪の粒子を表示します。</p>
         <div class="actions">
           <a href="./ice_magic_ar/">氷の魔法ポーズARを開く</a>
         </div>
       </article>
 
       <article class="app-card">
+        <span class="tag">HTML + CSS + JavaScript + MediaPipe</span>
+        <h2>ライトセーバーAR</h2>
+        <p>前面カメラ映像の上で両手グーを近づけると、Canvas 2Dの光るライトセーバーが伸びて手元に追従します。</p>
+        <div class="actions">
+          <a href="./lightsaber_ar/">ライトセーバーARを開く</a>
+        </div>
+      </article>
+
+      <article class="app-card">
         <span class="tag">React + Vite + TypeScript</span>
         <h2>変顔メーカー</h2>
-        <p>
-          眉、目、白目、口などのパーツを組み合わせてランダム生成もできるアプリです。
-        </p>
+        <p>眉、目、鼻、口などのパーツを組み合わせてランダム生成もできるアプリです。</p>
         <div class="actions">
           <a href="./henface_maker/">変顔メーカーを開く</a>
         </div>
