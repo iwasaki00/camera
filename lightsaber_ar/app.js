@@ -45,6 +45,7 @@ const COLORS = {
 const FINGER_TIPS = [8, 12, 16, 20];
 const FINGER_PIPS = [6, 10, 14, 18];
 const PALM_POINTS = [0, 5, 9, 13, 17];
+const ACTIVATION_HOLD_MS = 180;
 
 let handLandmarker;
 let stream;
@@ -137,7 +138,7 @@ function handScale(landmarks) {
 function getFistState(landmarks) {
   const scale = handScale(landmarks);
   const sensitivity = Number(sensitivityRange.value) / 100;
-  const curlMargin = mix(1.01, 1.16, sensitivity);
+  const curlMargin = mix(1.08, 1.24, sensitivity);
   let curled = 0;
 
   // 人差し指から小指まで、指先がPIP関節より手首側に寄っていれば曲がっているとみなす。
@@ -148,11 +149,11 @@ function getFistState(landmarks) {
   }
 
   // 親指は握り込み方向の個人差が大きいため、手のひら中心に近いかだけを緩めに見る。
-  const thumbFolded = distance(landmarks[4], landmarks[9]) < scale * mix(1.15, 1.45, sensitivity);
+  const thumbFolded = distance(landmarks[4], landmarks[9]) < scale * mix(1.28, 1.62, sensitivity);
   return {
     curled,
     thumbFolded,
-    isFist: curled >= 3 && thumbFolded
+    isFist: curled >= 3 || (curled >= 2 && thumbFolded)
   };
 }
 
@@ -195,15 +196,38 @@ function getTwoHandPose(hands) {
     x: (a.fingertipCenter.x + b.fingertipCenter.x) / 2,
     y: (a.fingertipCenter.y + b.fingertipCenter.y) / 2
   };
+  const rawHandle = {
+    x: b.palm.x - a.palm.x,
+    y: b.palm.y - a.palm.y
+  };
+  const handleLength = Math.hypot(rawHandle.x, rawHandle.y);
+  let handleDirection = { x: 0, y: -1 };
+
+  if (handleLength > 10) {
+    // 両手で柄を持っている想定なので、両手を結ぶ線をセーバーの主軸として強く反映する。
+    // 上下差がある時は下の手から上の手へ、横並びに近い時は両手の横方向へ傾ける。
+    if (Math.abs(rawHandle.y) > Math.abs(rawHandle.x) * 0.45) {
+      handleDirection =
+        rawHandle.y < 0
+          ? normalize(rawHandle)
+          : normalize({ x: -rawHandle.x, y: -rawHandle.y });
+    } else {
+      handleDirection = normalize(rawHandle);
+    }
+  }
 
   // 指先方向が取れない時は画面上方向に倒して、セーバーが自然に立つようにする。
-  const direction = normalize({
+  const fingerDirection = normalize({
     x: (tipCenter.x - wristCenter.x) * 0.65,
     y: (tipCenter.y - wristCenter.y) * 0.65 - 0.35 * window.innerHeight
   });
+  const direction = normalize({
+    x: handleDirection.x * 0.78 + fingerDirection.x * 0.22,
+    y: handleDirection.y * 0.78 + fingerDirection.y * 0.22
+  });
 
   const handDistance = distance(a.palm, b.palm);
-  const closeThreshold = Math.min(window.innerWidth, window.innerHeight) * mix(0.12, 0.24, Number(sensitivityRange.value) / 100);
+  const closeThreshold = Math.min(window.innerWidth, window.innerHeight) * mix(0.18, 0.34, Number(sensitivityRange.value) / 100);
 
   return {
     center,
@@ -220,8 +244,8 @@ function updateDiagnostics(hands, pose, now) {
   const fistCount = hands.filter((hand) => hand.fist).length;
   const averageScore =
     handCount > 0 ? hands.reduce((total, hand) => total + hand.score, 0) / handCount : 0;
-  const holdMs = fistHoldStartedAt ? clamp(now - fistHoldStartedAt, 0, 300) : 0;
-  const holdPercent = Math.round((holdMs / 300) * 100);
+  const holdMs = fistHoldStartedAt ? clamp(now - fistHoldStartedAt, 0, ACTIVATION_HOLD_MS) : 0;
+  const holdPercent = Math.round((holdMs / ACTIVATION_HOLD_MS) * 100);
   const saberLabel = saberState === "igniting" ? "IGNITE" : saberState === "on" ? "ON" : "OFF";
   const fistDetail =
     handCount === 0
@@ -385,7 +409,7 @@ function drawSaber(pose, now) {
   const ignitionProgress = saberState === "igniting" ? clamp((now - saberStartedAt) / 760, 0, 1) : 1;
   if (ignitionProgress >= 1 && saberState === "igniting") saberState = "on";
 
-  const maxLength = Math.min(window.innerHeight, window.innerWidth * 1.55) * (Number(lengthRange.value) / 100);
+  const maxLength = Math.min(window.innerHeight * 0.72, window.innerWidth * 1.15) * (Number(lengthRange.value) / 100);
   const bladeLength = maxLength * ignitionProgress;
   const hiltLength = 54;
   const base = pose.center;
@@ -456,7 +480,7 @@ function updateState(pose, now) {
   if (pose.bothFists && pose.handsClose) {
     if (!fistHoldStartedAt) fistHoldStartedAt = now;
     handsApartStartedAt = 0;
-    if (now - fistHoldStartedAt > 300) activateSaber(now);
+    if (now - fistHoldStartedAt > ACTIVATION_HOLD_MS) activateSaber(now);
   } else {
     fistHoldStartedAt = 0;
     if (saberState !== "off" && !pose.handsClose) {
