@@ -26,6 +26,11 @@
             <p>顔上に数値やエフェクトを重ねて試せるカメラです。</p>
             <a href="./face_effect/index.html">face_effect を開く</a>
           </li>
+          <li>
+            <strong>ice_magic_ar</strong>
+            <p>左右の手を認識し、手のひらを前に出すポーズで雪の結晶パーティクルを出すAR風カメラです。</p>
+            <a href="./ice_magic_ar/index.html">ice_magic_ar を開く</a>
+          </li>
         </ul>
       </section>
     </main>
