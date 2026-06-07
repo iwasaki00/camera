@@ -12,6 +12,7 @@ on:
       - "face_effect/**"
       - "henface_maker/**"
       - "ice_magic_ar/**"
+      - "lightsaber_ar/**"
       - "sudoku_camera/**"
       - ".github/workflows/deploy-face-effect-pages.yml"
   workflow_dispatch:
@@ -68,6 +69,7 @@ jobs:
           mkdir -p site/face_effect
           mkdir -p site/henface_maker
           mkdir -p site/ice_magic_ar
+          mkdir -p site/lightsaber_ar
           mkdir -p site/sudoku_camera
           cp index.html site/index.html
           cp index.xml site/index.xml
@@ -75,6 +77,7 @@ jobs:
           cp -r face_effect/dist/. site/face_effect/
           cp -r henface_maker/dist/. site/henface_maker/
           cp -r ice_magic_ar/dist/. site/ice_magic_ar/
+          cp -r lightsaber_ar/. site/lightsaber_ar/
           cp -r sudoku_camera/. site/sudoku_camera/
 
       - name: Setup Pages
