@@ -18,6 +18,22 @@ const swingBadge = document.querySelector("#swingBadge");
 const sensitivityRange = document.querySelector("#sensitivityRange");
 const lengthRange = document.querySelector("#lengthRange");
 const colorButtons = [...document.querySelectorAll(".color-button")];
+const judgeElements = {
+  hands: document.querySelector("#judgeHands"),
+  fists: document.querySelector("#judgeFists"),
+  close: document.querySelector("#judgeClose"),
+  hold: document.querySelector("#judgeHold"),
+  saber: document.querySelector("#judgeSaber"),
+  score: document.querySelector("#judgeScore")
+};
+const judgeValues = {
+  hands: document.querySelector("#handsValue"),
+  fists: document.querySelector("#fistsValue"),
+  close: document.querySelector("#closeValue"),
+  hold: document.querySelector("#holdValue"),
+  saber: document.querySelector("#saberValue"),
+  score: document.querySelector("#scoreValue")
+};
 
 const COLORS = {
   blue: { core: "#ffffff", glow: "#2f8cff" },
@@ -67,6 +83,17 @@ function updateStatus(text) {
   statusText.textContent = text;
 }
 
+function setJudgeState(key, value, state = "wait") {
+  const item = judgeElements[key];
+  const output = judgeValues[key];
+  if (!item || !output) return;
+
+  output.textContent = value;
+  item.classList.toggle("is-ok", state === "ok");
+  item.classList.toggle("is-bad", state === "bad");
+  item.classList.toggle("is-active", state === "active");
+}
+
 function resizeCanvas() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const width = Math.floor(window.innerWidth * dpr);
@@ -107,7 +134,7 @@ function handScale(landmarks) {
   return Math.max(distance(landmarks[0], landmarks[9]), distance(landmarks[5], landmarks[17]));
 }
 
-function isFist(landmarks) {
+function getFistState(landmarks) {
   const scale = handScale(landmarks);
   const sensitivity = Number(sensitivityRange.value) / 100;
   const curlMargin = mix(1.01, 1.16, sensitivity);
@@ -122,19 +149,33 @@ function isFist(landmarks) {
 
   // 親指は握り込み方向の個人差が大きいため、手のひら中心に近いかだけを緩めに見る。
   const thumbFolded = distance(landmarks[4], landmarks[9]) < scale * mix(1.15, 1.45, sensitivity);
-  return curled >= 3 && thumbFolded;
+  return {
+    curled,
+    thumbFolded,
+    isFist: curled >= 3 && thumbFolded
+  };
 }
 
-function readHand(landmarks) {
+function isFist(landmarks) {
+  return getFistState(landmarks).isFist;
+}
+
+function readHand(landmarks, handedness) {
   const wrist = toScreenPoint(landmarks[0]);
   const palm = averagePoint(landmarks, PALM_POINTS);
   const fingertipCenter = averagePoint(landmarks, [8, 12, 16, 20]);
+  const fistState = getFistState(landmarks);
+
   return {
     landmarks,
+    label: handedness?.categoryName || "Hand",
+    score: handedness?.score || 0,
     wrist,
     palm,
     fingertipCenter,
-    fist: isFist(landmarks)
+    curled: fistState.curled,
+    thumbFolded: fistState.thumbFolded,
+    fist: fistState.isFist
   };
 }
 
@@ -161,12 +202,49 @@ function getTwoHandPose(hands) {
     y: (tipCenter.y - wristCenter.y) * 0.65 - 0.35 * window.innerHeight
   });
 
+  const handDistance = distance(a.palm, b.palm);
+  const closeThreshold = Math.min(window.innerWidth, window.innerHeight) * mix(0.12, 0.24, Number(sensitivityRange.value) / 100);
+
   return {
     center,
     direction,
-    handsClose: distance(a.palm, b.palm) < Math.min(window.innerWidth, window.innerHeight) * mix(0.12, 0.24, Number(sensitivityRange.value) / 100),
+    handDistance,
+    closeThreshold,
+    handsClose: handDistance < closeThreshold,
     bothFists: a.fist && b.fist
   };
+}
+
+function updateDiagnostics(hands, pose, now) {
+  const handCount = hands.length;
+  const fistCount = hands.filter((hand) => hand.fist).length;
+  const averageScore =
+    handCount > 0 ? hands.reduce((total, hand) => total + hand.score, 0) / handCount : 0;
+  const holdMs = fistHoldStartedAt ? clamp(now - fistHoldStartedAt, 0, 300) : 0;
+  const holdPercent = Math.round((holdMs / 300) * 100);
+  const saberLabel = saberState === "igniting" ? "IGNITE" : saberState === "on" ? "ON" : "OFF";
+  const fistDetail =
+    handCount === 0
+      ? "--"
+      : hands
+          .slice(0, 2)
+          .map((hand) => `${hand.fist ? "OK" : "NG"}:${hand.curled}${hand.thumbFolded ? "T" : ""}`)
+          .join(" ");
+
+  setJudgeState("hands", `${handCount} / 2`, handCount >= 2 ? "ok" : handCount > 0 ? "active" : "bad");
+  setJudgeState("fists", fistDetail, pose?.bothFists ? "ok" : handCount >= 2 ? "bad" : "wait");
+  setJudgeState(
+    "close",
+    pose ? `${Math.round(pose.handDistance)} / ${Math.round(pose.closeThreshold)}` : "--",
+    pose?.handsClose ? "ok" : handCount >= 2 ? "bad" : "wait"
+  );
+  setJudgeState("hold", `${holdPercent}%`, holdPercent >= 100 ? "ok" : holdPercent > 0 ? "active" : "wait");
+  setJudgeState("saber", saberLabel, saberState === "on" ? "ok" : saberState === "igniting" ? "active" : "wait");
+  setJudgeState(
+    "score",
+    handCount > 0 ? `${Math.round(averageScore * 100)}%` : "--",
+    averageScore >= 0.55 ? "ok" : handCount > 0 ? "active" : "wait"
+  );
 }
 
 function smoothPose(pose) {
@@ -257,6 +335,8 @@ function turnOffSaber() {
   handsApartStartedAt = 0;
   smoothedPose = null;
   previousPose = null;
+  updateDiagnostics([], null, performance.now());
+  updateStatus(isRunning ? "手認識中" : "待機中");
 }
 
 function detectSwing(pose, now) {
@@ -468,9 +548,12 @@ function frame(now) {
   if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
     lastVideoTime = video.currentTime;
     const results = handLandmarker.detectForVideo(video, now);
-    const hands = (results.landmarks || []).map(readHand);
+    const hands = (results.landmarks || []).map((landmarks, index) =>
+      readHand(landmarks, results.handedness?.[index]?.[0])
+    );
     const pose = getTwoHandPose(hands);
     const activePose = updateState(pose, now);
+    updateDiagnostics(hands, pose, now);
 
     drawSaber(activePose, now);
     drawLandmarks(hands);
@@ -502,3 +585,4 @@ window.addEventListener("pagehide", () => {
 });
 
 resizeCanvas();
+updateDiagnostics([], null, performance.now());
