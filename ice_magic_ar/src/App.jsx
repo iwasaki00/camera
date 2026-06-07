@@ -8,7 +8,8 @@ const HAND_MODEL_URL =
 const WRIST = 0;
 const INDEX_TIP = 8;
 const PALM_ANCHORS = [0, 5, 9, 13, 17, 8];
-const MAX_PARTICLES = 140;
+const MAX_PARTICLES = 360;
+const PALM_OPEN_DELAY_MS = 300;
 const DIRECTIONS = {
   NONE: "NONE",
   UP: "UP",
@@ -73,6 +74,40 @@ function isCastingPose(landmarks) {
   return handScale > 0.17 && palmOpen && indexAwayFromWrist;
 }
 
+function isFingerExtended(landmarks, tipIndex, pipIndex) {
+  return distance(landmarks[tipIndex], landmarks[WRIST]) > distance(landmarks[pipIndex], landmarks[WRIST]) * 1.08;
+}
+
+function isThumbExtended(landmarks, handednessLabel) {
+  const tip = landmarks[4];
+  const ip = landmarks[3];
+  const handScale = getHandScale(landmarks);
+  const xDelta = tip.x - ip.x;
+  const farFromWrist = distance(tip, landmarks[WRIST]) > distance(ip, landmarks[WRIST]) * 1.04;
+
+  // パー判定: 親指はIP関節より外側にあるかを見る。ラベルが曖昧な時は横方向の開きで補完する。
+  const outward =
+    handednessLabel === "Left"
+      ? xDelta > handScale * 0.12
+      : handednessLabel === "Right"
+        ? xDelta < -handScale * 0.12
+        : Math.abs(xDelta) > handScale * 0.16;
+
+  return farFromWrist && outward;
+}
+
+function isPalmOpenPose(landmarks, handednessLabel) {
+  const extendedCount = [
+    isThumbExtended(landmarks, handednessLabel),
+    isFingerExtended(landmarks, 8, 6),
+    isFingerExtended(landmarks, 12, 10),
+    isFingerExtended(landmarks, 16, 14),
+    isFingerExtended(landmarks, 20, 18)
+  ].filter(Boolean).length;
+
+  return extendedCount >= 4;
+}
+
 function getPalmDirection(hand, previousHand, width, height) {
   if (!hand || !previousHand) {
     return DIRECTIONS.NONE;
@@ -84,12 +119,12 @@ function getPalmDirection(hand, previousHand, width, height) {
   const moveThreshold = Math.max(12, Math.min(width, height) * 0.028);
   const scaleThreshold = 0.025;
 
-  // 追加仕様: 前後は手の見かけサイズ変化で判定する。
+  // 既存方向判定: 前後は手の見かけサイズ変化で判定する。
   if (Math.abs(scaleDelta) > scaleThreshold) {
     return scaleDelta > 0 ? DIRECTIONS.FORWARD : DIRECTIONS.BACK;
   }
 
-  // 追加仕様: 上下左右はCanvas上の手のひら中心座標の変化で判定する。
+  // 既存方向判定: 上下左右はCanvas上の手のひら中心座標の変化で判定する。
   if (Math.abs(dx) < moveThreshold && Math.abs(dy) < moveThreshold) {
     return DIRECTIONS.NONE;
   }
@@ -104,60 +139,92 @@ function getPalmDirection(hand, previousHand, width, height) {
 function getDirectionVector(direction) {
   switch (direction) {
     case DIRECTIONS.UP:
-      return { x: 0, y: -1, sizeScale: 1 };
+      return { x: 0, y: -1 };
     case DIRECTIONS.DOWN:
-      return { x: 0, y: 1, sizeScale: 1 };
+      return { x: 0, y: 1 };
     case DIRECTIONS.LEFT:
-      return { x: -1, y: 0, sizeScale: 1 };
+      return { x: -1, y: -0.12 };
     case DIRECTIONS.RIGHT:
-      return { x: 1, y: 0, sizeScale: 1 };
+      return { x: 1, y: -0.12 };
     case DIRECTIONS.FORWARD:
-      return { x: 0, y: -0.25, sizeScale: 1.45 };
+      return { x: 0, y: -0.42 };
     case DIRECTIONS.BACK:
-      return { x: 0, y: 0.2, sizeScale: 0.72 };
+      return { x: 0, y: 0.34 };
     default:
-      return { x: 0, y: -1, sizeScale: 1 };
+      return { x: 0, y: -0.5 };
   }
 }
 
-function createParticle(origin, now, direction) {
+function createBlizzardParticle(origin, now, direction, forceAmount) {
   const vector = getDirectionVector(direction);
-  const angle = Math.atan2(vector.y, vector.x) + (Math.random() - 0.5) * 0.75;
-  const speed = 1 + Math.random() * 2.2;
+  const baseAngle = Math.atan2(vector.y, vector.x);
+  const spread = direction === DIRECTIONS.FORWARD || direction === DIRECTIONS.NONE ? 1.25 : 0.88;
+  const angle = baseAngle + (Math.random() - 0.5) * spread;
+  const force = 1.2 + (forceAmount / 100) * 5.2;
+  const speed = force * (0.75 + Math.random() * 1.25);
+  const typeRoll = Math.random();
+  const type = typeRoll > 0.9 ? "crystal" : typeRoll > 0.48 ? "line" : "dot";
+  const colors = ["#ffffff", "#dff8ff", "#9ee7ff", "#b9dcff"];
+  const size = type === "crystal" ? 5 + Math.random() * 7 : 1.4 + Math.random() * 4.8;
 
   return {
-    x: origin.x + (Math.random() - 0.5) * 22,
-    y: origin.y + (Math.random() - 0.5) * 22,
-    vx: Math.cos(angle) * speed + (Math.random() - 0.5) * 0.5,
-    vy: Math.sin(angle) * speed + (Math.random() - 0.5) * 0.5,
-    size: (5 + Math.random() * 9) * vector.sizeScale,
+    x: origin.x + (Math.random() - 0.5) * 30,
+    y: origin.y + (Math.random() - 0.5) * 26,
+    px: origin.x,
+    py: origin.y,
+    vx: Math.cos(angle) * speed + (Math.random() - 0.5) * 1.6,
+    vy: Math.sin(angle) * speed + (Math.random() - 0.5) * 1.2,
+    size,
+    type,
     life: 1,
     bornAt: now,
-    ttl: 680 + Math.random() * 520,
+    ttl: type === "crystal" ? 620 + Math.random() * 360 : 420 + Math.random() * 420,
     rotation: Math.random() * Math.PI,
-    spin: (Math.random() - 0.5) * 0.08,
-    color: Math.random() > 0.35 ? "#dff8ff" : "#9ee7ff"
+    spin: (Math.random() - 0.5) * 0.16,
+    color: colors[Math.floor(Math.random() * colors.length)]
   };
 }
 
-function drawSnowCrystal(ctx, particle) {
+function drawCrystal(ctx, particle) {
   ctx.save();
   ctx.translate(particle.x, particle.y);
   ctx.rotate(particle.rotation);
-  ctx.globalAlpha = particle.life;
   ctx.strokeStyle = particle.color;
-  ctx.lineWidth = particle.size * 0.12;
+  ctx.lineWidth = Math.max(0.8, particle.size * 0.11);
 
   for (let i = 0; i < 6; i += 1) {
     ctx.rotate(Math.PI / 3);
     ctx.beginPath();
     ctx.moveTo(0, 0);
     ctx.lineTo(0, -particle.size);
-    ctx.moveTo(0, -particle.size * 0.62);
-    ctx.lineTo(-particle.size * 0.22, -particle.size * 0.82);
-    ctx.moveTo(0, -particle.size * 0.62);
-    ctx.lineTo(particle.size * 0.22, -particle.size * 0.82);
+    ctx.moveTo(0, -particle.size * 0.58);
+    ctx.lineTo(-particle.size * 0.2, -particle.size * 0.78);
+    ctx.moveTo(0, -particle.size * 0.58);
+    ctx.lineTo(particle.size * 0.2, -particle.size * 0.78);
     ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawBlizzardParticle(ctx, particle) {
+  ctx.save();
+  ctx.globalAlpha = particle.life;
+
+  if (particle.type === "crystal") {
+    drawCrystal(ctx, particle);
+  } else if (particle.type === "line") {
+    ctx.strokeStyle = particle.color;
+    ctx.lineWidth = Math.max(1, particle.size * 0.42);
+    ctx.beginPath();
+    ctx.moveTo(particle.px, particle.py);
+    ctx.lineTo(particle.x, particle.y);
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = particle.color;
+    ctx.beginPath();
+    ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   ctx.restore();
@@ -193,13 +260,15 @@ function drawHandDebug(ctx, hand, isCasting) {
   ctx.restore();
 }
 
-function drawDirectionLabel(ctx, direction) {
+function drawHud(ctx, direction, isPalmOpen) {
   ctx.save();
   ctx.font = "700 18px sans-serif";
-  ctx.fillStyle = "rgba(3, 7, 13, 0.64)";
-  ctx.fillRect(12, 12, 230, 38);
+  ctx.fillStyle = "rgba(3, 7, 13, 0.66)";
+  ctx.fillRect(12, 12, 250, 68);
   ctx.fillStyle = direction === DIRECTIONS.NONE ? "#ffffff" : "#9ee7ff";
-  ctx.fillText(`Direction: ${direction}`, 24, 37);
+  ctx.fillText(`Direction: ${direction}`, 24, 38);
+  ctx.fillStyle = isPalmOpen ? "#9ee7ff" : "#ffffff";
+  ctx.fillText(`Palm: ${isPalmOpen ? "OPEN" : "CLOSED"}`, 24, 66);
   ctx.restore();
 }
 
@@ -216,22 +285,29 @@ export default function IceMagicApp() {
   const handsRef = useRef([]);
   const previousPalmRef = useRef(null);
   const currentPalmDirectionRef = useRef(DIRECTIONS.NONE);
-  const snowAmountRef = useRef(40);
+  const blizzardAmountRef = useRef(40);
+  const blizzardForceRef = useRef(60);
   const particleSpawnCarryRef = useRef(0);
+  const palmOpenStartedAtRef = useRef(0);
+  const isPalmOpenRef = useRef(false);
+  const isBlizzardActiveRef = useRef(false);
 
   const [cameraActive, setCameraActive] = useState(false);
   const [statusText, setStatusText] = useState("カメラを起動してください");
   const [statusState, setStatusState] = useState("waiting");
   const [isCasting, setIsCasting] = useState(false);
+  const [isPalmOpen, setIsPalmOpen] = useState(false);
   const [handCount, setHandCount] = useState(0);
   const [currentPalmDirection, setCurrentPalmDirection] = useState(DIRECTIONS.NONE);
-  const [snowAmount, setSnowAmount] = useState(40);
+  const [blizzardAmount, setBlizzardAmount] = useState(40);
+  const [blizzardForce, setBlizzardForce] = useState(60);
   const [debugEnabled, setDebugEnabled] = useState(true);
   const debugEnabledRef = useRef(debugEnabled);
   const lastUiRef = useRef({
     statusText: "カメラを起動してください",
     statusState: "waiting",
     isCasting: false,
+    isPalmOpen: false,
     handCount: 0,
     currentPalmDirection: DIRECTIONS.NONE
   });
@@ -241,8 +317,12 @@ export default function IceMagicApp() {
   }, [debugEnabled]);
 
   useEffect(() => {
-    snowAmountRef.current = snowAmount;
-  }, [snowAmount]);
+    blizzardAmountRef.current = blizzardAmount;
+  }, [blizzardAmount]);
+
+  useEffect(() => {
+    blizzardForceRef.current = blizzardForce;
+  }, [blizzardForce]);
 
   async function ensureHandLandmarker() {
     if (handLandmarkerRef.current) {
@@ -322,8 +402,12 @@ export default function IceMagicApp() {
     previousPalmRef.current = null;
     currentPalmDirectionRef.current = DIRECTIONS.NONE;
     particleSpawnCarryRef.current = 0;
+    palmOpenStartedAtRef.current = 0;
+    isPalmOpenRef.current = false;
+    isBlizzardActiveRef.current = false;
     setCameraActive(false);
     setIsCasting(false);
+    setIsPalmOpen(false);
     setHandCount(0);
     setCurrentPalmDirection(DIRECTIONS.NONE);
     setStatusState("waiting");
@@ -332,6 +416,7 @@ export default function IceMagicApp() {
       statusText: "カメラを起動してください",
       statusState: "waiting",
       isCasting: false,
+      isPalmOpen: false,
       handCount: 0,
       currentPalmDirection: DIRECTIONS.NONE
     };
@@ -348,6 +433,9 @@ export default function IceMagicApp() {
     if (previous.isCasting !== next.isCasting) {
       setIsCasting(next.isCasting);
     }
+    if (previous.isPalmOpen !== next.isPalmOpen) {
+      setIsPalmOpen(next.isPalmOpen);
+    }
     if (previous.handCount !== next.handCount) {
       setHandCount(next.handCount);
     }
@@ -357,31 +445,58 @@ export default function IceMagicApp() {
     lastUiRef.current = next;
   }
 
-  function updateParticles(ctx, now, emittingHand, direction) {
-    const snowAmountValue = snowAmountRef.current;
+  function updateBlizzardState(rawPalmOpen, now) {
+    isPalmOpenRef.current = rawPalmOpen;
 
-    // 追加仕様: DirectionがNONE以外の時だけ、手のひら中心から雪を発生させる。
-    if (emittingHand && direction !== DIRECTIONS.NONE && snowAmountValue > 0) {
-      const spawnRate = snowAmountValue / 25;
+    // パーは0.3秒以上続いた時だけ吹雪開始。閉じたら即停止する。
+    if (!rawPalmOpen) {
+      palmOpenStartedAtRef.current = 0;
+      isBlizzardActiveRef.current = false;
+      particleSpawnCarryRef.current = 0;
+      return;
+    }
+
+    if (palmOpenStartedAtRef.current === 0) {
+      palmOpenStartedAtRef.current = now;
+    }
+
+    isBlizzardActiveRef.current = now - palmOpenStartedAtRef.current >= PALM_OPEN_DELAY_MS;
+  }
+
+  function updateParticles(ctx, now, emittingHand, direction) {
+    const amount = blizzardAmountRef.current;
+    const force = blizzardForceRef.current;
+
+    // 吹雪化: パー継続中だけ新規粒子を大量発生させる。既存粒子は自然減衰させる。
+    if (isBlizzardActiveRef.current && emittingHand && amount > 0) {
+      const emitDirection = direction === DIRECTIONS.NONE ? DIRECTIONS.FORWARD : direction;
+      const spawnRate = 3 + (amount / 100) * 18;
       particleSpawnCarryRef.current += spawnRate;
-      const spawnCount = Math.min(Math.floor(particleSpawnCarryRef.current), 6);
+      const spawnCount = Math.min(Math.floor(particleSpawnCarryRef.current), 24);
       particleSpawnCarryRef.current -= spawnCount;
 
-      for (let i = 0; i < spawnCount && particlesRef.current.length < MAX_PARTICLES; i += 1) {
-        particlesRef.current.push(createParticle(emittingHand.palmCenter, now, direction));
+      for (let i = 0; i < spawnCount; i += 1) {
+        particlesRef.current.push(createBlizzardParticle(emittingHand.palmCenter, now, emitDirection, force));
       }
     } else {
       particleSpawnCarryRef.current = 0;
     }
 
+    if (particlesRef.current.length > MAX_PARTICLES) {
+      particlesRef.current.splice(0, particlesRef.current.length - MAX_PARTICLES);
+    }
+
     particlesRef.current = particlesRef.current.filter((particle) => {
       const age = now - particle.bornAt;
       particle.life = clamp(1 - age / particle.ttl, 0, 1);
+      particle.px = particle.x;
+      particle.py = particle.y;
       particle.x += particle.vx;
       particle.y += particle.vy;
-      particle.vy += 0.01;
+      particle.vx *= 0.992;
+      particle.vy = particle.vy * 0.992 + 0.006;
       particle.rotation += particle.spin;
-      drawSnowCrystal(ctx, particle);
+      drawBlizzardParticle(ctx, particle);
       return particle.life > 0;
     });
   }
@@ -427,19 +542,19 @@ export default function IceMagicApp() {
       lastVideoTimeRef.current = video.currentTime;
       const result = landmarker.detectForVideo(video, now);
       hands = (result.landmarks || []).map((landmarks, index) => {
-        const points = getHandPoints(landmarks, canvas.width, canvas.height);
         const category = result.handedness?.[index]?.[0];
+        const points = getHandPoints(landmarks, canvas.width, canvas.height);
         return {
           ...points,
           landmarks,
           label: category?.categoryName || `Hand ${index + 1}`,
           score: category?.score || 0,
-          rawCasting: isCastingPose(landmarks)
+          rawCasting: isCastingPose(landmarks),
+          palmOpen: isPalmOpenPose(landmarks, category?.categoryName)
         };
       });
       handsRef.current = hands;
 
-      // 追加仕様: 左右2手がある場合も、見かけサイズが大きい手を方向判定の基準にする。
       const primaryHand = getPrimaryHand(hands);
       currentPalmDirectionRef.current = getPalmDirection(primaryHand, previousPalmRef.current, canvas.width, canvas.height);
       previousPalmRef.current = primaryHand
@@ -448,6 +563,7 @@ export default function IceMagicApp() {
             handScale: primaryHand.handScale
           }
         : null;
+      updateBlizzardState(Boolean(primaryHand?.palmOpen), now);
     }
 
     const hasCastingPose = hands.some((hand) => hand.rawCasting);
@@ -455,10 +571,10 @@ export default function IceMagicApp() {
       ? Math.min(castHoldRef.current + 1, 4)
       : Math.max(castHoldRef.current - 1, 0);
     const casting = castHoldRef.current >= 2;
-
     const primaryHand = getPrimaryHand(hands);
+
     updateParticles(ctx, now, primaryHand, currentPalmDirectionRef.current);
-    drawDirectionLabel(ctx, currentPalmDirectionRef.current);
+    drawHud(ctx, currentPalmDirectionRef.current, isPalmOpenRef.current);
 
     if (debugEnabledRef.current) {
       hands.forEach((hand) => drawHandDebug(ctx, hand, casting));
@@ -467,15 +583,16 @@ export default function IceMagicApp() {
     const nextStatus =
       hands.length === 0
         ? { statusState: "waiting", statusText: "手を画面内に入れてください" }
-        : currentPalmDirectionRef.current !== DIRECTIONS.NONE
-          ? { statusState: "detecting", statusText: "手のひらから雪を発生中" }
-          : casting
-            ? { statusState: "detecting", statusText: "氷の魔法ポーズを検出中" }
-            : { statusState: "waiting", statusText: "手のひらを上下左右または前後に動かしてください" };
+        : isBlizzardActiveRef.current
+          ? { statusState: "detecting", statusText: "手のひらから吹雪を噴射中" }
+          : isPalmOpenRef.current
+            ? { statusState: "waiting", statusText: "パーを維持すると吹雪が出ます" }
+            : { statusState: "waiting", statusText: "手のひらをパーに開いてください" };
 
     updateUi({
       ...nextStatus,
       isCasting: casting,
+      isPalmOpen: isPalmOpenRef.current,
       handCount: hands.length,
       currentPalmDirection: currentPalmDirectionRef.current
     });
@@ -510,8 +627,8 @@ export default function IceMagicApp() {
         <p className="eyebrow">ICE MAGIC AR</p>
         <h1>氷の魔法ポーズAR</h1>
         <p className="lead">
-          手のひらを上下左右、または前後に動かすと、手のひら中心から雪の結晶が吹き出します。
-          第一段階として安定した手認識と軽量なCanvas演出を優先しています。
+          手のひらをパーに開いて0.3秒維持すると、手のひら中心から大量の吹雪が噴き出します。
+          閉じると新しい吹雪は即停止し、残った粒子だけ自然に消えます。
         </p>
 
         <div className="action-row">
@@ -544,6 +661,10 @@ export default function IceMagicApp() {
             <p className="info-value">{handCount} / 2</p>
           </div>
           <div>
+            <p className="info-label">Palm</p>
+            <p className="info-value">{isPalmOpen ? "OPEN" : "CLOSED"}</p>
+          </div>
+          <div>
             <p className="info-label">Casting</p>
             <p className="info-value">{isCasting ? "true" : "false"}</p>
           </div>
@@ -555,8 +676,8 @@ export default function IceMagicApp() {
 
         <div className="settings-panel">
           <label className="slider-row">
-            <span>雪の量</span>
-            <strong>{snowAmount}</strong>
+            <span>吹雪の量</span>
+            <strong>{blizzardAmount}</strong>
           </label>
           <input
             className="slider-input"
@@ -564,8 +685,22 @@ export default function IceMagicApp() {
             min="0"
             max="100"
             step="1"
-            value={snowAmount}
-            onChange={(event) => setSnowAmount(Number(event.target.value))}
+            value={blizzardAmount}
+            onChange={(event) => setBlizzardAmount(Number(event.target.value))}
+          />
+
+          <label className="slider-row">
+            <span>吹雪の勢い</span>
+            <strong>{blizzardForce}</strong>
+          </label>
+          <input
+            className="slider-input"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={blizzardForce}
+            onChange={(event) => setBlizzardForce(Number(event.target.value))}
           />
 
           <label className="toggle-row">
@@ -583,9 +718,9 @@ export default function IceMagicApp() {
         <h2>検出内容</h2>
         <ul>
           <li>左右の手を最大2つまで認識</li>
-          <li>手首、各指の付け根、人差し指先から手のひら中心を推定</li>
-          <li>上下左右はCanvas座標の変化、前後は手のサイズ変化で判定</li>
-          <li>DirectionがNONE以外の時だけ、手のひら中心から雪を発生</li>
+          <li>4本以上の指が伸びていればパーとして判定</li>
+          <li>パーが0.3秒以上続いたときだけ吹雪を開始</li>
+          <li>既存の方向判定を吹雪の噴射方向に利用</li>
           <li>粒子数を最大{MAX_PARTICLES}個に制限</li>
         </ul>
       </section>
