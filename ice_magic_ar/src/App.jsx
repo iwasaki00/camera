@@ -7,9 +7,10 @@ const HAND_MODEL_URL =
 
 const WRIST = 0;
 const INDEX_TIP = 8;
+const MIDDLE_MCP = 9;
+const MIDDLE_TIP = 12;
 const PALM_ANCHORS = [0, 5, 9, 13, 17, 8];
 const MAX_PARTICLES = 360;
-const PALM_OPEN_DELAY_MS = 300;
 const DIRECTIONS = {
   NONE: "NONE",
   UP: "UP",
@@ -59,10 +60,22 @@ function getHandScale(landmarks) {
 }
 
 function getHandPoints(landmarks, width, height) {
+  const wrist = mirrorPoint(landmarks[WRIST], width, height);
+  const middleBase = mirrorPoint(landmarks[MIDDLE_MCP], width, height);
+  const middleTip = mirrorPoint(landmarks[MIDDLE_TIP], width, height);
+  const beamTarget = {
+    x: (middleBase.x + middleTip.x) / 2,
+    y: (middleBase.y + middleTip.y) / 2
+  };
+
   return {
     indexTip: mirrorPoint(landmarks[INDEX_TIP], width, height),
-    wrist: mirrorPoint(landmarks[WRIST], width, height),
+    wrist,
     palmCenter: averageLandmark(landmarks, PALM_ANCHORS, width, height),
+    beamDirection: normalizeVector({
+      x: beamTarget.x - wrist.x,
+      y: beamTarget.y - wrist.y
+    }),
     handScale: getHandScale(landmarks)
   };
 }
@@ -106,6 +119,14 @@ function isPalmOpenPose(landmarks, handednessLabel) {
   ].filter(Boolean).length;
 
   return extendedCount >= 4;
+}
+
+function normalizeVector(vector) {
+  const length = Math.hypot(vector.x, vector.y) || 1;
+  return {
+    x: vector.x / length,
+    y: vector.y / length
+  };
 }
 
 function getPalmDirection(hand, previousHand, width, height) {
@@ -155,32 +176,43 @@ function getDirectionVector(direction) {
   }
 }
 
-function createBlizzardParticle(origin, now, direction, forceAmount) {
-  const vector = getDirectionVector(direction);
-  const baseAngle = Math.atan2(vector.y, vector.x);
-  const spread = direction === DIRECTIONS.FORWARD || direction === DIRECTIONS.NONE ? 1.25 : 0.88;
-  const angle = baseAngle + (Math.random() - 0.5) * spread;
-  const force = 1.2 + (forceAmount / 100) * 5.2;
-  const speed = force * (0.75 + Math.random() * 1.25);
+function createBlizzardParticle(origin, now, beamDirection, forceAmount) {
+  const baseAngle = Math.atan2(beamDirection.y, beamDirection.x);
+  const spread = (20 + Math.random() * 15) * (Math.PI / 180);
+  const angle = baseAngle + (Math.random() > 0.5 ? 1 : -1) * Math.random() * spread;
+  const force = 3.2 + (forceAmount / 100) * 8.8;
+  const speed = force * (0.9 + Math.random() * 1.15);
   const typeRoll = Math.random();
-  const type = typeRoll > 0.9 ? "crystal" : typeRoll > 0.48 ? "line" : "dot";
+  const type = typeRoll > 0.92 ? "crystal" : typeRoll > 0.26 ? "streak" : "snow";
   const colors = ["#ffffff", "#dff8ff", "#9ee7ff", "#b9dcff"];
-  const size = type === "crystal" ? 5 + Math.random() * 7 : 1.4 + Math.random() * 4.8;
+  const isShard = type === "crystal" && Math.random() > 0.62;
+  const forwardOffset = isShard ? 70 + Math.random() * 120 : Math.random() * 30;
+  const sideOffset = (Math.random() - 0.5) * (22 + forwardOffset * 0.28);
+  const perp = { x: -beamDirection.y, y: beamDirection.x };
+  const size =
+    type === "crystal"
+      ? isShard
+        ? 10 + Math.random() * 12
+        : 5 + Math.random() * 7
+      : type === "streak"
+        ? 2 + Math.random() * 4
+        : 1.5 + Math.random() * 3.8;
 
   return {
-    x: origin.x + (Math.random() - 0.5) * 30,
-    y: origin.y + (Math.random() - 0.5) * 26,
+    x: origin.x + beamDirection.x * forwardOffset + perp.x * sideOffset,
+    y: origin.y + beamDirection.y * forwardOffset + perp.y * sideOffset,
     px: origin.x,
     py: origin.y,
-    vx: Math.cos(angle) * speed + (Math.random() - 0.5) * 1.6,
-    vy: Math.sin(angle) * speed + (Math.random() - 0.5) * 1.2,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
     size,
     type,
+    isShard,
     life: 1,
     bornAt: now,
-    ttl: type === "crystal" ? 620 + Math.random() * 360 : 420 + Math.random() * 420,
+    ttl: type === "streak" ? 240 + Math.random() * 260 : 300 + Math.random() * 320,
     rotation: Math.random() * Math.PI,
-    spin: (Math.random() - 0.5) * 0.16,
+    spin: (Math.random() - 0.5) * 0.22,
     color: colors[Math.floor(Math.random() * colors.length)]
   };
 }
@@ -191,6 +223,20 @@ function drawCrystal(ctx, particle) {
   ctx.rotate(particle.rotation);
   ctx.strokeStyle = particle.color;
   ctx.lineWidth = Math.max(0.8, particle.size * 0.11);
+
+  if (particle.isShard) {
+    ctx.fillStyle = particle.color;
+    ctx.globalAlpha *= 0.58;
+    ctx.beginPath();
+    ctx.moveTo(0, -particle.size);
+    ctx.lineTo(particle.size * 0.55, particle.size * 0.2);
+    ctx.lineTo(0, particle.size * 0.82);
+    ctx.lineTo(-particle.size * 0.42, particle.size * 0.12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
 
   for (let i = 0; i < 6; i += 1) {
     ctx.rotate(Math.PI / 3);
@@ -213,9 +259,11 @@ function drawBlizzardParticle(ctx, particle) {
 
   if (particle.type === "crystal") {
     drawCrystal(ctx, particle);
-  } else if (particle.type === "line") {
+  } else if (particle.type === "streak") {
     ctx.strokeStyle = particle.color;
-    ctx.lineWidth = Math.max(1, particle.size * 0.42);
+    ctx.lineWidth = Math.max(1.4, particle.size * 0.62);
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = particle.color;
     ctx.beginPath();
     ctx.moveTo(particle.px, particle.py);
     ctx.lineTo(particle.x, particle.y);
@@ -227,6 +275,51 @@ function drawBlizzardParticle(ctx, particle) {
     ctx.fill();
   }
 
+  ctx.restore();
+}
+
+function drawMagicBeam(ctx, hand, width, height) {
+  const origin = hand.palmCenter;
+  const direction = hand.beamDirection;
+  const length = Math.min(Math.max(width, height) * 0.92, 760);
+  const tip = {
+    x: origin.x + direction.x * length,
+    y: origin.y + direction.y * length
+  };
+  const perp = { x: -direction.y, y: direction.x };
+  const rootWidth = 20;
+  const tipWidth = 120;
+  const rootLeft = { x: origin.x + perp.x * rootWidth, y: origin.y + perp.y * rootWidth };
+  const rootRight = { x: origin.x - perp.x * rootWidth, y: origin.y - perp.y * rootWidth };
+  const tipLeft = { x: tip.x + perp.x * tipWidth, y: tip.y + perp.y * tipWidth };
+  const tipRight = { x: tip.x - perp.x * tipWidth, y: tip.y - perp.y * tipWidth };
+
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+
+  // ビーム帯: 根元を明るく、先端ほど透明な円錐状グラデーションにする。
+  const beamGradient = ctx.createLinearGradient(origin.x, origin.y, tip.x, tip.y);
+  beamGradient.addColorStop(0, "rgba(255, 255, 255, 0.72)");
+  beamGradient.addColorStop(0.18, "rgba(158, 231, 255, 0.42)");
+  beamGradient.addColorStop(1, "rgba(158, 231, 255, 0)");
+  ctx.fillStyle = beamGradient;
+  ctx.beginPath();
+  ctx.moveTo(rootLeft.x, rootLeft.y);
+  ctx.lineTo(tipLeft.x, tipLeft.y);
+  ctx.lineTo(tipRight.x, tipRight.y);
+  ctx.lineTo(rootRight.x, rootRight.y);
+  ctx.closePath();
+  ctx.fill();
+
+  // 手のひら付近の発光円。
+  const glow = ctx.createRadialGradient(origin.x, origin.y, 4, origin.x, origin.y, 72);
+  glow.addColorStop(0, "rgba(255, 255, 255, 0.92)");
+  glow.addColorStop(0.28, "rgba(158, 231, 255, 0.55)");
+  glow.addColorStop(1, "rgba(158, 231, 255, 0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(origin.x, origin.y, 72, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -288,9 +381,7 @@ export default function IceMagicApp() {
   const blizzardAmountRef = useRef(40);
   const blizzardForceRef = useRef(60);
   const particleSpawnCarryRef = useRef(0);
-  const palmOpenStartedAtRef = useRef(0);
   const isPalmOpenRef = useRef(false);
-  const isBlizzardActiveRef = useRef(false);
 
   const [cameraActive, setCameraActive] = useState(false);
   const [statusText, setStatusText] = useState("カメラを起動してください");
@@ -402,9 +493,7 @@ export default function IceMagicApp() {
     previousPalmRef.current = null;
     currentPalmDirectionRef.current = DIRECTIONS.NONE;
     particleSpawnCarryRef.current = 0;
-    palmOpenStartedAtRef.current = 0;
     isPalmOpenRef.current = false;
-    isBlizzardActiveRef.current = false;
     setCameraActive(false);
     setIsCasting(false);
     setIsPalmOpen(false);
@@ -447,36 +536,24 @@ export default function IceMagicApp() {
 
   function updateBlizzardState(rawPalmOpen, now) {
     isPalmOpenRef.current = rawPalmOpen;
-
-    // パーは0.3秒以上続いた時だけ吹雪開始。閉じたら即停止する。
     if (!rawPalmOpen) {
-      palmOpenStartedAtRef.current = 0;
-      isBlizzardActiveRef.current = false;
       particleSpawnCarryRef.current = 0;
-      return;
     }
-
-    if (palmOpenStartedAtRef.current === 0) {
-      palmOpenStartedAtRef.current = now;
-    }
-
-    isBlizzardActiveRef.current = now - palmOpenStartedAtRef.current >= PALM_OPEN_DELAY_MS;
   }
 
   function updateParticles(ctx, now, emittingHand, direction) {
     const amount = blizzardAmountRef.current;
     const force = blizzardForceRef.current;
 
-    // 吹雪化: パー継続中だけ新規粒子を大量発生させる。既存粒子は自然減衰させる。
-    if (isBlizzardActiveRef.current && emittingHand && amount > 0) {
-      const emitDirection = direction === DIRECTIONS.NONE ? DIRECTIONS.FORWARD : direction;
-      const spawnRate = 3 + (amount / 100) * 18;
+    // 氷魔法化: パー状態の間だけ、手首から中指方向へビーム状に粒子を噴射する。
+    if (isPalmOpenRef.current && emittingHand && amount > 0) {
+      const spawnRate = 5 + (amount / 100) * 26;
       particleSpawnCarryRef.current += spawnRate;
-      const spawnCount = Math.min(Math.floor(particleSpawnCarryRef.current), 24);
+      const spawnCount = Math.min(Math.floor(particleSpawnCarryRef.current), 32);
       particleSpawnCarryRef.current -= spawnCount;
 
       for (let i = 0; i < spawnCount; i += 1) {
-        particlesRef.current.push(createBlizzardParticle(emittingHand.palmCenter, now, emitDirection, force));
+        particlesRef.current.push(createBlizzardParticle(emittingHand.palmCenter, now, emittingHand.beamDirection, force));
       }
     } else {
       particleSpawnCarryRef.current = 0;
@@ -493,8 +570,8 @@ export default function IceMagicApp() {
       particle.py = particle.y;
       particle.x += particle.vx;
       particle.y += particle.vy;
-      particle.vx *= 0.992;
-      particle.vy = particle.vy * 0.992 + 0.006;
+      particle.vx *= 0.985;
+      particle.vy *= 0.985;
       particle.rotation += particle.spin;
       drawBlizzardParticle(ctx, particle);
       return particle.life > 0;
@@ -573,6 +650,9 @@ export default function IceMagicApp() {
     const casting = castHoldRef.current >= 2;
     const primaryHand = getPrimaryHand(hands);
 
+    if (primaryHand && isPalmOpenRef.current) {
+      drawMagicBeam(ctx, primaryHand, canvas.width, canvas.height);
+    }
     updateParticles(ctx, now, primaryHand, currentPalmDirectionRef.current);
     drawHud(ctx, currentPalmDirectionRef.current, isPalmOpenRef.current);
 
@@ -583,11 +663,9 @@ export default function IceMagicApp() {
     const nextStatus =
       hands.length === 0
         ? { statusState: "waiting", statusText: "手を画面内に入れてください" }
-        : isBlizzardActiveRef.current
-          ? { statusState: "detecting", statusText: "手のひらから吹雪を噴射中" }
-          : isPalmOpenRef.current
-            ? { statusState: "waiting", statusText: "パーを維持すると吹雪が出ます" }
-            : { statusState: "waiting", statusText: "手のひらをパーに開いてください" };
+        : isPalmOpenRef.current
+          ? { statusState: "detecting", statusText: "手のひらから氷魔法を噴射中" }
+          : { statusState: "waiting", statusText: "手のひらをパーに開いてください" };
 
     updateUi({
       ...nextStatus,
@@ -627,8 +705,8 @@ export default function IceMagicApp() {
         <p className="eyebrow">ICE MAGIC AR</p>
         <h1>氷の魔法ポーズAR</h1>
         <p className="lead">
-          手のひらをパーに開いて0.3秒維持すると、手のひら中心から大量の吹雪が噴き出します。
-          閉じると新しい吹雪は即停止し、残った粒子だけ自然に消えます。
+          手のひらをパーに開くと、手首から中指方向へ白〜水色の光線状の吹雪が噴き出します。
+          閉じると新しい噴射は即停止し、残った粒子だけ自然に消えます。
         </p>
 
         <div className="action-row">
@@ -719,8 +797,8 @@ export default function IceMagicApp() {
         <ul>
           <li>左右の手を最大2つまで認識</li>
           <li>4本以上の指が伸びていればパーとして判定</li>
-          <li>パーが0.3秒以上続いたときだけ吹雪を開始</li>
-          <li>既存の方向判定を吹雪の噴射方向に利用</li>
+          <li>パー状態の間だけ氷魔法ビームを噴射</li>
+          <li>手首から中指方向のベクトルを噴射方向に利用</li>
           <li>粒子数を最大{MAX_PARTICLES}個に制限</li>
         </ul>
       </section>
