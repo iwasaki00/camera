@@ -14,6 +14,8 @@ const video = document.querySelector("#camera");
 const canvas = document.querySelector("#overlay");
 const ctx = canvas.getContext("2d");
 const startButton = document.querySelector("#startButton");
+const panelButton = document.querySelector("#panelButton");
+const hudBody = document.querySelector("#hudBody");
 const statusText = document.querySelector("#statusText");
 
 const values = {
@@ -230,12 +232,17 @@ function isArmExtended(pose, side) {
 }
 
 function isBarrierPose(pose) {
-  const near = distance(pose.leftWrist, pose.rightWrist) < pose.bodyWidth * (0.95 + (1 - controlValue("sensitivity")) * 0.35);
-  const swapped = pose.leftWrist.x > pose.chest.x + pose.bodyWidth * 0.08 && pose.rightWrist.x < pose.chest.x - pose.bodyWidth * 0.08;
+  const sensitivity = controlValue("sensitivity");
+  const near = distance(pose.leftWrist, pose.rightWrist) < pose.bodyWidth * (1.45 + (1 - sensitivity) * 0.5);
+  const crossed =
+    pose.leftWrist.x > pose.rightWrist.x + pose.bodyWidth * (0.02 + sensitivity * 0.04);
+  const nearCenter =
+    Math.abs(pose.leftWrist.x - pose.chest.x) < pose.bodyWidth * 1.25 &&
+    Math.abs(pose.rightWrist.x - pose.chest.x) < pose.bodyWidth * 1.25;
   const inChestBand =
-    Math.abs(pose.leftWrist.y - pose.chest.y) < pose.bodyWidth * 1.2 &&
-    Math.abs(pose.rightWrist.y - pose.chest.y) < pose.bodyWidth * 1.2;
-  return swapped && near && inChestBand;
+    Math.abs(pose.leftWrist.y - pose.chest.y) < pose.bodyWidth * 1.65 &&
+    Math.abs(pose.rightWrist.y - pose.chest.y) < pose.bodyWidth * 1.65;
+  return crossed && near && nearCenter && inChestBand;
 }
 
 function setShake(amount, now, duration = 260) {
@@ -654,6 +661,11 @@ function frame(now) {
 }
 
 startButton.addEventListener("click", startCamera);
+panelButton.addEventListener("click", () => {
+  const willOpen = hudBody.hidden;
+  hudBody.hidden = !willOpen;
+  panelButton.textContent = willOpen ? "HIDE" : "PANEL";
+});
 window.addEventListener("resize", resizeCanvas);
 window.addEventListener("pagehide", () => {
   if (stream) stream.getTracks().forEach((track) => track.stop());

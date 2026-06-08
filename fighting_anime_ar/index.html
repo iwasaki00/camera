@@ -14,57 +14,62 @@
     <section class="hud" aria-label="デバッグと操作">
       <div class="status-row">
         <strong id="statusText" class="status">idle</strong>
-        <button id="startButton" type="button">START</button>
-      </div>
-
-      <div class="debug-grid" aria-label="認識状態">
-        <div class="debug-item">
-          <span>現在の状態</span>
-          <strong id="modeValue">idle</strong>
-        </div>
-        <div class="debug-item">
-          <span>左手状態</span>
-          <strong id="leftHandValue">unknown</strong>
-        </div>
-        <div class="debug-item">
-          <span>右手状態</span>
-          <strong id="rightHandValue">unknown</strong>
-        </div>
-        <div class="debug-item">
-          <span>左腕角度</span>
-          <strong id="leftAngleValue">--</strong>
-        </div>
-        <div class="debug-item">
-          <span>右腕角度</span>
-          <strong id="rightAngleValue">--</strong>
-        </div>
-        <div class="debug-item">
-          <span>バリア判定</span>
-          <strong id="barrierValue">false</strong>
+        <div class="button-row">
+          <button id="panelButton" type="button" class="secondary">PANEL</button>
+          <button id="startButton" type="button">START</button>
         </div>
       </div>
 
-      <div class="controls" aria-label="調整">
-        <label>
-          <span>エフェクト量</span>
-          <input id="effectAmount" type="range" min="20" max="160" value="100">
-        </label>
-        <label>
-          <span>オーラ強さ</span>
-          <input id="auraPower" type="range" min="20" max="180" value="100">
-        </label>
-        <label>
-          <span>弾の速度</span>
-          <input id="ballSpeed" type="range" min="40" max="180" value="100">
-        </label>
-        <label>
-          <span>判定感度</span>
-          <input id="sensitivity" type="range" min="20" max="100" value="62">
-        </label>
-        <label>
-          <span>画面揺れ</span>
-          <input id="shakePower" type="range" min="0" max="160" value="80">
-        </label>
+      <div id="hudBody" class="hud-body" hidden>
+        <div class="debug-grid" aria-label="認識状態">
+          <div class="debug-item">
+            <span>現在の状態</span>
+            <strong id="modeValue">idle</strong>
+          </div>
+          <div class="debug-item">
+            <span>左手状態</span>
+            <strong id="leftHandValue">unknown</strong>
+          </div>
+          <div class="debug-item">
+            <span>右手状態</span>
+            <strong id="rightHandValue">unknown</strong>
+          </div>
+          <div class="debug-item">
+            <span>左腕角度</span>
+            <strong id="leftAngleValue">--</strong>
+          </div>
+          <div class="debug-item">
+            <span>右腕角度</span>
+            <strong id="rightAngleValue">--</strong>
+          </div>
+          <div class="debug-item">
+            <span>バリア判定</span>
+            <strong id="barrierValue">false</strong>
+          </div>
+        </div>
+
+        <div class="controls" aria-label="調整">
+          <label>
+            <span>エフェクト量</span>
+            <input id="effectAmount" type="range" min="20" max="160" value="100">
+          </label>
+          <label>
+            <span>オーラ強さ</span>
+            <input id="auraPower" type="range" min="20" max="180" value="100">
+          </label>
+          <label>
+            <span>弾の速度</span>
+            <input id="ballSpeed" type="range" min="40" max="180" value="100">
+          </label>
+          <label>
+            <span>判定感度</span>
+            <input id="sensitivity" type="range" min="20" max="100" value="70">
+          </label>
+          <label>
+            <span>画面揺れ</span>
+            <input id="shakePower" type="range" min="0" max="160" value="80">
+          </label>
+        </div>
       </div>
     </section>
   </main>
