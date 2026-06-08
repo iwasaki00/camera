@@ -36,6 +36,11 @@
             <p>両手グーを近づけると光るライトセーバーを表示するAR風カメラです。</p>
             <a href="./lightsaber_ar/index.html">lightsaber_arを開く</a>
           </li>
+          <li>
+            <strong>fighting_anime_ar</strong>
+            <p>iPhoneブラウザのカメラ上に格闘アニメ風の集中線、衝撃波、オーラを重ねるAR風Webアプリです。</p>
+            <a href="./fighting_anime_ar/index.html">fighting_anime_arを開く</a>
+          </li>
         </ul>
       </section>
     </main>
