@@ -115,6 +115,11 @@ button.secondary {
   background: rgba(255, 255, 255, 0.12);
 }
 
+button.secondary.is-active {
+  border-color: rgba(125, 241, 215, 0.7);
+  background: rgba(83, 214, 255, 0.24);
+}
+
 button:disabled {
   opacity: 0.55;
 }
@@ -126,6 +131,12 @@ button:disabled {
 
 .hud-body[hidden] {
   display: none;
+}
+
+.hud.is-open {
+  background:
+    linear-gradient(135deg, rgba(83, 214, 255, 0.16), rgba(255, 104, 66, 0.1)),
+    var(--panel);
 }
 
 .debug-grid {

@@ -1,9 +1,5 @@
-import {
-  FilesetResolver,
-  HandLandmarker,
-  PoseLandmarker
-} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/+esm";
-
+const MEDIAPIPE_MODULE_URL =
+  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/+esm";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
 const HAND_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
@@ -88,6 +84,7 @@ let previousHands = { left: "unknown", right: "unknown" };
 let lastPose = null;
 let lastHands = { left: { state: "unknown", landmarks: null }, right: { state: "unknown", landmarks: null } };
 let lastTechnique = { barrier: false };
+let mediaPipeTasks;
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -302,10 +299,10 @@ function updateTechniqueState(pose, hands, now) {
   chargeFrames = charge ? chargeFrames + 1 : 0;
   barrierFrames = barrier ? barrierFrames + 1 : 0;
 
-  if (pose && isArmExtended(pose, "left") && previousHands.left === "fist" && leftHand === "open") {
+  if (pose && previousHands.left === "fist" && leftHand === "open") {
     spawnProjectile(pose, "left", now);
   }
-  if (pose && isArmExtended(pose, "right") && previousHands.right === "fist" && rightHand === "open") {
+  if (pose && previousHands.right === "fist" && rightHand === "open") {
     spawnProjectile(pose, "right", now);
   }
 
@@ -549,6 +546,8 @@ async function loadModels() {
   if (handLandmarker && poseLandmarker) return;
 
   statusText.textContent = "loading";
+  mediaPipeTasks ||= await import(MEDIAPIPE_MODULE_URL);
+  const { FilesetResolver, HandLandmarker, PoseLandmarker } = mediaPipeTasks;
   const vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
   const sharedOptions = {
     runningMode: "VIDEO"
@@ -664,6 +663,9 @@ startButton.addEventListener("click", startCamera);
 panelButton.addEventListener("click", () => {
   const willOpen = hudBody.hidden;
   hudBody.hidden = !willOpen;
+  panelButton.classList.toggle("is-active", willOpen);
+  panelButton.setAttribute("aria-expanded", String(willOpen));
+  document.querySelector(".hud").classList.toggle("is-open", willOpen);
   panelButton.textContent = willOpen ? "HIDE" : "PANEL";
 });
 window.addEventListener("resize", resizeCanvas);
