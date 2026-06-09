@@ -85,6 +85,8 @@ let lastPose = null;
 let lastHands = { left: { state: "unknown", landmarks: null }, right: { state: "unknown", landmarks: null } };
 let lastTechnique = { barrier: false };
 let mediaPipeTasks;
+let previousGesturePose = null;
+let rocketCooldownUntil = { left: 0, right: 0 };
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -121,6 +123,7 @@ function toScreenPoint(landmark) {
   return {
     x: (1 - landmark.x) * window.innerWidth,
     y: landmark.y * window.innerHeight,
+    z: landmark.z ?? 0,
     visibility: landmark.visibility ?? 1
   };
 }
@@ -285,6 +288,55 @@ function spawnProjectile(pose, side, now) {
   setShake(10, now, 220);
 }
 
+function spawnRocketPunch(pose, side, now) {
+  const wrist = pose[`${side}Wrist`];
+  const elbow = pose[`${side}Elbow`];
+  const direction = normalize({ x: wrist.x - elbow.x, y: wrist.y - elbow.y });
+  const speed = 10.5 * controlValue("ballSpeed");
+  projectiles.push({
+    kind: "rocket",
+    x: wrist.x,
+    y: wrist.y,
+    vx: direction.x * speed,
+    vy: direction.y * speed,
+    age: 0,
+    life: 1250,
+    radius: 22 + 12 * controlValue("effectAmount"),
+    trail: []
+  });
+  shockwaves.push({ x: wrist.x, y: wrist.y, age: 0, life: 420, maxRadius: 120 });
+  setShake(15, now, 260);
+}
+
+function detectRocketPunch(pose, hands, now) {
+  if (!pose || !previousGesturePose) return;
+
+  for (const side of ["left", "right"]) {
+    if (hands[side].state !== "fist" || now < rocketCooldownUntil[side]) continue;
+
+    const wrist = pose[`${side}Wrist`];
+    const elbow = pose[`${side}Elbow`];
+    const shoulder = pose[`${side}Shoulder`];
+    const previousWrist = previousGesturePose[`${side}Wrist`];
+    const previousShoulder = previousGesturePose[`${side}Shoulder`];
+    const currentReach = distance(shoulder, wrist);
+    const previousReach = distance(previousShoulder, previousWrist);
+    const reachDelta = currentReach - previousReach;
+    const screenSpeed = distance(wrist, previousWrist);
+    const cameraPush = previousWrist.z - wrist.z;
+    const armReady = angleDegrees(shoulder, elbow, wrist) > 118;
+    const thrust =
+      reachDelta > pose.bodyWidth * 0.12 ||
+      screenSpeed > pose.bodyWidth * 0.18 ||
+      cameraPush > 0.035;
+
+    if (armReady && thrust) {
+      spawnRocketPunch(pose, side, now);
+      rocketCooldownUntil[side] = now + 650;
+    }
+  }
+}
+
 function updateTechniqueState(pose, hands, now) {
   const leftHand = hands.left.state;
   const rightHand = hands.right.state;
@@ -305,6 +357,7 @@ function updateTechniqueState(pose, hands, now) {
   if (pose && previousHands.right === "fist" && rightHand === "open") {
     spawnProjectile(pose, "right", now);
   }
+  detectRocketPunch(pose, hands, now);
 
   if (barrierFrames >= STABLE_FRAMES) {
     mode = "barrier";
@@ -321,6 +374,7 @@ function updateTechniqueState(pose, hands, now) {
   }
 
   previousHands = { left: leftHand, right: rightHand };
+  previousGesturePose = pose;
   return { charge, barrier };
 }
 
@@ -499,15 +553,33 @@ function updateProjectiles(delta) {
     });
 
     const gradient = ctx.createRadialGradient(ball.x, ball.y, 2, ball.x, ball.y, ball.radius * 2.2);
-    gradient.addColorStop(0, "rgba(255,255,255,1)");
-    gradient.addColorStop(0.24, "rgba(132,239,255,0.94)");
-    gradient.addColorStop(1, "rgba(255,104,66,0)");
+    if (ball.kind === "rocket") {
+      gradient.addColorStop(0, "rgba(255,255,255,1)");
+      gradient.addColorStop(0.2, "rgba(255,210,96,0.96)");
+      gradient.addColorStop(0.52, "rgba(255,88,40,0.42)");
+      gradient.addColorStop(1, "rgba(255,88,40,0)");
+    } else {
+      gradient.addColorStop(0, "rgba(255,255,255,1)");
+      gradient.addColorStop(0.24, "rgba(132,239,255,0.94)");
+      gradient.addColorStop(1, "rgba(255,104,66,0)");
+    }
     ctx.fillStyle = gradient;
-    ctx.shadowColor = "#53d6ff";
-    ctx.shadowBlur = 28;
+    ctx.shadowColor = ball.kind === "rocket" ? "#ff5b28" : "#53d6ff";
+    ctx.shadowBlur = ball.kind === "rocket" ? 36 : 28;
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, ball.radius * 2.2, 0, Math.PI * 2);
     ctx.fill();
+
+    if (ball.kind === "rocket") {
+      const direction = normalize({ x: ball.vx, y: ball.vy });
+      const rear = { x: ball.x - direction.x * ball.radius * 1.2, y: ball.y - direction.y * ball.radius * 1.2 };
+      ctx.strokeStyle = "rgba(255,255,255,0.86)";
+      ctx.lineWidth = Math.max(5, ball.radius * 0.22);
+      ctx.beginPath();
+      ctx.moveTo(rear.x, rear.y);
+      ctx.lineTo(ball.x + direction.x * ball.radius * 0.5, ball.y + direction.y * ball.radius * 0.5);
+      ctx.stroke();
+    }
     ctx.restore();
 
     const inBounds = ball.x > -160 && ball.x < window.innerWidth + 160 && ball.y > -160 && ball.y < window.innerHeight + 160;
