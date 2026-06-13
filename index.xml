@@ -41,6 +41,11 @@
             <p>iPhoneブラウザのカメラ上に格闘アニメ風の集中線、衝撃波、オーラを重ねるAR風Webアプリです。</p>
             <a href="./fighting_anime_ar/index.html">fighting_anime_arを開く</a>
           </li>
+          <li>
+            <strong>fighting_anime_ar_plus</strong>
+            <p>格闘アニメ演出ARの拡張版です。既存版とは別メニューとして追加演出や調整を試す入口です。</p>
+            <a href="./fighting_anime_ar_plus/index.html">fighting_anime_ar_plusを開く</a>
+          </li>
         </ul>
       </section>
     </main>
