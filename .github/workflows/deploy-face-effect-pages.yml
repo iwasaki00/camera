@@ -13,6 +13,7 @@ on:
       - "henface_maker/**"
       - "ice_magic_ar/**"
       - "fighting_anime_ar/**"
+      - "fighting_anime_ar_plus/**"
       - "lightsaber_ar/**"
       - "sudoku_camera/**"
       - ".github/workflows/deploy-face-effect-pages.yml"
@@ -71,6 +72,7 @@ jobs:
           mkdir -p site/henface_maker
           mkdir -p site/ice_magic_ar
           mkdir -p site/fighting_anime_ar
+          mkdir -p site/fighting_anime_ar_plus
           mkdir -p site/lightsaber_ar
           mkdir -p site/sudoku_camera
           cp index.html site/index.html
@@ -80,6 +82,7 @@ jobs:
           cp -r henface_maker/dist/. site/henface_maker/
           cp -r ice_magic_ar/dist/. site/ice_magic_ar/
           cp -r fighting_anime_ar/. site/fighting_anime_ar/
+          cp -r fighting_anime_ar_plus/. site/fighting_anime_ar_plus/
           cp -r lightsaber_ar/. site/lightsaber_ar/
           cp -r sudoku_camera/. site/sudoku_camera/
 
