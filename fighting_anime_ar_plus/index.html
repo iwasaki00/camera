@@ -11,62 +11,72 @@
     <video id="camera" class="camera" playsinline muted autoplay></video>
     <canvas id="overlay" class="overlay"></canvas>
 
-    <section class="hud" aria-label="デバッグと操作">
-      <div class="status-row">
+    <div class="scoreboard" aria-label="score">
+      <div class="player-score player-a">
+        <span>P1</span>
+        <meter id="p1Hp" min="0" max="100" value="100"></meter>
+      </div>
+      <div class="player-score player-b">
+        <span>P2</span>
+        <meter id="p2Hp" min="0" max="100" value="100"></meter>
+      </div>
+    </div>
+
+    <section class="hud" aria-label="debug and controls">
+      <div class="hud-row">
         <strong id="statusText" class="status">idle</strong>
-        <div class="button-row">
-          <button id="panelButton" type="button" class="secondary">PANEL</button>
-          <button id="startButton" type="button">START</button>
-        </div>
+        <button id="startButton" type="button">START</button>
+        <button id="cameraButton" type="button" class="secondary">CAM</button>
+        <button id="panelButton" type="button" class="secondary" aria-expanded="false">DEBUG</button>
       </div>
 
       <div id="hudBody" class="hud-body" hidden>
-        <div class="debug-grid" aria-label="認識状態">
+        <div class="debug-grid" aria-label="recognition state">
           <div class="debug-item">
-            <span>現在の状態</span>
-            <strong id="modeValue">idle</strong>
+            <span>poses</span>
+            <strong id="poseCountValue">0</strong>
           </div>
           <div class="debug-item">
-            <span>左手状態</span>
-            <strong id="leftHandValue">unknown</strong>
+            <span>P1</span>
+            <strong id="p1StateValue">lost</strong>
           </div>
           <div class="debug-item">
-            <span>右手状態</span>
-            <strong id="rightHandValue">unknown</strong>
+            <span>P2</span>
+            <strong id="p2StateValue">lost</strong>
           </div>
           <div class="debug-item">
-            <span>左腕角度</span>
-            <strong id="leftAngleValue">--</strong>
+            <span>P1 hands</span>
+            <strong id="p1HandsValue">--</strong>
           </div>
           <div class="debug-item">
-            <span>右腕角度</span>
-            <strong id="rightAngleValue">--</strong>
+            <span>P2 hands</span>
+            <strong id="p2HandsValue">--</strong>
           </div>
           <div class="debug-item">
-            <span>バリア判定</span>
-            <strong id="barrierValue">false</strong>
+            <span>camera</span>
+            <strong id="cameraValue">front</strong>
           </div>
         </div>
 
-        <div class="controls" aria-label="調整">
+        <div class="controls" aria-label="adjustments">
           <label>
-            <span>エフェクト量</span>
+            <span>effects</span>
             <input id="effectAmount" type="range" min="20" max="160" value="100">
           </label>
           <label>
-            <span>オーラ強さ</span>
+            <span>aura</span>
             <input id="auraPower" type="range" min="20" max="180" value="100">
           </label>
           <label>
-            <span>弾の速度</span>
+            <span>speed</span>
             <input id="ballSpeed" type="range" min="40" max="180" value="100">
           </label>
           <label>
-            <span>判定感度</span>
+            <span>sense</span>
             <input id="sensitivity" type="range" min="20" max="100" value="70">
           </label>
           <label>
-            <span>画面揺れ</span>
+            <span>shake</span>
             <input id="shakePower" type="range" min="0" max="160" value="80">
           </label>
         </div>

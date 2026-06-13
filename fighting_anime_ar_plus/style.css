@@ -1,12 +1,12 @@
 :root {
   color-scheme: dark;
-  --panel: rgba(10, 14, 20, 0.74);
-  --panel-line: rgba(255, 255, 255, 0.16);
+  --panel: rgba(7, 10, 16, 0.78);
+  --panel-line: rgba(255, 255, 255, 0.18);
   --text: #fff8ed;
-  --muted: #c7b9aa;
-  --accent: #53d6ff;
-  --accent-2: #ff6842;
-  --ok: #7df1d7;
+  --muted: #c9c1b7;
+  --cyan: #55ddff;
+  --red: #ff6148;
+  --green: #7df1d7;
   --warn: #ffd069;
 }
 
@@ -34,9 +34,7 @@ input {
   position: fixed;
   inset: 0;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 50% 18%, rgba(83, 214, 255, 0.12), transparent 32%),
-    #050507;
+  background: #050507;
 }
 
 .camera,
@@ -49,79 +47,113 @@ input {
 
 .camera {
   object-fit: cover;
-  transform: scaleX(-1);
   background: #050507;
+}
+
+.camera.is-front {
+  transform: scaleX(-1);
 }
 
 .overlay {
   pointer-events: none;
 }
 
-.hud {
+.scoreboard {
   position: absolute;
-  left: max(10px, env(safe-area-inset-left));
-  right: max(10px, env(safe-area-inset-right));
-  bottom: max(10px, env(safe-area-inset-bottom));
+  top: max(8px, env(safe-area-inset-top));
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  z-index: 2;
   display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
-  max-height: min(56vh, 430px);
-  overflow: auto;
-  padding: 12px;
+  pointer-events: none;
+}
+
+.player-score {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 9px;
   border: 1px solid var(--panel-line);
   border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(83, 214, 255, 0.12), rgba(255, 104, 66, 0.08)),
-    var(--panel);
+  background: rgba(7, 10, 16, 0.58);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.player-score span {
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+meter {
+  width: 100%;
+  height: 12px;
+}
+
+.hud {
+  position: absolute;
+  right: max(8px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  z-index: 3;
+  display: grid;
+  gap: 8px;
+  width: min(440px, calc(100vw - 16px));
+  max-height: min(64vh, 430px);
+  overflow: auto;
+  padding: 9px;
+  border: 1px solid var(--panel-line);
+  border-radius: 8px;
+  background: var(--panel);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
-  box-shadow: 0 20px 54px rgba(0, 0, 0, 0.38);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.42);
 }
 
-.status-row {
-  display: flex;
+.hud-row {
+  display: grid;
+  grid-template-columns: minmax(64px, 1fr) repeat(3, auto);
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.button-row {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .status {
   min-width: 0;
+  overflow: hidden;
   color: var(--warn);
-  font-size: 1rem;
+  font-size: 0.84rem;
   line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 button {
-  min-width: 76px;
-  min-height: 40px;
+  min-width: 58px;
+  min-height: 36px;
   border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 8px;
-  padding: 0 14px;
-  background: linear-gradient(135deg, var(--accent-2), #d93320);
+  padding: 0 10px;
+  background: linear-gradient(135deg, var(--red), #c92d1e);
   color: #fff;
-  font-weight: 800;
+  font-size: 0.78rem;
+  font-weight: 900;
   letter-spacing: 0;
 }
 
 button.secondary {
-  min-width: 68px;
   background: rgba(255, 255, 255, 0.12);
 }
 
 button.secondary.is-active {
-  border-color: rgba(125, 241, 215, 0.7);
-  background: rgba(83, 214, 255, 0.24);
+  border-color: rgba(125, 241, 215, 0.72);
+  background: rgba(85, 221, 255, 0.22);
 }
 
 button:disabled {
-  opacity: 0.55;
+  opacity: 0.58;
 }
 
 .hud-body {
@@ -133,21 +165,15 @@ button:disabled {
   display: none;
 }
 
-.hud.is-open {
-  background:
-    linear-gradient(135deg, rgba(83, 214, 255, 0.16), rgba(255, 104, 66, 0.1)),
-    var(--panel);
-}
-
 .debug-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .debug-item {
   min-width: 0;
-  padding: 8px;
+  padding: 7px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.08);
@@ -156,17 +182,17 @@ button:disabled {
 .debug-item span {
   display: block;
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 .debug-item strong {
   display: block;
-  margin-top: 4px;
+  margin-top: 3px;
   overflow: hidden;
-  color: var(--ok);
-  font-size: 0.88rem;
+  color: var(--green);
+  font-size: 0.78rem;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -174,57 +200,63 @@ button:disabled {
 
 .controls {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .controls label {
   display: grid;
-  grid-template-columns: 84px minmax(0, 1fr);
+  grid-template-columns: 56px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   font-weight: 800;
 }
 
 .controls input {
   width: 100%;
-  accent-color: var(--accent);
+  accent-color: var(--cyan);
 }
 
-@media (min-width: 760px) {
-  .hud {
-    width: min(620px, calc(100% - 24px));
-    left: 50%;
+@media (orientation: landscape) and (max-height: 540px) {
+  .scoreboard {
+    grid-template-columns: minmax(140px, 220px) minmax(140px, 220px);
     right: auto;
-    transform: translateX(-50%);
   }
-}
 
-@media (max-width: 420px) {
   .hud {
-    left: max(8px, env(safe-area-inset-left));
-    right: max(8px, env(safe-area-inset-right));
-    bottom: max(8px, env(safe-area-inset-bottom));
-    padding: 9px;
+    width: min(360px, 48vw);
+    max-height: calc(100vh - 18px);
+    padding: 7px;
   }
 
-  .status {
-    font-size: 0.92rem;
+  .hud-row {
+    grid-template-columns: minmax(44px, 1fr) repeat(3, auto);
   }
 
   button {
-    min-width: 64px;
-    min-height: 36px;
-    padding: 0 10px;
-    font-size: 0.82rem;
+    min-width: 50px;
+    min-height: 32px;
+    padding: 0 8px;
+    font-size: 0.72rem;
   }
 
   .debug-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
 
-  .controls label {
-    grid-template-columns: 76px minmax(0, 1fr);
+@media (max-width: 390px) {
+  .hud {
+    width: calc(100vw - 16px);
+  }
+
+  .hud-row {
+    grid-template-columns: minmax(40px, 1fr) repeat(3, auto);
+  }
+
+  button {
+    min-width: 48px;
+    padding: 0 7px;
   }
 }
