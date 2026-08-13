@@ -94,12 +94,17 @@
           <span>再生速度</span>
           <button type="button" data-speed="1" class="is-active">1×</button>
           <button type="button" data-speed="2">2×</button>
+          <button type="button" data-speed="3">3×</button>
           <button type="button" data-speed="4">4×</button>
+          <button type="button" data-speed="5">5×</button>
+          <button type="button" data-speed="10">10×</button>
         </div>
+        <p class="save-help" id="saveHelp">「保存・共有」を押し、共有メニューから保存先を選んでください。</p>
         <div class="review-actions">
           <button class="secondary-button" id="retakeButton" type="button">撮り直す</button>
-          <a class="primary-button" id="saveButton" download>保存する</a>
+          <button class="primary-button" id="saveButton" type="button">保存・共有</button>
         </div>
+        <a id="downloadLink" hidden download></a>
       </div>
     </dialog>
   </main>

@@ -13,7 +13,7 @@ const els = {
   sliders: $("#sliders"), quality: $("#qualitySelect"), audio: $("#audioToggle"), debug: $("#debugToggle"), debugPanel: $("#debugPanel"),
   resetAll: $("#resetAll"), recStatus: $("#recStatus"), recTime: $("#recTime"), toast: $("#toast"),
   dialog: $("#reviewDialog"), photoReview: $("#photoReview"), videoReview: $("#videoReview"), reviewLabel: $("#reviewLabel"),
-  speedRow: $("#speedRow"), save: $("#saveButton"), retake: $("#retakeButton"), closeReview: $("#closeReview"),
+  speedRow: $("#speedRow"), saveHelp: $("#saveHelp"), save: $("#saveButton"), download: $("#downloadLink"), retake: $("#retakeButton"), closeReview: $("#closeReview"),
 };
 
 let params = { ...DEFAULTS };
@@ -22,6 +22,8 @@ let recording = false;
 let recordingStarted = 0;
 let timerId;
 let objectUrl = "";
+let reviewBlob = null;
+let reviewFilename = "";
 let currentFps = 0;
 let enhance = true;
 let toastTimer;
@@ -102,6 +104,8 @@ function setMode(next) {
 function closeObjectUrl() {
   if (objectUrl) URL.revokeObjectURL(objectUrl);
   objectUrl = "";
+  reviewBlob = null;
+  reviewFilename = "";
   els.photoReview.removeAttribute("src");
   els.videoReview.pause();
   els.videoReview.removeAttribute("src");
@@ -118,9 +122,32 @@ function showReview(blob, type) {
   els.reviewLabel.textContent = photo ? "PHOTO PREVIEW" : "VIDEO PREVIEW";
   if (photo) els.photoReview.src = objectUrl; else els.videoReview.src = objectUrl;
   const ext = photo ? "jpg" : (blob.type.includes("mp4") ? "mp4" : "webm");
-  els.save.href = objectUrl;
-  els.save.download = `miniature-${new Date().toISOString().replace(/[:.]/g, "-")}.${ext}`;
+  reviewBlob = blob;
+  reviewFilename = `miniature-${new Date().toISOString().replace(/[:.]/g, "-")}.${ext}`;
+  els.download.href = objectUrl;
+  els.download.download = reviewFilename;
+  els.save.textContent = "保存・共有";
+  els.saveHelp.textContent = photo
+    ? "iPhoneでは「保存・共有」を押し、共有メニューの「画像を保存」を選ぶと写真アプリに入ります。"
+    : "iPhoneでは「保存・共有」を押し、共有メニューの「ビデオを保存」を選ぶと写真アプリに入ります。";
+  els.speedRow.querySelectorAll("button").forEach((button) => button.classList.toggle("is-active", button.dataset.speed === "1"));
+  els.videoReview.playbackRate = 1;
   els.dialog.showModal();
+}
+
+async function saveReview() {
+  if (!reviewBlob || !reviewFilename) return;
+  const file = new File([reviewBlob], reviewFilename, { type: reviewBlob.type || "application/octet-stream" });
+  if (navigator.share && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: "Miniature Camera" });
+      return;
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+    }
+  }
+  els.download.click();
+  showToast("ダウンロードに保存しました。Safariのダウンロード一覧を確認してください。", 5000);
 }
 
 function takePhoto() {
@@ -222,6 +249,7 @@ els.audio.addEventListener("change", () => { if (!els.audio.checked) camera.stop
 els.debug.addEventListener("change", () => { els.debugPanel.hidden = !els.debug.checked; updateDebug(); });
 els.retake.addEventListener("click", () => { els.dialog.close(); closeObjectUrl(); });
 els.closeReview.addEventListener("click", () => { els.dialog.close(); closeObjectUrl(); });
+els.save.addEventListener("click", saveReview);
 els.speedRow.addEventListener("click", (event) => { const speed = Number(event.target.dataset.speed); if (!speed) return; els.videoReview.playbackRate = speed; els.speedRow.querySelectorAll("button").forEach((b) => b.classList.toggle("is-active", b === event.target)); });
 
 let dragY = null, pinchStart = null;
