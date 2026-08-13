@@ -12,39 +12,44 @@
         <p>`camera` 配下の iPhone 向けカメラ検証メニューです。</p>
         <ul>
           <li>
-            <strong>sudoku_camera</strong>
+            <strong>009_miniature_camera</strong>
+            <p>風景をティルトシフト風に加工し、写真・動画として保存できるミニチュアカメラです。</p>
+            <a href="./009_miniature_camera/index.html">009_miniature_cameraを開く</a>
+          </li>
+          <li>
+            <strong>004_sudoku_camera</strong>
             <p>9x9の盤面を入力してナンプレを解く試作アプリです。</p>
-            <a href="./sudoku_camera/index.html">sudoku_cameraを開く</a>
+            <a href="./004_sudoku_camera/index.html">004_sudoku_cameraを開く</a>
           </li>
           <li>
-            <strong>browser_camera</strong>
+            <strong>001_browser_camera</strong>
             <p>シンプルなブラウザカメラ確認ページです。</p>
-            <a href="./browser_camera/index.html">browser_cameraを開く</a>
+            <a href="./001_browser_camera/index.html">001_browser_cameraを開く</a>
           </li>
           <li>
-            <strong>face_effect</strong>
+            <strong>002_face_effect</strong>
             <p>顔の上に数値やエフェクトを重ねて試せるカメラです。</p>
-            <a href="./face_effect/index.html">face_effectを開く</a>
+            <a href="./002_face_effect/index.html">002_face_effectを開く</a>
           </li>
           <li>
-            <strong>ice_magic_ar</strong>
+            <strong>005_ice_magic_ar</strong>
             <p>手を認識して雪の粒子を表示するAR風カメラです。</p>
-            <a href="./ice_magic_ar/index.html">ice_magic_arを開く</a>
+            <a href="./005_ice_magic_ar/index.html">005_ice_magic_arを開く</a>
           </li>
           <li>
-            <strong>lightsaber_ar</strong>
+            <strong>006_lightsaber_ar</strong>
             <p>両手グーを近づけると光るライトセーバーを表示するAR風カメラです。</p>
-            <a href="./lightsaber_ar/index.html">lightsaber_arを開く</a>
+            <a href="./006_lightsaber_ar/index.html">006_lightsaber_arを開く</a>
           </li>
           <li>
-            <strong>fighting_anime_ar</strong>
+            <strong>007_fighting_anime_ar</strong>
             <p>iPhoneブラウザのカメラ上に格闘アニメ風の集中線、衝撃波、オーラを重ねるAR風Webアプリです。</p>
-            <a href="./fighting_anime_ar/index.html">fighting_anime_arを開く</a>
+            <a href="./007_fighting_anime_ar/index.html">007_fighting_anime_arを開く</a>
           </li>
           <li>
-            <strong>fighting_anime_ar_plus</strong>
+            <strong>008_fighting_anime_ar_plus</strong>
             <p>格闘アニメ演出ARの拡張版です。既存版とは別メニューとして追加演出や調整を試す入口です。</p>
-            <a href="./fighting_anime_ar_plus/index.html">fighting_anime_ar_plusを開く</a>
+            <a href="./008_fighting_anime_ar_plus/index.html">008_fighting_anime_ar_plusを開く</a>
           </li>
         </ul>
       </section>

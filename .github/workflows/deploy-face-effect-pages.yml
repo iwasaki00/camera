@@ -8,14 +8,14 @@ on:
     paths:
       - "index.html"
       - "index.xml"
-      - "browser_camera/**"
-      - "face_effect/**"
-      - "henface_maker/**"
-      - "ice_magic_ar/**"
-      - "fighting_anime_ar/**"
-      - "fighting_anime_ar_plus/**"
-      - "lightsaber_ar/**"
-      - "sudoku_camera/**"
+      - "001_browser_camera/**"
+      - "002_face_effect/**"
+      - "003_henface_maker/**"
+      - "004_sudoku_camera/**"
+      - "005_ice_magic_ar/**"
+      - "006_lightsaber_ar/**"
+      - "007_fighting_anime_ar/**"
+      - "008_fighting_anime_ar_plus/**"
       - ".github/workflows/deploy-face-effect-pages.yml"
   workflow_dispatch:
 
@@ -41,50 +41,50 @@ jobs:
           node-version: 20
 
       - name: Install face_effect dependencies
-        working-directory: face_effect
+        working-directory: 002_face_effect
         run: npm install
 
       - name: Build face_effect
-        working-directory: face_effect
+        working-directory: 002_face_effect
         run: npm run build
 
       - name: Install henface_maker dependencies
-        working-directory: henface_maker
+        working-directory: 003_henface_maker
         run: npm install
 
       - name: Build henface_maker
-        working-directory: henface_maker
+        working-directory: 003_henface_maker
         run: npm run build
 
       - name: Install ice_magic_ar dependencies
-        working-directory: ice_magic_ar
+        working-directory: 005_ice_magic_ar
         run: npm install
 
       - name: Build ice_magic_ar
-        working-directory: ice_magic_ar
+        working-directory: 005_ice_magic_ar
         run: npm run build
 
       - name: Assemble Pages site
         shell: bash
         run: |
-          mkdir -p site/browser_camera
-          mkdir -p site/face_effect
-          mkdir -p site/henface_maker
-          mkdir -p site/ice_magic_ar
-          mkdir -p site/fighting_anime_ar
-          mkdir -p site/fighting_anime_ar_plus
-          mkdir -p site/lightsaber_ar
-          mkdir -p site/sudoku_camera
+          mkdir -p site/001_browser_camera
+          mkdir -p site/002_face_effect
+          mkdir -p site/003_henface_maker
+          mkdir -p site/004_sudoku_camera
+          mkdir -p site/005_ice_magic_ar
+          mkdir -p site/006_lightsaber_ar
+          mkdir -p site/007_fighting_anime_ar
+          mkdir -p site/008_fighting_anime_ar_plus
           cp index.html site/index.html
           cp index.xml site/index.xml
-          cp -r browser_camera/. site/browser_camera/
-          cp -r face_effect/dist/. site/face_effect/
-          cp -r henface_maker/dist/. site/henface_maker/
-          cp -r ice_magic_ar/dist/. site/ice_magic_ar/
-          cp -r fighting_anime_ar/. site/fighting_anime_ar/
-          cp -r fighting_anime_ar_plus/. site/fighting_anime_ar_plus/
-          cp -r lightsaber_ar/. site/lightsaber_ar/
-          cp -r sudoku_camera/. site/sudoku_camera/
+          cp -r 001_browser_camera/. site/001_browser_camera/
+          cp -r 002_face_effect/dist/. site/002_face_effect/
+          cp -r 003_henface_maker/dist/. site/003_henface_maker/
+          cp -r 004_sudoku_camera/. site/004_sudoku_camera/
+          cp -r 005_ice_magic_ar/dist/. site/005_ice_magic_ar/
+          cp -r 006_lightsaber_ar/. site/006_lightsaber_ar/
+          cp -r 007_fighting_anime_ar/. site/007_fighting_anime_ar/
+          cp -r 008_fighting_anime_ar_plus/. site/008_fighting_anime_ar_plus/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

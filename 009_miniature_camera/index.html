@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#101516">
+  <title>Miniature Camera</title>
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+  <main class="app" id="app">
+    <section class="viewport" id="viewport" aria-label="カメラプレビュー">
+      <video class="source-video" id="sourceVideo" playsinline muted></video>
+      <canvas id="previewCanvas"></canvas>
+
+      <div class="topbar">
+        <div class="brand"><span class="brand-dot"></span>MINIATURE</div>
+        <div class="rec-status" id="recStatus" hidden><span></span>REC <b id="recTime">00:00</b></div>
+      </div>
+
+      <div class="focus-guide" id="focusGuide" aria-hidden="true">
+        <div class="guide-edge guide-edge--top"></div>
+        <div class="guide-center"></div>
+        <div class="guide-edge guide-edge--bottom"></div>
+      </div>
+
+      <div class="empty-state" id="emptyState">
+        <div class="lens-mark"><span></span></div>
+        <p>風景を、小さな世界に。</p>
+        <button class="primary-button" id="startButton" type="button">カメラを開始</button>
+        <small>カメラは端末内でのみ処理されます</small>
+      </div>
+
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      <pre class="debug-panel" id="debugPanel" hidden></pre>
+    </section>
+
+    <section class="control-deck">
+      <div class="quick-row">
+        <label class="select-wrap">
+          <span>LOOK</span>
+          <select id="presetSelect" aria-label="プリセット">
+            <option value="standard">標準</option>
+            <option value="vivid">強調</option>
+            <option value="city">街並み</option>
+            <option value="train">電車</option>
+            <option value="soft">ソフト</option>
+          </select>
+        </label>
+        <button class="icon-button" id="flipButton" type="button" aria-label="カメラを切り替える">↻<small>切替</small></button>
+        <button class="icon-button" id="settingsButton" type="button" aria-label="詳細設定を開く" aria-expanded="false">⌁<small>調整</small></button>
+      </div>
+
+      <div class="mode-tabs" role="tablist" aria-label="撮影モード">
+        <button class="mode-tab is-active" id="photoMode" type="button" role="tab" aria-selected="true">写真</button>
+        <button class="mode-tab" id="videoMode" type="button" role="tab" aria-selected="false">動画</button>
+      </div>
+
+      <div class="capture-row">
+        <button class="minor-button" id="guideButton" type="button" aria-pressed="true">GUIDE<br><b>ON</b></button>
+        <button class="shutter" id="shutterButton" type="button" aria-label="撮影" disabled><span></span></button>
+        <button class="minor-button" id="enhanceButton" type="button" aria-pressed="true">MODEL<br><b>ON</b></button>
+      </div>
+    </section>
+
+    <aside class="settings-sheet" id="settingsSheet" aria-hidden="true">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">
+        <div><small>FINE TUNE</small><h2>ミニチュア調整</h2></div>
+        <button id="closeSettings" type="button" aria-label="閉じる">×</button>
+      </div>
+      <div class="sliders" id="sliders"></div>
+      <div class="setting-grid">
+        <label>画質
+          <select id="qualitySelect">
+            <option value="low">低負荷 640×480</option>
+            <option value="standard" selected>標準 1280×720</option>
+            <option value="high">高画質 1920×1080</option>
+          </select>
+        </label>
+        <label class="switch-row">音声録音 <input id="audioToggle" type="checkbox"><span></span></label>
+        <label class="switch-row">デバッグ <input id="debugToggle" type="checkbox"><span></span></label>
+      </div>
+      <button class="reset-all" id="resetAll" type="button">すべて標準に戻す</button>
+    </aside>
+    <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+
+    <dialog class="review-dialog" id="reviewDialog">
+      <div class="review-card">
+        <div class="review-head"><span id="reviewLabel">PHOTO PREVIEW</span><button id="closeReview" type="button" aria-label="閉じる">×</button></div>
+        <img id="photoReview" alt="撮影した写真" hidden>
+        <video id="videoReview" playsinline controls hidden></video>
+        <div class="speed-row" id="speedRow" hidden>
+          <span>再生速度</span>
+          <button type="button" data-speed="1" class="is-active">1×</button>
+          <button type="button" data-speed="2">2×</button>
+          <button type="button" data-speed="4">4×</button>
+        </div>
+        <div class="review-actions">
+          <button class="secondary-button" id="retakeButton" type="button">撮り直す</button>
+          <a class="primary-button" id="saveButton" download>保存する</a>
+        </div>
+      </div>
+    </dialog>
+  </main>
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
