@@ -16,6 +16,7 @@ on:
       - "006_lightsaber_ar/**"
       - "007_fighting_anime_ar/**"
       - "008_fighting_anime_ar_plus/**"
+      - "009_miniature_camera/**"
       - ".github/workflows/deploy-face-effect-pages.yml"
   workflow_dispatch:
 
@@ -75,6 +76,7 @@ jobs:
           mkdir -p site/006_lightsaber_ar
           mkdir -p site/007_fighting_anime_ar
           mkdir -p site/008_fighting_anime_ar_plus
+          mkdir -p site/009_miniature_camera
           cp index.html site/index.html
           cp index.xml site/index.xml
           cp -r 001_browser_camera/. site/001_browser_camera/
@@ -85,6 +87,7 @@ jobs:
           cp -r 006_lightsaber_ar/. site/006_lightsaber_ar/
           cp -r 007_fighting_anime_ar/. site/007_fighting_anime_ar/
           cp -r 008_fighting_anime_ar_plus/. site/008_fighting_anime_ar_plus/
+          cp -r 009_miniature_camera/. site/009_miniature_camera/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
