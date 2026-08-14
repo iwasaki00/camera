@@ -48,6 +48,19 @@ export class CameraController {
     return this.start({ facingMode: this.facingMode === "environment" ? "user" : "environment" });
   }
 
+  get capabilities() {
+    return this.stream?.getVideoTracks()[0]?.getCapabilities?.() || {};
+  }
+
+  async setZoom(value) {
+    const track = this.stream?.getVideoTracks()[0];
+    const zoom = this.capabilities.zoom;
+    if (!track || !zoom) return false;
+    const next = Math.max(zoom.min, Math.min(zoom.max, value));
+    await track.applyConstraints({ advanced: [{ zoom: next }] });
+    return true;
+  }
+
   stopVideo() {
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = null;

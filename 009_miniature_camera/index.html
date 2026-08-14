@@ -15,13 +15,23 @@
 
       <div class="topbar">
         <div class="brand"><span class="brand-dot"></span>MINIATURE</div>
-        <div class="rec-status" id="recStatus" hidden><span></span>REC <b id="recTime">00:00</b></div>
+        <div class="top-actions">
+          <button class="compare-button" id="compareButton" type="button">比較</button>
+          <div class="rec-status" id="recStatus" hidden><span></span>REC <b id="recTime">00:00</b></div>
+        </div>
       </div>
 
-      <div class="focus-guide" id="focusGuide" aria-hidden="true">
+      <div class="focus-guide shape-horizontal" id="focusGuide" aria-hidden="true">
         <div class="guide-edge guide-edge--top"></div>
         <div class="guide-center"></div>
         <div class="guide-edge guide-edge--bottom"></div>
+      </div>
+      <div class="composition-grid" id="compositionGrid" aria-hidden="true"></div>
+      <div class="level" id="level" hidden aria-label="水平器"><span id="levelLine"></span></div>
+      <div class="timelapse-status" id="timelapseStatus" hidden>
+        <b id="timelapseTitle">TIMELAPSE ×4</b>
+        <span>撮影時間 <strong id="timelapseElapsed">00:00</strong></span>
+        <span>完成予想 <strong id="timelapseOutput">00:00</strong></span>
       </div>
 
       <div class="empty-state" id="emptyState">
@@ -40,10 +50,14 @@
         <label class="select-wrap">
           <span>LOOK</span>
           <select id="presetSelect" aria-label="プリセット">
-            <option value="standard">標準</option>
-            <option value="vivid">強調</option>
+            <option value="natural">自然</option>
+            <option value="standard" selected>標準ミニチュア</option>
+            <option value="vivid">強調ミニチュア</option>
             <option value="city">街並み</option>
-            <option value="train">電車</option>
+            <option value="train">鉄道模型</option>
+            <option value="night">夜景</option>
+            <option value="retro">レトロ模型</option>
+            <option value="toy">トイカメラ</option>
             <option value="soft">ソフト</option>
           </select>
         </label>
@@ -51,15 +65,27 @@
         <button class="icon-button" id="settingsButton" type="button" aria-label="詳細設定を開く" aria-expanded="false">⌁<small>調整</small></button>
       </div>
 
+      <label class="degree-control" for="degreeControl">
+        <span>自然</span>
+        <div><b>ミニチュア度</b><input id="degreeControl" type="range" min="0" max="100" step="1" value="55"></div>
+        <span>模型</span>
+      </label>
+
       <div class="mode-tabs" role="tablist" aria-label="撮影モード">
         <button class="mode-tab is-active" id="photoMode" type="button" role="tab" aria-selected="true">写真</button>
         <button class="mode-tab" id="videoMode" type="button" role="tab" aria-selected="false">動画</button>
+        <button class="mode-tab" id="timelapseMode" type="button" role="tab" aria-selected="false">TIME LAPSE</button>
       </div>
 
       <div class="capture-row">
         <button class="minor-button" id="guideButton" type="button" aria-pressed="true">GUIDE<br><b>ON</b></button>
         <button class="shutter" id="shutterButton" type="button" aria-label="撮影" disabled><span></span></button>
         <button class="minor-button" id="enhanceButton" type="button" aria-pressed="true">MODEL<br><b>ON</b></button>
+      </div>
+      <div class="library-row">
+        <button id="libraryButton" type="button">ライブラリから開く</button>
+        <button id="sourcePlayButton" type="button" hidden>一時停止</button>
+        <input id="libraryInput" type="file" accept="image/*,video/*" hidden>
       </div>
     </section>
 
@@ -71,6 +97,55 @@
       </div>
       <div class="sliders" id="sliders"></div>
       <div class="setting-grid">
+        <label>ぼかし形状
+          <select id="shapeSelect">
+            <option value="horizontal">横帯</option>
+            <option value="vertical">縦帯</option>
+            <option value="circle">円形</option>
+            <option value="ellipse">楕円形</option>
+          </select>
+        </label>
+        <label>ジェスチャー
+          <select id="gestureSelect">
+            <option value="focus">ピント編集</option>
+            <option value="zoom">ズーム</option>
+          </select>
+        </label>
+        <label id="zoomSetting">ズーム <span class="inline-range"><input id="zoomControl" type="range" min="1" max="3" step="0.1" value="1"><output id="zoomOutput">1.0x</output></span></label>
+        <label>グリッド
+          <select id="gridSelect">
+            <option value="off">OFF</option>
+            <option value="thirds">3×3</option>
+            <option value="cross">中央十字</option>
+            <option value="horizon">水平線</option>
+          </select>
+        </label>
+        <label>コマ撮り風
+          <select id="stopMotionSelect">
+            <option value="off">OFF</option>
+            <option value="weak">弱（15fps）</option>
+            <option value="medium">中（10fps）</option>
+            <option value="strong">強（6fps）</option>
+          </select>
+        </label>
+        <label>タイムラプス倍率
+          <select id="timelapseFactor">
+            <option value="2">×2</option>
+            <option value="4" selected>×4</option>
+            <option value="8">×8</option>
+            <option value="16">×16</option>
+          </select>
+        </label>
+        <label>おすすめ設定
+          <select id="recommendSelect">
+            <option value="">選択してください</option>
+            <option value="city">街・交差点</option>
+            <option value="train">鉄道</option>
+            <option value="highrise">高層階からの風景</option>
+            <option value="night">夜景</option>
+            <option value="crowd">人や車が多い場所</option>
+          </select>
+        </label>
         <label>画質
           <select id="qualitySelect">
             <option value="low">低負荷 640×480</option>
@@ -78,6 +153,7 @@
             <option value="high">高画質 1920×1080</option>
           </select>
         </label>
+        <button class="feature-button" id="levelButton" type="button">水平器を有効にする</button>
         <label class="switch-row">音声録音 <input id="audioToggle" type="checkbox"><span></span></label>
         <label class="switch-row">デバッグ <input id="debugToggle" type="checkbox"><span></span></label>
       </div>
