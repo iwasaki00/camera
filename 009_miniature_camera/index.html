@@ -88,24 +88,24 @@
     <dialog class="review-dialog" id="reviewDialog">
       <div class="review-card">
         <div class="review-head"><span id="reviewLabel">PHOTO PREVIEW</span><button id="closeReview" type="button" aria-label="閉じる">×</button></div>
-        <img id="photoReview" alt="撮影した写真" hidden>
-        <video id="videoReview" playsinline controls hidden></video>
-        <div class="speed-row" id="speedRow" hidden>
-          <span>再生速度</span>
-          <button type="button" data-speed="1" class="is-active">1×</button>
-          <button type="button" data-speed="2">2×</button>
-          <button type="button" data-speed="3">3×</button>
-          <button type="button" data-speed="4">4×</button>
-          <button type="button" data-speed="5">5×</button>
-          <button type="button" data-speed="10">10×</button>
+        <div class="review-stage">
+          <img id="photoReview" alt="撮影した写真" hidden>
+          <video id="videoReview" playsinline controls hidden></video>
         </div>
-        <p class="save-help" id="saveHelp">「保存」ボタンでファイルとしてダウンロードできます。</p>
-        <div class="review-actions">
-          <button class="secondary-button" id="retakeButton" type="button">撮り直す</button>
-          <button class="primary-button" id="saveButton" type="button">写真を保存</button>
-        </div>
-        <button class="share-button" id="shareButton" type="button">共有メニューを開く</button>
-        <a id="downloadLink" hidden download></a>
+        <footer class="review-footer">
+          <div class="speed-row" id="speedRow" hidden>
+            <span>再生速度</span>
+            <button type="button" data-speed="0.5">0.5x</button>
+            <button type="button" data-speed="1" class="is-active">1x</button>
+            <button type="button" data-speed="2">2x</button>
+            <button type="button" data-speed="5">5x</button>
+            <button type="button" data-speed="10">10x</button>
+          </div>
+          <div class="review-actions">
+            <button class="secondary-button" id="retakeButton" type="button">撮り直す</button>
+            <button class="primary-button" id="shareButton" type="button">共有メニューを開く</button>
+          </div>
+        </footer>
       </div>
     </dialog>
   </main>
