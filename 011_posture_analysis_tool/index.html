@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#07110f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="iPhone Safariで使える、カメラ映像ベースの姿勢チェックツール">
+  <title>Posture Lens｜姿勢解析ツール</title>
+  <link rel="stylesheet" href="./assets/css/style.css">
+</head>
+<body>
+  <main class="app">
+    <section class="stage" id="stage" aria-label="カメラプレビュー">
+      <video id="camera" autoplay muted playsinline></video>
+      <canvas id="overlay"></canvas>
+      <div class="vignette"></div>
+
+      <header class="topbar">
+        <div class="brand"><span class="brand-mark">●</span><div><b>POSTURE LENS</b><small>姿勢解析ツール</small></div></div>
+        <button class="icon-button" id="flipCamera" aria-label="カメラを切り替える" disabled>↻</button>
+      </header>
+
+      <div class="mode-tabs" role="tablist" aria-label="解析方向">
+        <button class="active" data-mode="front">正面</button>
+        <button data-mode="left">左側面</button>
+        <button data-mode="right">右側面</button>
+      </div>
+
+      <div class="status-pill" id="statusPill"><span></span><b id="statusText">カメラ未起動</b></div>
+      <div class="guide" id="guide"><div class="guide-head"></div><div class="guide-body"></div><p>全身が枠内に入る位置に立ってください</p></div>
+
+      <div class="empty-state" id="emptyState">
+        <div class="scan-icon"><i></i></div>
+        <p class="eyebrow">ON-DEVICE POSTURE CHECK</p>
+        <h1>姿勢を、<br><em>まっすぐ見える化。</em></h1>
+        <p>カメラ映像は端末内で処理されます。まず全身が映る場所にiPhoneを置いてください。</p>
+        <button class="primary" id="startCamera">カメラを開始</button>
+      </div>
+
+      <aside class="tools" aria-label="表示設定">
+        <button class="active" data-toggle="skeleton"><span>⌁</span>骨格</button>
+        <button class="active" data-toggle="grid"><span>＃</span>グリッド</button>
+        <button class="active" data-toggle="center"><span>╋</span>中心線</button>
+        <button class="active" data-toggle="values"><span>°</span>数値</button>
+      </aside>
+
+      <div class="debug" id="debug" hidden>検出: <b id="debugDetected">—</b> / FPS: <b id="debugFps">—</b> / 点: <b id="debugPoints">0</b></div>
+    </section>
+
+    <section class="control-dock">
+      <div class="instruction"><span class="pulse"></span><div><small>GUIDE</small><b id="instructionText">カメラを開始してください</b></div><button id="debugToggle" aria-label="デバッグ情報の表示切替">i</button></div>
+      <div class="action-row">
+        <button class="secondary" id="historyButton"><span>◷</span>履歴</button>
+        <button class="analyze" id="analyzeButton" disabled><span></span><b>解析</b><small>姿勢を止めてタップ</small></button>
+        <button class="secondary" id="resetButton" disabled><span>↺</span>再解析</button>
+      </div>
+      <p class="disclaimer">本ツールは簡易的な姿勢チェックです。医療診断を目的としたものではありません。</p>
+    </section>
+  </main>
+
+  <dialog id="resultDialog" class="sheet">
+    <article>
+      <header><div><small>ANALYSIS COMPLETE</small><h2>解析結果</h2></div><button data-close="result" aria-label="閉じる">×</button></header>
+      <div class="score"><div><span id="scoreValue">—</span><small>/ 100</small></div><p id="scoreComment"></p></div>
+      <div class="result-list" id="resultList"></div>
+      <footer><button class="secondary wide" id="saveButton">結果を保存</button><button class="primary wide" data-close="result">カメラに戻る</button></footer>
+    </article>
+  </dialog>
+
+  <dialog id="historyDialog" class="sheet">
+    <article>
+      <header><div><small>LOCAL HISTORY</small><h2>保存した解析</h2></div><button data-close="history" aria-label="閉じる">×</button></header>
+      <div id="historyList" class="history-list"></div>
+      <section class="compare" id="comparePanel" hidden><h3>Before / After</h3><div id="compareTable"></div></section>
+    </article>
+  </dialog>
+
+  <script type="module" src="./assets/js/main.js"></script>
+</body>
+</html>
