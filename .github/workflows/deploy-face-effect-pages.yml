@@ -18,6 +18,7 @@ on:
       - "008_fighting_anime_ar_plus/**"
       - "009_miniature_camera/**"
       - "010_motion_quiz_camera/**"
+      - "011_posture_analysis_tool/**"
       - ".github/workflows/deploy-face-effect-pages.yml"
   workflow_dispatch:
 
@@ -79,6 +80,7 @@ jobs:
           mkdir -p site/008_fighting_anime_ar_plus
           mkdir -p site/009_miniature_camera
           mkdir -p site/010_motion_quiz_camera
+          mkdir -p site/011_posture_analysis_tool
           cp index.html site/index.html
           cp index.xml site/index.xml
           cp -r 001_browser_camera/. site/001_browser_camera/
@@ -91,6 +93,7 @@ jobs:
           cp -r 008_fighting_anime_ar_plus/. site/008_fighting_anime_ar_plus/
           cp -r 009_miniature_camera/. site/009_miniature_camera/
           cp -r 010_motion_quiz_camera/. site/010_motion_quiz_camera/
+          cp -r 011_posture_analysis_tool/. site/011_posture_analysis_tool/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
