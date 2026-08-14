@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#081714">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="人の動きを骨格動画にして、何の動きか当てるクイズを作れるiPhone向けカメラアプリ">
+  <meta property="og:title" content="Motion Quiz Camera">
+  <meta property="og:description" content="動きを撮って、骨格クイズにしよう。">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="./assets/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Motion Quiz Camera">
+  <meta name="twitter:description" content="動きを撮って、骨格クイズにしよう。">
+  <meta name="twitter:image" content="./assets/og.png">
+  <title>Motion Quiz Camera</title>
+  <link rel="stylesheet" href="./styles/main.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="app-header">
+      <button class="brand" type="button" data-view="capture" aria-label="撮影画面へ">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span><b>MOTION</b><small>QUIZ CAMERA</small></span>
+      </button>
+      <nav aria-label="メインメニュー">
+        <button class="nav-button is-active" type="button" data-view="capture">撮影</button>
+        <button class="nav-button" type="button" data-view="library">作品</button>
+      </nav>
+    </header>
+
+    <section class="view is-active" id="captureView" aria-label="撮影">
+      <div class="camera-card">
+        <div class="stage" id="stage">
+          <video id="cameraVideo" playsinline muted></video>
+          <canvas id="poseCanvas"></canvas>
+          <div class="stage-shade"></div>
+
+          <div class="stage-topline">
+            <div class="live-pill"><span></span><b id="cameraStatus">CAMERA OFF</b></div>
+            <div class="pose-pill" id="poseStatus">AI 準備前</div>
+          </div>
+
+          <div class="empty-camera" id="emptyCamera">
+            <div class="person-glyph" aria-hidden="true"><span></span><i></i></div>
+            <h1>動きを、クイズにしよう。</h1>
+            <p>全身が入る場所にiPhoneを置いて、カメラを開始してください。</p>
+            <button class="primary-button" id="startCameraButton" type="button">カメラを開始</button>
+            <small>映像と動きはこの端末内で処理されます</small>
+          </div>
+
+          <div class="countdown" id="countdown" hidden aria-live="assertive">3</div>
+          <div class="recording-hud" id="recordingHud" hidden>
+            <span class="record-dot"></span><b>REC</b><time id="elapsedTime">00:00.0</time>
+          </div>
+          <div class="frame-guide"><span>全身をフレーム内に</span></div>
+          <div class="stage-message" id="stageMessage" role="status" aria-live="polite"></div>
+        </div>
+
+        <div class="preview-switch" role="group" aria-label="プレビュー表示">
+          <button type="button" data-preview="video">元動画</button>
+          <button class="is-active" type="button" data-preview="overlay">重ねて表示</button>
+          <button type="button" data-preview="skeleton">骨格のみ</button>
+        </div>
+      </div>
+
+      <section class="control-panel">
+        <div class="setting-row">
+          <label class="field">
+            <span>録画時間</span>
+            <select id="durationSelect">
+              <option value="3">3秒</option>
+              <option value="5" selected>5秒</option>
+              <option value="10">10秒</option>
+              <option value="15">15秒</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>見え方</span>
+            <select id="difficultySelect">
+              <option value="easy">かんたん</option>
+              <option value="normal" selected>ふつう</option>
+              <option value="hard">むずかしい</option>
+              <option value="extreme">激ムズ</option>
+            </select>
+          </label>
+          <button class="flip-button" id="flipCameraButton" type="button" disabled>
+            <span aria-hidden="true">↻</span>カメラ切替
+          </button>
+        </div>
+
+        <div class="capture-actions">
+          <div class="status-copy">
+            <small id="readyLabel">カメラを開始してください</small>
+            <b id="detectedLabel">撮影の準備</b>
+          </div>
+          <button class="record-button" id="recordButton" type="button" aria-label="録画開始" disabled><span></span></button>
+          <button class="stop-button" id="stopButton" type="button" disabled><span></span>停止</button>
+        </div>
+      </section>
+    </section>
+
+    <section class="view" id="libraryView" aria-label="作品一覧">
+      <div class="library-head">
+        <div><p class="eyebrow">YOUR MOTIONS</p><h1>何の動きでしょう？</h1></div>
+        <span id="workCount">0作品</span>
+      </div>
+      <div class="work-grid" id="workGrid"></div>
+      <div class="empty-library" id="emptyLibrary">
+        <span class="empty-icon" aria-hidden="true">?</span>
+        <h2>まだ作品がありません</h2>
+        <p>最初の動きを撮影して、クイズを作ってみましょう。</p>
+        <button class="primary-button" type="button" data-view="capture">撮影してみる</button>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="reviewDialog" class="sheet-dialog">
+    <form method="dialog" class="dialog-card" id="reviewForm">
+      <header><div><p class="eyebrow">CAPTURE COMPLETE</p><h2>クイズに仕上げる</h2></div><button class="close-button" value="cancel" aria-label="閉じる">×</button></header>
+      <div class="review-player">
+        <video id="reviewVideo" playsinline loop muted></video>
+        <canvas id="reviewSkeleton"></canvas>
+        <div class="review-badge">SKELETON PREVIEW</div>
+      </div>
+      <div class="review-tabs" role="group" aria-label="録画確認">
+        <button type="button" data-review-mode="original">元動画</button>
+        <button class="is-active" type="button" data-review-mode="skeleton">骨格動画</button>
+      </div>
+      <div class="form-grid">
+        <label><span>タイトル <em>必須</em></span><input id="titleInput" maxlength="40" required placeholder="例：朝のルーティン"></label>
+        <label><span>答え <em>必須</em></span><input id="answerInput" maxlength="40" required placeholder="例：歯みがき"></label>
+        <label class="full"><span>ヒント</span><input id="hintInput" maxlength="80" placeholder="例：毎朝すること"></label>
+      </div>
+      <footer><button class="secondary-button" id="retakeButton" type="button">撮り直す</button><button class="primary-button" id="saveButton" type="submit">端末に保存</button></footer>
+    </form>
+  </dialog>
+
+  <dialog id="detailDialog" class="sheet-dialog detail-dialog">
+    <article class="dialog-card">
+      <header><div><p class="eyebrow">MOTION QUIZ</p><h2 id="detailTitle">作品</h2></div><button class="close-button" id="closeDetailButton" type="button" aria-label="閉じる">×</button></header>
+      <div class="detail-player">
+        <video id="detailVideo" playsinline loop controls></video>
+        <canvas id="detailCanvas"></canvas>
+        <button class="big-play" id="bigPlayButton" type="button" aria-label="再生">▶</button>
+      </div>
+      <div class="detail-tabs" role="group" aria-label="動画切替">
+        <button type="button" data-detail-mode="original">元動画</button>
+        <button class="is-active" type="button" data-detail-mode="skeleton">クイズ動画</button>
+      </div>
+      <div class="quiz-panel">
+        <p id="detailHint"></p>
+        <div class="answer-box" id="answerBox"><small>答え</small><strong id="detailAnswer">—</strong></div>
+        <button class="reveal-button" id="revealButton" type="button">答えを見る</button>
+      </div>
+      <div class="playback-tools">
+        <label>再生速度 <select id="speedSelect"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="1.5">1.5x</option><option value="2">2x</option></select></label>
+        <label class="loop-label"><input id="loopToggle" type="checkbox" checked> ループ再生</label>
+      </div>
+      <details><summary>モーション情報</summary><pre id="motionSummary"></pre></details>
+      <footer><button class="danger-button" id="deleteButton" type="button">削除</button><button class="secondary-button" id="downloadButton" type="button">保存・共有</button></footer>
+    </article>
+  </dialog>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
