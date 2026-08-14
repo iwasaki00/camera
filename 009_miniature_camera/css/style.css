@@ -90,6 +90,8 @@ input[type="range"] { width: 100%; accent-color: var(--lime); }
 .review-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; font: 700 10px monospace; letter-spacing: .16em; color: var(--lime); }
 .review-card img, .review-card video { width: 100%; min-height: 0; flex: 1; object-fit: contain; border-radius: 15px; background: #000; }
 .review-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+.share-button { width: 100%; min-height: 42px; margin-top: 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: transparent; font-weight: 700; }
+.share-button[hidden] { display: none; }
 .speed-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 7px; margin-top: 12px; font-size: 11px; color: var(--muted); }
 .speed-row button { padding: 7px 12px; border: 1px solid var(--line); border-radius: 99px; color: var(--ink); background: transparent; }
 .speed-row button.is-active { color: #111608; border-color: var(--lime); background: var(--lime); }

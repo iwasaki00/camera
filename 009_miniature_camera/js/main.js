@@ -13,7 +13,7 @@ const els = {
   sliders: $("#sliders"), quality: $("#qualitySelect"), audio: $("#audioToggle"), debug: $("#debugToggle"), debugPanel: $("#debugPanel"),
   resetAll: $("#resetAll"), recStatus: $("#recStatus"), recTime: $("#recTime"), toast: $("#toast"),
   dialog: $("#reviewDialog"), photoReview: $("#photoReview"), videoReview: $("#videoReview"), reviewLabel: $("#reviewLabel"),
-  speedRow: $("#speedRow"), saveHelp: $("#saveHelp"), save: $("#saveButton"), download: $("#downloadLink"), retake: $("#retakeButton"), closeReview: $("#closeReview"),
+  speedRow: $("#speedRow"), saveHelp: $("#saveHelp"), save: $("#saveButton"), share: $("#shareButton"), download: $("#downloadLink"), retake: $("#retakeButton"), closeReview: $("#closeReview"),
 };
 
 let params = { ...DEFAULTS };
@@ -126,18 +126,26 @@ function showReview(blob, type) {
   reviewFilename = `miniature-${new Date().toISOString().replace(/[:.]/g, "-")}.${ext}`;
   els.download.href = objectUrl;
   els.download.download = reviewFilename;
-  els.save.textContent = "保存・共有";
+  els.save.textContent = photo ? "写真を保存" : "動画を保存";
   els.saveHelp.textContent = photo
-    ? "iPhoneでは「保存・共有」を押し、共有メニューの「画像を保存」を選ぶと写真アプリに入ります。"
-    : "iPhoneでは「保存・共有」を押し、共有メニューの「ビデオを保存」を選ぶと写真アプリに入ります。";
+    ? "共有メニューを使わず、写真ファイルをダウンロードします。iPhoneでは「ファイル」アプリのダウンロード先に保存されます。"
+    : "共有メニューを使わず、動画ファイルをダウンロードします。iPhoneでは「ファイル」アプリのダウンロード先に保存されます。";
+  const shareFile = new File([blob], reviewFilename, { type: (blob.type || "application/octet-stream").split(";")[0] });
+  els.share.hidden = !(navigator.share && navigator.canShare?.({ files: [shareFile] }));
   els.speedRow.querySelectorAll("button").forEach((button) => button.classList.toggle("is-active", button.dataset.speed === "1"));
   els.videoReview.playbackRate = 1;
   els.dialog.showModal();
 }
 
-async function saveReview() {
+function saveReview() {
   if (!reviewBlob || !reviewFilename) return;
-  const file = new File([reviewBlob], reviewFilename, { type: reviewBlob.type || "application/octet-stream" });
+  els.download.click();
+  showToast("保存しました。「ファイル」アプリのダウンロード先を確認してください。", 5000);
+}
+
+async function shareReview() {
+  if (!reviewBlob || !reviewFilename) return;
+  const file = new File([reviewBlob], reviewFilename, { type: (reviewBlob.type || "application/octet-stream").split(";")[0] });
   if (navigator.share && navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: "Miniature Camera" });
@@ -146,8 +154,7 @@ async function saveReview() {
       if (error?.name === "AbortError") return;
     }
   }
-  els.download.click();
-  showToast("ダウンロードに保存しました。Safariのダウンロード一覧を確認してください。", 5000);
+  showToast("このブラウザではファイル共有を利用できません。保存ボタンを使用してください。", 5000);
 }
 
 function takePhoto() {
@@ -250,6 +257,7 @@ els.debug.addEventListener("change", () => { els.debugPanel.hidden = !els.debug.
 els.retake.addEventListener("click", () => { els.dialog.close(); closeObjectUrl(); });
 els.closeReview.addEventListener("click", () => { els.dialog.close(); closeObjectUrl(); });
 els.save.addEventListener("click", saveReview);
+els.share.addEventListener("click", shareReview);
 els.speedRow.addEventListener("click", (event) => { const speed = Number(event.target.dataset.speed); if (!speed) return; els.videoReview.playbackRate = speed; els.speedRow.querySelectorAll("button").forEach((b) => b.classList.toggle("is-active", b === event.target)); });
 
 let dragY = null, pinchStart = null;
