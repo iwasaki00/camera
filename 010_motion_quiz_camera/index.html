@@ -16,7 +16,7 @@
   <meta name="twitter:description" content="動きを撮って、骨格クイズにしよう。">
   <meta name="twitter:image" content="./assets/og.png">
   <title>Motion Quiz Camera</title>
-  <link rel="stylesheet" href="./styles/main.css">
+  <link rel="stylesheet" href="./styles/main.css?v=20260820c">
 </head>
 <body>
   <main class="app-shell">
@@ -67,6 +67,15 @@
       </div>
 
       <section class="control-panel">
+        <div class="capture-actions">
+          <div class="status-copy">
+            <small id="readyLabel">カメラを開始してください</small>
+            <b id="detectedLabel">撮影の準備</b>
+          </div>
+          <button class="record-button" id="recordButton" type="button" aria-label="録画開始" disabled><span></span></button>
+          <button class="stop-button" id="stopButton" type="button" disabled><span></span>停止</button>
+        </div>
+
         <div class="setting-row">
           <label class="field">
             <span>録画時間</span>
@@ -91,14 +100,6 @@
           </button>
         </div>
 
-        <div class="capture-actions">
-          <div class="status-copy">
-            <small id="readyLabel">カメラを開始してください</small>
-            <b id="detectedLabel">撮影の準備</b>
-          </div>
-          <button class="record-button" id="recordButton" type="button" aria-label="録画開始" disabled><span></span></button>
-          <button class="stop-button" id="stopButton" type="button" disabled><span></span>停止</button>
-        </div>
       </section>
     </section>
 
@@ -164,6 +165,6 @@
     </article>
   </dialog>
 
-  <script type="module" src="./src/main.js"></script>
+  <script type="module" src="./src/main.js?v=20260820c"></script>
 </body>
 </html>
