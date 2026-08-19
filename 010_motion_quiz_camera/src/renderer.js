@@ -24,8 +24,15 @@ export class PoseRenderer {
     this.resize(video);
     const pctx = this.previewCanvas.getContext("2d");
     pctx.clearRect(0,0,this.width,this.height);
-    if (this.mode === "skeleton") { pctx.fillStyle="#020504"; pctx.fillRect(0,0,this.width,this.height); }
-    this.drawSkeleton(pctx, landmarks, this.difficulty);
+    if (this.mode === "skeleton") {
+      pctx.fillStyle="#020504";
+      pctx.fillRect(0,0,this.width,this.height);
+    } else if (video.readyState >= 2) {
+      // iPhone Safariではライブvideo要素の表示位置がずれる場合があるため、
+      // 映像をCanvas全面へ描画して表示位置と骨格座標を一致させる。
+      try { pctx.drawImage(video,0,0,this.width,this.height); } catch {}
+    }
+    if (this.mode !== "video") this.drawSkeleton(pctx, landmarks, this.difficulty);
 
     const rctx = this.recordCanvas.getContext("2d");
     rctx.fillStyle="#020504"; rctx.fillRect(0,0,this.width,this.height);
