@@ -21,13 +21,6 @@ export function canvasToBlob(canvas, type = "image/jpeg", quality = .78) {
   return new Promise(resolve => canvas.toBlob(resolve, type, quality));
 }
 
-export function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const anchor = Object.assign(document.createElement("a"), { href:url, download:filename });
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1500);
-}
-
 export function friendlyError(error) {
   if (!window.isSecureContext) return "カメラにはHTTPS接続が必要です。";
   if (error?.name === "NotAllowedError") return "カメラが許可されていません。Safariの設定から許可してください。";

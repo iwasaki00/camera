@@ -5,7 +5,7 @@ import { DualRecorder } from "./recorder.js";
 import { MotionStore } from "./storage.js";
 import { MotionPlayer } from "./player.js";
 import { DIFFICULTIES, TARGET_FPS } from "./config.js";
-import { $, $$, canvasToBlob, downloadBlob, formatDate, formatTime, friendlyError, makeId, sleep } from "./utils.js";
+import { $, $$, canvasToBlob, formatDate, formatTime, friendlyError, makeId, sleep } from "./utils.js";
 
 export class MotionQuizApp {
   constructor() {
@@ -54,7 +54,6 @@ export class MotionQuizApp {
     $("#speedSelect").addEventListener("change",event=>this.setPlaybackSpeed(Number(event.target.value)));
     $("#loopToggle").addEventListener("change",event=>this.setLoop(event.target.checked));
     $("#deleteButton").addEventListener("click",()=>this.deleteCurrent());
-    $("#downloadButton").addEventListener("click",()=>this.shareCurrent());
     $("#reviewDialog").addEventListener("close",()=>this.reviewPlayer.pause());
     $("#detailDialog").addEventListener("close",()=>this.stopDetailMedia());
     document.addEventListener("visibilitychange",()=>{if(document.hidden&&!this.recording)this.detailPlayer.pause();});
@@ -269,16 +268,6 @@ export class MotionQuizApp {
   async deleteCurrent() {
     if(!this.currentWork||!confirm(`「${this.currentWork.title}」を削除しますか？`))return;
     await this.store.delete(this.currentWork.id);this.closeDetail();await this.refreshLibrary();
-  }
-
-  async shareCurrent() {
-    const work=this.currentWork;if(!work)return;
-    const jsonBlob=new Blob([JSON.stringify({id:work.id,title:work.title,answer:work.answer,hint:work.hint,createdAt:work.createdAt,durationSec:work.durationSec,cameraFacing:work.cameraFacing,difficulty:work.difficulty,motionData:work.motionData},null,2)],{type:"application/json"});
-    const ext=work.skeletonVideoBlob?.type.includes("webm")?"webm":"mp4";
-    const files=[new File([jsonBlob],`${work.title}-motion.json`,{type:jsonBlob.type})];
-    if(work.skeletonVideoBlob)files.unshift(new File([work.skeletonVideoBlob],`${work.title}-quiz.${ext}`,{type:work.skeletonVideoBlob.type}));
-    try { if(navigator.canShare?.({files})) {await navigator.share({title:work.title,text:"この動きは何でしょう？",files});return} } catch(error){if(error.name==="AbortError")return}
-    downloadBlob(work.skeletonVideoBlob||jsonBlob,work.skeletonVideoBlob?`${work.title}-quiz.${ext}`:`${work.title}-motion.json`);
   }
 
   setBlobVideo(video,blob) {

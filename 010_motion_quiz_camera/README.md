@@ -31,7 +31,6 @@ PCでは `http://localhost:8000/010_motion_quiz_camera/` を開きます。iPhon
 - かんたん / ふつう / むずかしい / 激ムズの骨格表示
 - IndexedDBへの動画Blob、JSON、サムネイル、クイズ情報の保存
 - 作品一覧、詳細、答えの表示・非表示、0.5x〜2x再生、ループ、削除
-- Web Share APIによる共有。非対応時は骨格動画またはJSONをダウンロード
 
 ## iPhone Safariでの注意
 
