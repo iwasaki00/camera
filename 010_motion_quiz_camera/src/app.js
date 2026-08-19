@@ -1,6 +1,6 @@
 import { CameraController } from "./camera.js";
 import { PoseDetector } from "./pose.js";
-import { PoseRenderer } from "./renderer.js?v=20260820c";
+import { PoseRenderer } from "./renderer.js?v=20260820d";
 import { DualRecorder } from "./recorder.js";
 import { MotionStore } from "./storage.js";
 import { MotionPlayer } from "./player.js";
