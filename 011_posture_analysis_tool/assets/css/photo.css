@@ -1,0 +1,67 @@
+video,
+#uploadedImage,
+canvas,
+.vignette {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+video,
+#uploadedImage {
+  object-fit: cover;
+}
+
+#uploadedImage {
+  object-fit: contain;
+  background: #030605;
+}
+
+#uploadedImage[hidden] {
+  display: none;
+}
+
+.top-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.top-actions .icon-button {
+  font-size: 22px;
+}
+
+.start-actions {
+  display: grid;
+  gap: 8px;
+  min-width: 210px;
+}
+
+.photo-button {
+  padding: 11px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.action-row {
+  grid-template-columns: 54px 54px minmax(0, 1fr) 54px;
+  gap: 8px;
+}
+
+.image-loading #uploadedImage {
+  filter: brightness(0.55);
+}
+
+@media (max-width: 380px) {
+  .action-row {
+    grid-template-columns: 49px 49px minmax(0, 1fr) 49px;
+    gap: 6px;
+  }
+
+  .analyze {
+    padding-inline: 12px;
+  }
+}
