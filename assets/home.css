@@ -769,8 +769,8 @@ p { margin-top: 0; }
   .section-kicker { font-size: 0.66rem; }
 
   .app-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
   }
 
   .app-card { border-radius: 18px; }
@@ -795,15 +795,16 @@ p { margin-top: 0; }
   .app-copy { padding: 9px 3px 0; }
 
   .app-copy strong {
-    padding-right: 21px;
-    font-size: clamp(0.77rem, 3.8vw, 0.9rem);
+    padding-right: 0;
+    font-size: clamp(0.65rem, 3vw, 0.8rem);
   }
 
-  .app-copy small { font-size: 0.63rem; }
+  .app-copy small { display: none; }
 
   .detail-button {
+    top: 10px;
     right: 10px;
-    bottom: 22px;
+    bottom: auto;
     width: 22px;
     height: 22px;
     font-size: 0.7rem;
@@ -856,8 +857,7 @@ p { margin-top: 0; }
   }
 
   .gesture-guide__icon { margin-top: 1px; }
-  .app-copy small { display: none; }
-  .detail-button { bottom: 14px; }
+  .detail-button { top: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
