@@ -2,241 +2,216 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Camera Apps</title>
-  <style>
-    :root {
-      color-scheme: light;
-      --bg-0: #f7efe4;
-      --bg-1: #efe2d0;
-      --card: rgba(255, 255, 255, 0.8);
-      --line: rgba(49, 32, 19, 0.12);
-      --text: #21150f;
-      --muted: #6c554a;
-      --accent: #cb5b32;
-      --accent-2: #194a63;
-      --shadow: 0 24px 48px rgba(80, 46, 25, 0.12);
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
-      color: var(--text);
-      background:
-        radial-gradient(circle at top left, rgba(203, 91, 50, 0.16), transparent 30%),
-        radial-gradient(circle at bottom right, rgba(25, 74, 99, 0.12), transparent 30%),
-        linear-gradient(180deg, var(--bg-0), var(--bg-1));
-    }
-
-    main {
-      width: min(100%, 980px);
-      margin: 0 auto;
-      padding: 28px 16px 40px;
-    }
-
-    .hero,
-    .app-card {
-      border: 1px solid var(--line);
-      border-radius: 28px;
-      background: var(--card);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(12px);
-    }
-
-    .hero {
-      padding: 24px;
-    }
-
-    .eyebrow {
-      margin: 0 0 8px;
-      color: var(--accent);
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-    }
-
-    h1,
-    h2,
-    p {
-      margin: 0;
-    }
-
-    h1 {
-      font-size: clamp(2rem, 7vw, 3.4rem);
-      line-height: 1.04;
-    }
-
-    .lead {
-      margin-top: 12px;
-      color: var(--muted);
-      line-height: 1.8;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 16px;
-      margin-top: 18px;
-    }
-
-    .app-card {
-      padding: 20px;
-    }
-
-    .tag {
-      display: inline-flex;
-      align-items: center;
-      min-height: 32px;
-      padding: 0 12px;
-      border-radius: 999px;
-      color: var(--accent-2);
-      background: rgba(25, 74, 99, 0.08);
-      font-size: 0.88rem;
-      font-weight: 700;
-    }
-
-    .app-card h2 {
-      margin-top: 12px;
-    }
-
-    .app-card p {
-      margin-top: 12px;
-      color: var(--muted);
-      line-height: 1.75;
-    }
-
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 16px;
-    }
-
-    a {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 48px;
-      padding: 0 18px;
-      border-radius: 999px;
-      color: #fffaf7;
-      background: linear-gradient(135deg, #df8761, var(--accent));
-      text-decoration: none;
-      font-weight: 700;
-    }
-
-    @media (max-width: 720px) {
-      .grid {
-        grid-template-columns: 1fr;
-      }
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="カメラで遊べる11個のWebアプリをまとめたCamera Playground。タップで起動、長押しで詳しい説明を確認できます。">
+  <meta name="theme-color" content="#f6f0e6">
+  <title>Camera Playground</title>
+  <link rel="stylesheet" href="./assets/home.css">
+  <script src="./assets/home.js" defer></script>
 </head>
 <body>
-  <main>
-    <section class="hero">
-      <p class="eyebrow">CAMERA APPS</p>
-      <h1>iPhone向けカメラ実験アプリ集</h1>
-      <p class="lead">
-        GitHub Pagesで公開しやすいカメラ系アプリの入口です。顔エフェクト、AR風ハンドトラッキング、ナンプレ解答などをまとめています。
-      </p>
+  <div class="page-glow page-glow--coral" aria-hidden="true"></div>
+  <div class="page-glow page-glow--blue" aria-hidden="true"></div>
+
+  <main class="page-shell">
+    <header class="hero">
+      <div class="hero__copy">
+        <div class="hero__meta">
+          <p class="brand">CAMERA PLAYGROUND</p>
+          <span class="app-count">11 APPS</span>
+        </div>
+        <h1>カメラで、<br><em>あそぼう。</em></h1>
+        <p class="hero__lead">AR、顔あそび、パズル、姿勢解析。作ったカメラアプリを、ひとつの遊び場にまとめました。</p>
+        <p class="gesture-guide">
+          <span class="gesture-guide__icon" aria-hidden="true"><span></span></span>
+          <span><strong>タップ</strong>で開く&nbsp;&nbsp;·&nbsp;&nbsp;<strong>長押し</strong>でくわしく</span>
+        </p>
+      </div>
+      <div class="hero__lens" aria-hidden="true">
+        <span class="hero__orbit hero__orbit--one"></span>
+        <span class="hero__orbit hero__orbit--two"></span>
+        <span class="hero__lens-ring"><span class="hero__lens-core"></span></span>
+        <span class="hero__spark hero__spark--one"></span>
+        <span class="hero__spark hero__spark--two"></span>
+      </div>
+    </header>
+
+    <section class="collection" aria-labelledby="collection-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">CHOOSE YOUR CAMERA</p>
+          <h2 id="collection-title">どれで遊ぶ？</h2>
+        </div>
+        <p class="section-note">新しい順</p>
+      </div>
+
+      <div class="app-grid">
+        <article class="app-card" data-app="posture-lens">
+          <a class="app-link" href="./011_posture_analysis_tool/" aria-label="Posture Lens 姿勢解析ツールを開く">
+            <span class="app-number">011</span>
+            <span class="app-visual">
+              <img src="./assets/app-icons/posture-lens.webp" alt="姿勢をカメラで解析するイメージ" width="512" height="512" fetchpriority="high" draggable="false">
+              <span class="app-type">TOOL</span>
+            </span>
+            <span class="app-copy"><strong>Posture Lens</strong><small>姿勢を見える化</small></span>
+            <span class="hold-progress" aria-hidden="true"></span>
+          </a>
+          <button class="detail-button" type="button" aria-label="Posture Lensの詳細を表示" data-detail-button><span aria-hidden="true">i</span></button>
+        </article>
+
+        <article class="app-card" data-app="motion-quiz">
+          <a class="app-link" href="./010_motion_quiz_camera/" aria-label="Motion Quiz Cameraを開く">
+            <span class="app-number">010</span>
+            <span class="app-visual">
+              <img src="./assets/app-icons/motion-quiz.webp" alt="骨格の動きを当てるクイズのイメージ" width="512" height="512" loading="lazy" draggable="false">
+              <span class="app-type">GAME</span>
+            </span>
+            <span class="app-copy"><strong>Motion Quiz</strong><small>動きをクイズに</small></span>
+            <span class="hold-progress" aria-hidden="true"></span>
+          </a>
+          <button class="detail-button" type="button" aria-label="Motion Quiz Cameraの詳細を表示" data-detail-button><span aria-hidden="true">i</span></button>
+        </article>
+
+        <article class="app-card" data-app="miniature-camera">
+          <a class="app-link" href="./009_miniature_camera/" aria-label="ミニチュアカメラを開く">
+            <span class="app-number">009</span>
+            <span class="app-visual">
+              <img src="./assets/app-icons/miniature-camera.webp" alt="レンズの中に小さな街があるイメージ" width="512" height="512" loading="lazy" draggable="false">
+              <span class="app-type">CAMERA</span>
+            </span>
+            <span class="app-copy"><strong>ミニチュアカメラ</strong><small>街をジオラマ風に</small></span>
+            <span class="hold-progress" aria-hidden="true"></span>
+          </a>
+          <button class="detail-button" type="button" aria-label="ミニチュアカメラの詳細を表示" data-detail-button><span aria-hidden="true">i</span></button>
+        </article>
+
+        <article class="app-card" data-app="fighting-plus">
+          <a class="app-link" href="./008_fighting_anime_ar_plus/" aria-label="格闘アニメ演出AR Plusを開く">
+            <span class="app-number">008</span>
+            <span class="app-visual">
+              <img src="./assets/app-icons/fighting-anime-plus.webp" alt="二つの拳と強い衝撃波のイメージ" width="512" height="512" loading="lazy" draggable="false">
+              <span class="app-type">AR PLUS</span>
+            </span>
+            <span class="app-copy"><strong>格闘アニメAR+</strong><small>演出をもっと派手に</small></span>
+            <span class="hold-progress" aria-hidden="true"></span>
+          </a>
+          <button class="detail-button" type="button" aria-label="格闘アニメ演出AR Plusの詳細を表示" data-detail-button><span aria-hidden="true">i</span></button>
+        </article>
+
+        <article class="app-card" data-app="fighting-anime">
+          <a class="app-link" href="./007_fighting_anime_ar/" aria-label="格闘アニメ演出ARを開く">
+            <span class="app-number">007</span>
+            <span class="app-visual">
+              <img src="./assets/app-icons/fighting-anime.webp" alt="拳とアニメ風の衝撃エフェクトのイメージ" width="512" height="512" loading="lazy" draggable="false">
+              <span class="app-type">AR</span>
+            </span>
+            <span class="app-copy"><strong>格闘アニメAR</strong><small>必殺技をカメラに</small></span>
+            <span class="hold-progress" aria-hidden="true"></span>
+          </a>
+          <button class="detail-button" type="button" aria-label="格闘アニメ演出ARの詳細を表示" data-detail-button><span aria-hidden="true">i</span></button>
+        </article>
+
+        <article class="app-card" data-app="lightsaber">
+          <a class="app-link" href="./006_lightsaber_ar/" aria-label="ライトセーバーARを開く">
+            <span class="app-number">006</span>
+            <span class="app-visual">
+              <img src="./assets/app-icons/lightsaber.webp" alt="光る二本の剣が交差するイメージ" width="512" height="512" loading="lazy" draggable="false">
+              <span class="app-type">AR</span>
+            </span>
+            <span class="app-copy"><strong>ライトセーバーAR</strong><small>手の中に光の剣</small></span>
+            <span class="hold-progress" aria-hidden="true"></span>
+          </a>
+          <button class="detail-button" type="button" aria-label="ライトセーバーARの詳細を表示" data-detail-button><span aria-hidden="true">i</span></button>
+        </article>
+
+        <article class="app-card" data-app="ice-magic">
+          <a class="app-link" href="./005_ice_magic_ar/" aria-label="氷の魔法ポーズARを開く">
+            <span class="app-number">005</span>
+            <span class="app-visual">
+              <img src="./assets/app-icons/ice-magic.webp" alt="両手から氷の結晶を作るイメージ" width="512" height="512" loading="lazy" draggable="false">
+              <span class="app-type">AR</span>
+            </span>
+            <span class="app-copy"><strong>氷の魔法AR</strong><small>手のひらから雪</small></span>
+            <span class="hold-progress" aria-hidden="true"></span>
+          </a>
+          <button class="detail-button" type="button" aria-label="氷の魔法ポーズARの詳細を表示" data-detail-button><span aria-hidden="true">i</span></button>
+        </article>
+
+        <article class="app-card" data-app="sudoku-camera">
+          <a class="app-link" href="./004_sudoku_camera/" aria-label="ナンプレOCRカメラを開く">
+            <span class="app-number">004</span>
+            <span class="app-visual">
+              <img src="./assets/app-icons/sudoku-camera.webp" alt="カメラで数独の盤面を読み取るイメージ" width="512" height="512" loading="lazy" draggable="false">
+              <span class="app-type">PUZZLE</span>
+            </span>
+            <span class="app-copy"><strong>ナンプレOCR</strong><small>盤面を9×9で読む</small></span>
+            <span class="hold-progress" aria-hidden="true"></span>
+          </a>
+          <button class="detail-button" type="button" aria-label="ナンプレOCRカメラの詳細を表示" data-detail-button><span aria-hidden="true">i</span></button>
+        </article>
+
+        <article class="app-card" data-app="henface-maker">
+          <a class="app-link" href="./003_henface_maker/" aria-label="変顔メーカーを開く">
+            <span class="app-number">003</span>
+            <span class="app-visual">
+              <img src="./assets/app-icons/henface-maker.webp" alt="目や口を組み合わせた変顔のイメージ" width="512" height="512" loading="lazy" draggable="false">
+              <span class="app-type">GAME</span>
+            </span>
+            <span class="app-copy"><strong>変顔メーカー</strong><small>顔パーツで大変身</small></span>
+            <span class="hold-progress" aria-hidden="true"></span>
+          </a>
+          <button class="detail-button" type="button" aria-label="変顔メーカーの詳細を表示" data-detail-button><span aria-hidden="true">i</span></button>
+        </article>
+
+        <article class="app-card" data-app="face-effect">
+          <a class="app-link" href="./002_face_effect/" aria-label="顔エフェクトカメラを開く">
+            <span class="app-number">002</span>
+            <span class="app-visual">
+              <img src="./assets/app-icons/face-effect.webp" alt="顔にカラフルなフィルターを重ねるイメージ" width="512" height="512" loading="lazy" draggable="false">
+              <span class="app-type">CAMERA</span>
+            </span>
+            <span class="app-copy"><strong>顔エフェクト</strong><small>顔に数式とフィルター</small></span>
+            <span class="hold-progress" aria-hidden="true"></span>
+          </a>
+          <button class="detail-button" type="button" aria-label="顔エフェクトカメラの詳細を表示" data-detail-button><span aria-hidden="true">i</span></button>
+        </article>
+
+        <article class="app-card" data-app="browser-camera">
+          <a class="app-link" href="./001_browser_camera/" aria-label="Browser Cameraを開く">
+            <span class="app-number">001</span>
+            <span class="app-visual">
+              <img src="./assets/app-icons/browser-camera.webp" alt="ブラウザで使うカメラのイメージ" width="512" height="512" loading="lazy" draggable="false">
+              <span class="app-type">CAMERA</span>
+            </span>
+            <span class="app-copy"><strong>Browser Camera</strong><small>いちばんシンプルな撮影</small></span>
+            <span class="hold-progress" aria-hidden="true"></span>
+          </a>
+          <button class="detail-button" type="button" aria-label="Browser Cameraの詳細を表示" data-detail-button><span aria-hidden="true">i</span></button>
+        </article>
+      </div>
     </section>
 
-    <section class="grid">
-      <article class="app-card">
-        <span class="tag">MediaPipe Pose + Canvas + Local Storage</span>
-        <h2>Posture Lens｜姿勢解析ツール</h2>
-        <p>iPhoneのカメラで全身の骨格を捉え、正面・側面の姿勢をリアルタイムに確認できます。解析結果の保存とBefore / After比較にも対応しています。</p>
-        <div class="actions">
-          <a href="./011_posture_analysis_tool/">姿勢解析ツールを開く</a>
-        </div>
-      </article>
-
-      <article class="app-card">
-        <span class="tag">MediaPipe Pose + MediaRecorder + IndexedDB</span>
-        <h2>Motion Quiz Camera</h2>
-        <p>人の動きを骨格だけの動画にして、「何の動きでしょう？」というクイズを作れるiPhone向けカメラアプリです。</p>
-        <div class="actions">
-          <a href="./010_motion_quiz_camera/">Motion Quiz Cameraを開く</a>
-        </div>
-      </article>
-
-      <article class="app-card">
-        <span class="tag">WebGL + Canvas + MediaRecorder</span>
-        <h2>ミニチュアカメラ</h2>
-        <p>風景の中央だけにピントを残し、上下をなめらかにぼかすティルトシフト風カメラです。加工済みの写真・動画をそのまま保存できます。</p>
-        <div class="actions">
-          <a href="./009_miniature_camera/">ミニチュアカメラを開く</a>
-        </div>
-      </article>
-
-      <article class="app-card">
-        <span class="tag">HTML + CSS + JavaScript</span>
-        <h2>ナンプレ解答カメラ</h2>
-        <p>9x9の盤面を手入力してバックトラック法で解答する試作です。将来のカメラOCR追加を見据えた構成です。</p>
-        <div class="actions">
-          <a href="./004_sudoku_camera/">ナンプレ解答カメラを開く</a>
-        </div>
-      </article>
-
-      <article class="app-card">
-        <span class="tag">React + Vite</span>
-        <h2>顔エフェクトカメラ</h2>
-        <p>顔の検出結果に応じて数値やエフェクトを重ねて試せるカメラアプリです。</p>
-        <div class="actions">
-          <a href="./002_face_effect/">顔エフェクトカメラを開く</a>
-        </div>
-      </article>
-
-      <article class="app-card">
-        <span class="tag">React + Vite + MediaPipe Hands</span>
-        <h2>氷の魔法ポーズAR</h2>
-        <p>iPhone Safari向けのAR風カメラです。左右の手を認識し、手のひらを前に出すポーズで雪の粒子を表示します。</p>
-        <div class="actions">
-          <a href="./005_ice_magic_ar/">氷の魔法ポーズARを開く</a>
-        </div>
-      </article>
-
-      <article class="app-card">
-        <span class="tag">HTML + CSS + JavaScript + MediaPipe</span>
-        <h2>ライトセーバーAR</h2>
-        <p>前面カメラ映像の上で両手グーを近づけると、Canvas 2Dの光るライトセーバーが伸びて手元に追従します。</p>
-        <div class="actions">
-          <a href="./006_lightsaber_ar/">ライトセーバーARを開く</a>
-        </div>
-      </article>
-
-      <article class="app-card">
-        <span class="tag">iPhone Safari + AR style camera</span>
-        <h2>格闘アニメ演出AR</h2>
-        <p>iPhoneブラウザのカメラ上に、集中線、衝撃波、オーラ、必殺技カットインのような格闘アニメ演出を重ねるAR風Webアプリです。</p>
-        <div class="actions">
-          <a href="./007_fighting_anime_ar/">格闘アニメ演出ARを開く</a>
-        </div>
-      </article>
-
-      <article class="app-card">
-        <span class="tag">iPhone Safari + AR style camera</span>
-        <h2>格闘アニメ演出AR Plus</h2>
-        <p>格闘アニメ演出ARの拡張版です。既存版とは別メニューとして、追加演出や調整を試せる入口です。</p>
-        <div class="actions">
-          <a href="./008_fighting_anime_ar_plus/index.html">格闘アニメ演出AR Plusを開く</a>
-        </div>
-      </article>
-
-      <article class="app-card">
-        <span class="tag">React + Vite + TypeScript</span>
-        <h2>変顔メーカー</h2>
-        <p>眉、目、鼻、口などのパーツを組み合わせてランダム生成もできるアプリです。</p>
-        <div class="actions">
-          <a href="./003_henface_maker/">変顔メーカーを開く</a>
-        </div>
-      </article>
-    </section>
+    <footer class="footer">
+      <p>Made for iPhone Safari <span aria-hidden="true">·</span> Camera experiments in your browser</p>
+    </footer>
   </main>
+
+  <dialog class="detail-dialog" id="app-detail" aria-labelledby="detail-title" aria-describedby="detail-description">
+    <div class="detail-dialog__handle" aria-hidden="true"></div>
+    <button class="detail-dialog__close" type="button" aria-label="詳細を閉じる" data-dialog-close><span aria-hidden="true"></span></button>
+    <div class="detail-dialog__top">
+      <img id="detail-icon" src="" alt="" width="512" height="512">
+      <div>
+        <p class="detail-dialog__number" id="detail-number"></p>
+        <p class="detail-dialog__type" id="detail-type"></p>
+      </div>
+    </div>
+    <h2 id="detail-title"></h2>
+    <p class="detail-dialog__description" id="detail-description"></p>
+    <p class="detail-dialog__tech" id="detail-tech"></p>
+    <a class="detail-dialog__open" id="detail-link" href="#"><span>このアプリを開く</span><span aria-hidden="true">→</span></a>
+  </dialog>
+
+  <p class="sr-only" id="interaction-status" aria-live="polite"></p>
 </body>
 </html>
