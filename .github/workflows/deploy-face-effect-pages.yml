@@ -8,6 +8,7 @@ on:
     paths:
       - "index.html"
       - "index.xml"
+      - "assets/**"
       - "001_browser_camera/**"
       - "002_face_effect/**"
       - "003_henface_maker/**"
@@ -70,6 +71,7 @@ jobs:
       - name: Assemble Pages site
         shell: bash
         run: |
+          mkdir -p site/assets
           mkdir -p site/001_browser_camera
           mkdir -p site/002_face_effect
           mkdir -p site/003_henface_maker
@@ -83,6 +85,7 @@ jobs:
           mkdir -p site/011_posture_analysis_tool
           cp index.html site/index.html
           cp index.xml site/index.xml
+          cp -r assets/. site/assets/
           cp -r 001_browser_camera/. site/001_browser_camera/
           cp -r 002_face_effect/dist/. site/002_face_effect/
           cp -r 003_henface_maker/dist/. site/003_henface_maker/
