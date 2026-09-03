@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="description" content="カメラで遊べる11個のWebアプリをまとめたCamera Playground。タップで起動、長押しで詳しい説明を確認できます。">
+  <meta name="description" content="カメラで遊べる12個のWebアプリをまとめたCamera Playground。タップで起動、長押しで詳しい説明を確認できます。">
   <meta name="theme-color" content="#f6f0e6">
   <title>Camera Playground</title>
   <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
@@ -21,7 +21,7 @@
       <div class="hero__copy">
         <div class="hero__meta">
           <p class="brand">CAMERA PLAYGROUND</p>
-          <span class="app-count">11 APPS</span>
+          <span class="app-count">12 APPS</span>
         </div>
         <h1>カメラで、<br><em>あそぼう。</em></h1>
         <p class="hero__lead">AR、顔あそび、パズル、姿勢解析。作ったカメラアプリを、ひとつの遊び場にまとめました。</p>
@@ -49,11 +49,24 @@
       </div>
 
       <div class="app-grid">
+        <article class="app-card" data-app="karada-gakki">
+          <a class="app-link" href="./012_karada_gakki/" aria-label="カラダ楽器を開く">
+            <span class="app-number">012</span>
+            <span class="app-visual">
+              <img src="./assets/app-icons/motion-quiz.webp" alt="体の動きをカメラで認識するイメージ" width="512" height="512" fetchpriority="high" draggable="false">
+              <span class="app-type">MUSIC</span>
+            </span>
+            <span class="app-copy"><strong>カラダ楽器</strong><small>動きで音を鳴らそう</small></span>
+            <span class="hold-progress" aria-hidden="true"></span>
+          </a>
+          <button class="detail-button" type="button" aria-label="カラダ楽器の詳細を表示" data-detail-button><span aria-hidden="true">i</span></button>
+        </article>
+
         <article class="app-card" data-app="posture-lens">
           <a class="app-link" href="./011_posture_analysis_tool/" aria-label="Posture Lens 姿勢解析ツールを開く">
             <span class="app-number">011</span>
             <span class="app-visual">
-              <img src="./assets/app-icons/posture-lens.webp" alt="姿勢をカメラで解析するイメージ" width="512" height="512" fetchpriority="high" draggable="false">
+              <img src="./assets/app-icons/posture-lens.webp" alt="姿勢をカメラで解析するイメージ" width="512" height="512" loading="lazy" draggable="false">
               <span class="app-type">TOOL</span>
             </span>
             <span class="app-copy"><strong>Posture Lens</strong><small>姿勢を見える化</small></span>

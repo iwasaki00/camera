@@ -1,4 +1,12 @@
 const APP_DETAILS = {
+  "karada-gakki": {
+    number: "012",
+    type: "BODY MUSIC",
+    title: "カラダ楽器",
+    description: "顔や体の動きをカメラで認識し、口・ウインク・笑顔・手足の動きに合わせてドラムやピアノの音を鳴らします。顔モードと体モードを切り替えて演奏できます。",
+    tech: "MediaPipe Face & Pose · Web Audio API · Canvas",
+    icon: "./assets/app-icons/motion-quiz.webp"
+  },
   "posture-lens": {
     number: "011",
     type: "POSTURE TOOL",
