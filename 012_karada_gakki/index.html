@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#090b12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="顔や体の動きで音を鳴らす、iPhone向けカメラ楽器">
+  <title>カラダ楽器</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <section id="startScreen" class="screen start-screen active" aria-labelledby="appTitle">
+      <div class="brand-mark" aria-hidden="true"><span>♪</span></div>
+      <p class="eyebrow">MOVE YOUR BODY. MAKE A SOUND.</p>
+      <h1 id="appTitle">カラダ<span>楽器</span></h1>
+      <p class="lead">顔や体を動かすだけ。<br>あなた自身が、楽器になる。</p>
+
+      <fieldset class="mode-picker">
+        <legend>演奏スタイルを選ぶ</legend>
+        <label class="mode-card selected">
+          <input type="radio" name="startMode" value="face" checked>
+          <span class="mode-icon" aria-hidden="true">☺</span>
+          <span><b>顔モード</b><small>口・ウインク・笑顔・傾き</small></span>
+          <i aria-hidden="true"></i>
+        </label>
+        <label class="mode-card">
+          <input type="radio" name="startMode" value="body">
+          <span class="mode-icon" aria-hidden="true">人</span>
+          <span><b>体モード</b><small>手・足を大きく動かす</small></span>
+          <i aria-hidden="true"></i>
+        </label>
+      </fieldset>
+
+      <button id="startButton" class="primary-button" type="button">
+        <span class="button-icon">▶</span><span>カメラを起動してはじめる</span>
+      </button>
+      <p id="startStatus" class="start-status" role="status">初回はカメラの使用を「許可」してください</p>
+      <details class="help-card">
+        <summary>使い方とプライバシー</summary>
+        <p>iPhoneを安定した場所に置き、明るい場所で正面を向いてください。映像と認識処理は端末内で行い、保存・送信しません。</p>
+      </details>
+    </section>
+
+    <section id="playScreen" class="screen play-screen" aria-label="演奏画面">
+      <div class="camera-stage">
+        <video id="camera" autoplay muted playsinline></video>
+        <canvas id="overlay" aria-hidden="true"></canvas>
+        <div class="camera-shade" aria-hidden="true"></div>
+
+        <header class="topbar">
+          <button id="backButton" class="round-button" type="button" aria-label="起動画面に戻る">←</button>
+          <div class="live-badge"><span></span><b>LIVE</b></div>
+          <button id="settingsButton" class="round-button" type="button" aria-label="設定を開く">⚙</button>
+        </header>
+
+        <div class="mode-tabs" aria-label="認識モード">
+          <button type="button" data-play-mode="face" class="active">☺ 顔</button>
+          <button type="button" data-play-mode="body">人 体</button>
+        </div>
+
+        <div class="tracking-status"><span id="trackingDot"></span><b id="trackingText">モデル準備中…</b></div>
+
+        <div id="noteBurst" class="note-burst" aria-hidden="true">♪</div>
+        <div class="now-playing" aria-live="polite">
+          <small>LAST SOUND</small>
+          <strong id="lastSound">—</strong>
+          <span id="lastAction">動いて音を鳴らそう</span>
+        </div>
+      </div>
+
+      <section class="play-controls">
+        <div class="gesture-strip" id="gestureStrip" aria-label="認識する動作"></div>
+        <div class="control-row">
+          <div><span class="status-light"></span><b id="modeLabel">顔モード</b><small id="modeHint">顔を画面の中央へ</small></div>
+          <button id="debugToggle" type="button" aria-pressed="true">DEBUG <b>ON</b></button>
+        </div>
+        <section id="debugPanel" class="debug-panel" aria-label="デバッグ情報">
+          <header><span>認識データ</span><span id="debugFps">0 FPS</span></header>
+          <div id="debugScores" class="debug-scores"></div>
+          <footer id="debugLog">発音ログ: —</footer>
+        </section>
+      </section>
+    </section>
+  </main>
+
+  <dialog id="settingsDialog" class="settings-sheet">
+    <form method="dialog">
+      <header><div><small>SOUND CONTROL</small><h2>演奏設定</h2></div><button value="close" aria-label="設定を閉じる">×</button></header>
+      <label class="setting-row"><span><b>プリセット</b><small>音の組み合わせ</small></span><select id="presetSelect"><option value="drum">Drum</option><option value="piano">Piano</option><option value="effect">Effect</option></select></label>
+      <label class="setting-range"><span><b>感度</b><output id="sensitivityValue">50</output></span><input id="sensitivityRange" type="range" min="0" max="100" value="50"></label>
+      <label class="setting-range"><span><b>クールダウン</b><output id="cooldownValue">200 ms</output></span><input id="cooldownRange" type="range" min="100" max="1000" step="50" value="200"></label>
+      <label class="setting-range"><span><b>音量</b><output id="volumeValue">80%</output></span><input id="volumeRange" type="range" min="0" max="100" value="80"></label>
+      <section class="assignments"><h3>動作ごとの音</h3><div id="assignmentList"></div></section>
+      <button class="done-button" value="close">設定を保存して戻る</button>
+    </form>
+  </dialog>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
