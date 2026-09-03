@@ -20,6 +20,7 @@ on:
       - "009_miniature_camera/**"
       - "010_motion_quiz_camera/**"
       - "011_posture_analysis_tool/**"
+      - "012_karada_gakki/**"
       - ".github/workflows/deploy-face-effect-pages.yml"
   workflow_dispatch:
 
@@ -83,6 +84,7 @@ jobs:
           mkdir -p site/009_miniature_camera
           mkdir -p site/010_motion_quiz_camera
           mkdir -p site/011_posture_analysis_tool
+          mkdir -p site/012_karada_gakki
           cp index.html site/index.html
           cp index.xml site/index.xml
           cp -r assets/. site/assets/
@@ -97,6 +99,7 @@ jobs:
           cp -r 009_miniature_camera/. site/009_miniature_camera/
           cp -r 010_motion_quiz_camera/. site/010_motion_quiz_camera/
           cp -r 011_posture_analysis_tool/. site/011_posture_analysis_tool/
+          cp -r 012_karada_gakki/. site/012_karada_gakki/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
