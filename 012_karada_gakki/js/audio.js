@@ -64,23 +64,27 @@ export class AudioEngine {
     }));
   }
 
-  play(name) {
+  play(name, intensity = 1) {
     if (!this.context || this.context.state !== "running") return;
+    const output = this.context.createGain();
+    output.gain.value = Math.max(0, Math.min(1, intensity));
+    output.connect(this.master);
     const buffer = this.buffers.get(name);
     if (buffer) {
       const source = this.context.createBufferSource();
       source.buffer = buffer;
-      source.connect(this.master);
+      source.connect(output);
+      source.onended = () => output.disconnect();
       source.start();
       return;
     }
-    this.playSynth(name);
+    this.playSynth(name, output);
   }
 
-  playSynth(name) {
+  playSynth(name, output) {
     const ctx = this.context;
     const now = ctx.currentTime;
-    if (NOTES[name]) return this.tone(NOTES[name], now, 0.5, "triangle");
+    if (NOTES[name]) return this.tone(NOTES[name], now, 0.5, "triangle", output);
     if (name === "kick") {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -88,22 +92,22 @@ export class AudioEngine {
       osc.frequency.exponentialRampToValueAtTime(42, now + 0.16);
       gain.gain.setValueAtTime(0.9, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-      osc.connect(gain).connect(this.master); osc.start(now); osc.stop(now + 0.23); return;
+      osc.connect(gain).connect(output); osc.onended = () => output.disconnect(); osc.start(now); osc.stop(now + 0.23); return;
     }
-    if (name === "tom") return this.tone(115, now, 0.22, "sine");
-    this.noise(now, name === "crash" ? 0.6 : name === "hihat" ? 0.08 : 0.16, name);
+    if (name === "tom") return this.tone(115, now, 0.22, "sine", output);
+    this.noise(now, name === "crash" ? 0.6 : name === "hihat" ? 0.08 : 0.16, name, output);
   }
 
-  tone(frequency, now, duration, type) {
+  tone(frequency, now, duration, type, output) {
     const osc = this.context.createOscillator();
     const gain = this.context.createGain();
     osc.type = type; osc.frequency.value = frequency;
     gain.gain.setValueAtTime(0.48, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-    osc.connect(gain).connect(this.master); osc.start(now); osc.stop(now + duration);
+    osc.connect(gain).connect(output); osc.onended = () => output.disconnect(); osc.start(now); osc.stop(now + duration);
   }
 
-  noise(now, duration, kind) {
+  noise(now, duration, kind, output) {
     const length = Math.ceil(this.context.sampleRate * duration);
     const buffer = this.context.createBuffer(1, length, this.context.sampleRate);
     const data = buffer.getChannelData(0);
@@ -116,6 +120,6 @@ export class AudioEngine {
     filter.frequency.value = kind === "crash" ? 3200 : 6500;
     gain.gain.setValueAtTime(kind === "hihat" ? 0.25 : 0.42, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-    source.connect(filter).connect(gain).connect(this.master); source.start(now);
+    source.connect(filter).connect(gain).connect(output); source.onended = () => output.disconnect(); source.start(now);
   }
 }

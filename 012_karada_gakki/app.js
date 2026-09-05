@@ -3,7 +3,7 @@ import { AudioEngine, SOUND_LABELS } from "./js/audio.js";
 import { ActionDetector } from "./js/actionDetector.js";
 import { FaceMode, FACE_THRESHOLDS } from "./js/faceMode.js";
 import { BodyMode, BODY_THRESHOLDS } from "./js/bodyMode.js";
-import { ACTIONS, PRESETS, SOUND_OPTIONS, loadSettings, saveSettings, scaledThreshold } from "./js/settings.js";
+import { ACTIONS, PRESETS, SOUND_OPTIONS, createDefaultSensitivities, loadSettings, saveSettings, scaledThreshold } from "./js/settings.js";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -13,10 +13,10 @@ const ui = {
   startButton: $("#startButton"), startStatus: $("#startStatus"), backButton: $("#backButton"),
   settingsButton: $("#settingsButton"), settings: $("#settingsDialog"), trackingText: $("#trackingText"),
   trackingDot: $("#trackingDot"), modeLabel: $("#modeLabel"), modeHint: $("#modeHint"),
-  lastSound: $("#lastSound"), lastAction: $("#lastAction"), noteBurst: $("#noteBurst"),
+  lastSound: $("#lastSound"), lastAction: $("#lastAction"), lastIntensity: $("#lastIntensity"), noteBurst: $("#noteBurst"),
   gestureStrip: $("#gestureStrip"), debugToggle: $("#debugToggle"), debugPanel: $("#debugPanel"),
-  debugFps: $("#debugFps"), debugScores: $("#debugScores"), debugLog: $("#debugLog"),
-  preset: $("#presetSelect"), sensitivity: $("#sensitivityRange"), sensitivityValue: $("#sensitivityValue"),
+  debugRecognition: $("#debugRecognition"), debugFps: $("#debugFps"), debugScores: $("#debugScores"), debugLog: $("#debugLog"),
+  preset: $("#presetSelect"), sensitivityList: $("#sensitivityList"), resetSensitivity: $("#resetSensitivityButton"),
   cooldown: $("#cooldownRange"), cooldownValue: $("#cooldownValue"), volume: $("#volumeRange"),
   volumeValue: $("#volumeValue"), assignments: $("#assignmentList"),
 };
@@ -40,6 +40,7 @@ let actionStates = {};
 function setTracking(text, state = "") {
   ui.trackingText.textContent = text;
   ui.trackingDot.className = state;
+  if (!ui.debugPanel.hidden) ui.debugRecognition.textContent = `認識データ · ${text}`;
 }
 
 function resizeCanvas() {
@@ -66,7 +67,7 @@ function renderGestureStrip() {
   [...ui.gestureStrip.children].forEach((item) => item.classList.toggle("active", actionStates[item.dataset.action]?.phase === "active"));
 }
 
-function renderDebug(scores = {}, thresholds = {}) {
+function renderDebug(scores = {}, thresholds = {}, motion = {}) {
   const currentKeys = [...ui.debugScores.children].map((item) => item.dataset.action).join(",");
   const nextKeys = ACTIONS[mode].map(([key]) => key).join(",");
   if (currentKeys !== nextKeys) {
@@ -75,7 +76,13 @@ function renderDebug(scores = {}, thresholds = {}) {
       row.className = "debug-score"; row.dataset.action = key;
       const name = document.createElement("span"); name.textContent = label;
       const value = document.createElement("b");
-      row.append(name, value); return row;
+      row.append(name, value);
+      if (mode === "body") {
+        const motionValue = document.createElement("small");
+        motionValue.className = "debug-motion";
+        row.append(motionValue);
+      }
+      return row;
     }));
   }
   [...ui.debugScores.children].forEach((row) => {
@@ -83,16 +90,32 @@ function renderDebug(scores = {}, thresholds = {}) {
     const state = actionStates[key] || { phase: "inactive" };
     row.classList.toggle("on", state.phase === "active");
     row.querySelector("b").textContent = `${(scores[key] || 0).toFixed(2)} / ${(thresholds[key] || 0).toFixed(2)} · ${state.phase}`;
+    const motionValue = row.querySelector(".debug-motion");
+    if (motionValue) {
+      const values = motion[key] || { speed: 0, volume: 0.25 };
+      motionValue.textContent = `SPD ${values.speed.toFixed(2)}  ·  VOL ${values.volume.toFixed(2)}`;
+    }
   });
 }
 
-function triggerSound(actionKey) {
+function triggerSound(actionKey, motion = null) {
   const sound = settings.assignments[mode][actionKey];
-  audio.play(sound);
+  const speed = mode === "body" ? motion?.speed || 0 : 0;
+  const intensity = mode === "body" ? motion?.volume ?? 0.25 : 1;
+  audio.play(sound, intensity);
   const label = ACTIONS[mode].find(([key]) => key === actionKey)?.[1] || actionKey;
   ui.lastSound.textContent = SOUND_LABELS[sound] || sound;
   ui.lastAction.textContent = label;
-  ui.debugLog.textContent = `発音ログ: ${new Date().toLocaleTimeString("ja-JP")} / ${label} → ${SOUND_LABELS[sound]}`;
+  ui.lastIntensity.textContent = mode === "body" ? `強さ ${Math.round(intensity * 100)}%` : "固定音量";
+  ui.debugLog.textContent = `発音ログ: ${new Date().toLocaleTimeString("ja-JP")} / ${label} → ${SOUND_LABELS[sound]} / velocity ${speed.toFixed(2)} / volume ${intensity.toFixed(2)}`;
+  const chip = ui.gestureStrip.querySelector(`[data-action="${actionKey}"]`);
+  if (chip) {
+    chip.style.setProperty("--hit-glow", `${Math.round(5 + 14 * intensity)}px`);
+    chip.style.setProperty("--hit-alpha", (0.16 + 0.48 * intensity).toFixed(2));
+    chip.classList.remove("hit");
+    void chip.offsetWidth;
+    chip.classList.add("hit");
+  }
   ui.noteBurst.classList.remove("play");
   void ui.noteBurst.offsetWidth;
   ui.noteBurst.classList.add("play");
@@ -129,19 +152,30 @@ async function switchMode(nextMode) {
 
 function processResult(result, now) {
   const bases = mode === "face" ? FACE_THRESHOLDS : BODY_THRESHOLDS;
-  const thresholds = Object.fromEntries(Object.entries(bases).map(([key, value]) => [key, scaledThreshold(value, settings.sensitivity)]));
+  const thresholds = Object.fromEntries(Object.entries(bases).map(([key, value]) => [
+    key,
+    scaledThreshold(value, settings.sensitivities[mode][key]),
+  ]));
+  const scores = { ...result.scores };
+  // 両手の現在の個別感度を尊重しつつ、成立時はCrashだけを優先する。
+  if (mode === "body" && scores.bothHands >= thresholds.bothHands) {
+    scores.leftHand = 0;
+    scores.rightHand = 0;
+  }
   if (result.detected) {
     setTracking(mode === "face" ? "顔を認識中" : "体を認識中", "ready");
     for (const [key] of ACTIONS[mode]) {
-      const status = detector.update(key, result.scores[key] || 0, thresholds[key], now);
+      const status = detector.update(key, scores[key] || 0, thresholds[key], now);
+      status.speed = result.motion?.[key]?.speed || 0;
+      status.volume = result.motion?.[key]?.volume ?? (mode === "body" ? 0.25 : 1);
       actionStates[key] = status;
-      if (status.triggered) triggerSound(key);
+      if (status.triggered) triggerSound(key, result.motion?.[key]);
     }
   } else {
     setTracking(mode === "face" ? "顔を探しています" : "全身を探しています");
   }
   renderGestureStrip();
-  if (!ui.debugPanel.hidden) renderDebug(result.scores, thresholds);
+  if (!ui.debugPanel.hidden) renderDebug(scores, thresholds, result.motion);
 }
 
 function renderFrame(now) {
@@ -172,7 +206,7 @@ function renderFrame(now) {
   fpsFrames++;
   if (now - fpsStartedAt >= 1000) {
     currentFps = Math.round(fpsFrames * 1000 / (now - fpsStartedAt));
-    ui.debugFps.textContent = `${currentFps} FPS / ${mode === "face" ? "FACE" : "POSE"}`;
+    if (!ui.debugPanel.hidden) ui.debugFps.textContent = `${currentFps} FPS / ${mode === "face" ? "FACE" : "POSE"}`;
     fpsFrames = 0; fpsStartedAt = now;
   }
 }
@@ -235,11 +269,43 @@ function renderAssignments() {
 
 function renderSettings() {
   ui.preset.value = ["drum", "piano", "effect"].includes(settings.preset) ? settings.preset : "drum";
-  ui.sensitivity.value = settings.sensitivity; ui.sensitivityValue.textContent = settings.sensitivity;
   ui.cooldown.value = settings.cooldown; ui.cooldownValue.textContent = `${settings.cooldown} ms`;
   ui.volume.value = settings.volume; ui.volumeValue.textContent = `${settings.volume}%`;
   detector.setCooldown(settings.cooldown);
+  renderSensitivityControls();
   renderAssignments();
+}
+
+function renderSensitivityControls() {
+  ui.sensitivityList.replaceChildren(...["face", "body"].map((selectedMode) => {
+    const group = document.createElement("details");
+    group.className = "sensitivity-group";
+    group.open = selectedMode === mode;
+    const summary = document.createElement("summary");
+    summary.textContent = selectedMode === "face" ? "顔モード" : "体モード";
+    const items = document.createElement("div");
+    items.className = "sensitivity-items";
+
+    ACTIONS[selectedMode].forEach(([key, label]) => {
+      const row = document.createElement("label");
+      row.className = "action-sensitivity";
+      const heading = document.createElement("span");
+      const name = document.createElement("b"); name.textContent = label;
+      const value = document.createElement("output"); value.textContent = `感度 ${settings.sensitivities[selectedMode][key]}`;
+      const slider = document.createElement("input");
+      slider.type = "range"; slider.min = "0"; slider.max = "100"; slider.step = "1";
+      slider.value = settings.sensitivities[selectedMode][key];
+      slider.setAttribute("aria-label", `${label}の感度`);
+      slider.addEventListener("input", () => {
+        settings.sensitivities[selectedMode][key] = Number(slider.value);
+        value.textContent = `感度 ${slider.value}`;
+      });
+      slider.addEventListener("change", () => saveSettings(settings));
+      heading.append(name, value); row.append(heading, slider); items.append(row);
+    });
+    group.append(summary, items);
+    return group;
+  }));
 }
 
 ui.startButton.addEventListener("click", startApp);
@@ -249,6 +315,7 @@ ui.debugToggle.addEventListener("click", () => {
   ui.debugPanel.hidden = !ui.debugPanel.hidden;
   ui.debugToggle.setAttribute("aria-pressed", String(!ui.debugPanel.hidden));
   ui.debugToggle.querySelector("b").textContent = ui.debugPanel.hidden ? "OFF" : "ON";
+  if (!ui.debugPanel.hidden) ui.debugRecognition.textContent = `認識データ · ${ui.trackingText.textContent}`;
 });
 
 $$('.mode-card input').forEach((input) => input.addEventListener("change", () => {
@@ -261,7 +328,12 @@ ui.preset.addEventListener("change", () => {
   settings.assignments = JSON.parse(JSON.stringify(PRESETS[settings.preset]));
   saveSettings(settings); renderAssignments();
 });
-ui.sensitivity.addEventListener("input", () => { settings.sensitivity = Number(ui.sensitivity.value); ui.sensitivityValue.textContent = settings.sensitivity; saveSettings(settings); });
+ui.resetSensitivity.addEventListener("click", () => {
+  if (!window.confirm("顔・体すべての感度を初期値に戻しますか？")) return;
+  settings.sensitivities = createDefaultSensitivities();
+  saveSettings(settings);
+  renderSensitivityControls();
+});
 ui.cooldown.addEventListener("input", () => { settings.cooldown = Number(ui.cooldown.value); ui.cooldownValue.textContent = `${settings.cooldown} ms`; detector.setCooldown(settings.cooldown); saveSettings(settings); });
 ui.volume.addEventListener("input", () => { settings.volume = Number(ui.volume.value); ui.volumeValue.textContent = `${settings.volume}%`; audio.setVolume(settings.volume / 100); saveSettings(settings); });
 

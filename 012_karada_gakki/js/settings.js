@@ -26,11 +26,34 @@ export const PRESETS = {
 
 export const SOUND_OPTIONS = ["kick", "snare", "hihat", "clap", "tom", "crash", "c4", "d4", "e4", "g4"];
 
+export const DEFAULT_SENSITIVITIES = Object.freeze({
+  face: Object.freeze({ mouthOpen: 50, winkLeft: 50, winkRight: 50, smile: 50, tiltLeft: 50, tiltRight: 50 }),
+  body: Object.freeze({ leftHand: 50, rightHand: 50, bothHands: 50, leftLeg: 50, rightLeg: 50 }),
+});
+
+export function createDefaultSensitivities() {
+  return JSON.parse(JSON.stringify(DEFAULT_SENSITIVITIES));
+}
+
 export function loadSettings() {
-  const fallback = { preset: "drum", sensitivity: 50, cooldown: 200, volume: 80, assignments: JSON.parse(JSON.stringify(PRESETS.drum)) };
+  const fallback = { preset: "drum", cooldown: 200, volume: 80, assignments: JSON.parse(JSON.stringify(PRESETS.drum)), sensitivities: createDefaultSensitivities() };
   try {
     const saved = JSON.parse(localStorage.getItem("karada-gakki-settings"));
-    return saved ? { ...fallback, ...saved, assignments: { ...fallback.assignments, ...saved.assignments } } : fallback;
+    if (!saved) return fallback;
+    // 旧版の全体感度がある場合は、初回だけ全アクションへ引き継ぐ。
+    const legacySensitivity = Number.isFinite(saved.sensitivity) ? saved.sensitivity : 50;
+    const sensitivities = createDefaultSensitivities();
+    for (const selectedMode of Object.keys(sensitivities)) {
+      for (const key of Object.keys(sensitivities[selectedMode])) {
+        sensitivities[selectedMode][key] = saved.sensitivities?.[selectedMode]?.[key] ?? legacySensitivity;
+      }
+    }
+    return {
+      ...fallback,
+      ...saved,
+      assignments: { ...fallback.assignments, ...saved.assignments },
+      sensitivities,
+    };
   } catch (_) { return fallback; }
 }
 

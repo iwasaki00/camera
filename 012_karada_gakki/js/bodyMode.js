@@ -1,10 +1,14 @@
 import { POSE_MODEL, getFileset, getVision } from "./vision.js";
+import { MotionTracker, velocityToVolume } from "./motionTracker.js";
 
 const clamp = (value) => Math.max(0, Math.min(1, value));
 const visible = (point) => (point?.visibility ?? 1) > 0.45;
 
 export class BodyMode {
-  constructor() { this.landmarker = null; }
+  constructor() {
+    this.landmarker = null;
+    this.motionTracker = new MotionTracker();
+  }
 
   async init() {
     const [{ PoseLandmarker }, fileset] = await Promise.all([getVision(), getFileset()]);
@@ -27,16 +31,36 @@ export class BodyMode {
   detect(video, now) {
     const result = this.landmarker?.detectForVideo(video, now);
     const p = result?.landmarks?.[0];
-    if (!p) return { detected: false, landmarks: null, scores: {} };
+    if (!p) {
+      this.motionTracker.reset();
+      return { detected: false, landmarks: null, scores: {}, motion: {} };
+    }
+
+    const track = (name, index) => this.motionTracker.update(
+      name,
+      p[index].x,
+      p[index].y,
+      now,
+      p[index].visibility ?? 1,
+    );
+    const leftHandSpeed = track("leftHand", 15);
+    const rightHandSpeed = track("rightHand", 16);
+    const leftLegSpeed = track("leftLeg", 27);
+    const rightLegSpeed = track("rightLeg", 28);
+    const speeds = {
+      leftHand: leftHandSpeed,
+      rightHand: rightHandSpeed,
+      bothHands: Math.max(leftHandSpeed, rightHandSpeed),
+      leftLeg: leftLegSpeed,
+      rightLeg: rightLegSpeed,
+    };
 
     const torso = Math.max(0.08, Math.abs(((p[23].y + p[24].y) / 2) - ((p[11].y + p[12].y) / 2)));
     const handScore = (wrist, shoulder) => visible(p[wrist]) && visible(p[shoulder])
       ? clamp((p[shoulder].y - p[wrist].y) / torso * 0.85 + 0.3) : 0;
-    let leftHand = handScore(15, 11);
-    let rightHand = handScore(16, 12);
+    const leftHand = handScore(15, 11);
+    const rightHand = handScore(16, 12);
     const bothHands = Math.min(leftHand, rightHand);
-    // 両手成立中は両手アクションだけを優先し、3音同時発音を避ける。
-    if (bothHands >= 0.55) { leftHand = 0; rightHand = 0; }
 
     const legScore = (knee, ankle, otherKnee, otherAnkle) => {
       if (![knee, ankle, otherKnee, otherAnkle].every((i) => visible(p[i]))) return 0;
@@ -52,6 +76,10 @@ export class BodyMode {
         leftLeg: legScore(25, 27, 26, 28),
         rightLeg: legScore(26, 28, 25, 27),
       },
+      motion: Object.fromEntries(Object.entries(speeds).map(([key, speed]) => [key, {
+        speed,
+        volume: velocityToVolume(speed),
+      }])),
     };
   }
 
@@ -76,7 +104,11 @@ export class BodyMode {
     });
   }
 
-  close() { this.landmarker?.close(); this.landmarker = null; }
+  close() {
+    this.landmarker?.close();
+    this.landmarker = null;
+    this.motionTracker.reset();
+  }
 }
 
 export const BODY_THRESHOLDS = {

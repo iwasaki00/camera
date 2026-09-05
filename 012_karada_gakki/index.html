@@ -68,6 +68,7 @@
           <small>LAST SOUND</small>
           <strong id="lastSound">—</strong>
           <span id="lastAction">動いて音を鳴らそう</span>
+          <span id="lastIntensity" class="last-intensity">強さ —</span>
         </div>
       </div>
 
@@ -78,7 +79,7 @@
           <button id="debugToggle" type="button" aria-pressed="true">DEBUG <b>ON</b></button>
         </div>
         <section id="debugPanel" class="debug-panel" aria-label="デバッグ情報">
-          <header><span>認識データ</span><span id="debugFps">0 FPS</span></header>
+          <header><span id="debugRecognition">認識データ · 待機中</span><span id="debugFps">0 FPS</span></header>
           <div id="debugScores" class="debug-scores"></div>
           <footer id="debugLog">発音ログ: —</footer>
         </section>
@@ -90,9 +91,9 @@
     <form method="dialog">
       <header><div><small>SOUND CONTROL</small><h2>演奏設定</h2></div><button value="close" aria-label="設定を閉じる">×</button></header>
       <label class="setting-row"><span><b>プリセット</b><small>音の組み合わせ</small></span><select id="presetSelect"><option value="drum">Drum</option><option value="piano">Piano</option><option value="effect">Effect</option></select></label>
-      <label class="setting-range"><span><b>感度</b><output id="sensitivityValue">50</output></span><input id="sensitivityRange" type="range" min="0" max="100" value="50"></label>
       <label class="setting-range"><span><b>クールダウン</b><output id="cooldownValue">200 ms</output></span><input id="cooldownRange" type="range" min="100" max="1000" step="50" value="200"></label>
       <label class="setting-range"><span><b>音量</b><output id="volumeValue">80%</output></span><input id="volumeRange" type="range" min="0" max="100" value="80"></label>
+      <section class="sensitivities"><div class="section-title"><div><h3>動作ごとの感度</h3><small>高いほど小さな動きで反応します</small></div><button id="resetSensitivityButton" type="button">初期値に戻す</button></div><div id="sensitivityList"></div></section>
       <section class="assignments"><h3>動作ごとの音</h3><div id="assignmentList"></div></section>
       <button class="done-button" value="close">設定を保存して戻る</button>
     </form>
