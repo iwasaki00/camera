@@ -1,62 +1,26 @@
 let activeStream = null;
 
-function waitForVideoReady(videoElement, timeoutMs = 4000) {
-  if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
-    return Promise.resolve(true);
-  }
-
-  return new Promise((resolve) => {
-    const timeoutId = window.setTimeout(() => {
-      cleanup();
-      resolve(false);
-    }, timeoutMs);
-
-    const handleReady = () => {
-      cleanup();
-      resolve(true);
-    };
-
-    const cleanup = () => {
-      window.clearTimeout(timeoutId);
-      videoElement.removeEventListener("loadedmetadata", handleReady);
-      videoElement.removeEventListener("loadeddata", handleReady);
-      videoElement.removeEventListener("canplay", handleReady);
-      videoElement.removeEventListener("playing", handleReady);
-    };
-
-    videoElement.addEventListener("loadedmetadata", handleReady, { once: true });
-    videoElement.addEventListener("loadeddata", handleReady, { once: true });
-    videoElement.addEventListener("canplay", handleReady, { once: true });
-    videoElement.addEventListener("playing", handleReady, { once: true });
-  });
+function stopTracks(stream) {
+  if (!stream) return;
+  for (const track of stream.getTracks()) track.stop();
 }
 
-function stopTracks(stream) {
-  if (!stream) {
-    return;
-  }
-
-  for (const track of stream.getTracks()) {
-    track.stop();
-  }
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 export function isCameraSupported() {
-  return Boolean(
-    navigator.mediaDevices &&
-    typeof navigator.mediaDevices.getUserMedia === "function"
-  );
+  return Boolean(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function");
 }
 
 export async function startCamera(videoElement) {
   if (!isCameraSupported()) {
-    throw new Error("\u30ab\u30e1\u30e9\u3092\u5229\u7528\u3067\u304d\u307e\u305b\u3093\u3002iPhone Safari \u3067 HTTPS \u30da\u30fc\u30b8\u3068\u3057\u3066\u958b\u3044\u3066\u304f\u3060\u3055\u3044\u3002");
+    throw new Error("カメラを利用できません。iPhone SafariでHTTPSページとして開いてください。");
   }
 
   stopTracks(activeStream);
   activeStream = null;
-
-  const constraints = {
+  const preferredConstraints = {
     audio: false,
     video: {
       facingMode: { ideal: "environment" },
@@ -65,16 +29,12 @@ export async function startCamera(videoElement) {
     }
   };
 
-  console.log("[camera] requesting camera", constraints);
-
+  console.log("[camera] requesting camera", preferredConstraints);
   try {
-    activeStream = await navigator.mediaDevices.getUserMedia(constraints);
-  } catch (error) {
-    console.warn("[camera] preferred constraints failed", error);
-    activeStream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: true
-    });
+    activeStream = await navigator.mediaDevices.getUserMedia(preferredConstraints);
+  } catch (preferredError) {
+    console.warn("[camera] preferred constraints failed; retrying with default video", preferredError);
+    activeStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
   }
 
   videoElement.autoplay = true;
@@ -89,44 +49,104 @@ export async function startCamera(videoElement) {
   try {
     const playPromise = videoElement.play();
     if (playPromise && typeof playPromise.catch === "function") {
-      playPromise.catch((error) => {
-        console.warn("[camera] play() rejected but continuing with metadata wait", error);
-      });
+      playPromise.catch((error) => console.warn("[camera] play() rejected; stream remains available", error));
     }
   } catch (error) {
-    console.warn("[camera] play() threw synchronously", error);
+    console.warn("[camera] play() threw; stream remains available", error);
   }
 
-  waitForVideoReady(videoElement).then((becameReady) => {
-    if (!becameReady) {
-      console.warn("[camera] video readiness timeout; stream is active but metadata is delayed");
-      return;
-    }
-    console.log("[camera] video metadata became ready");
-  });
-
-  console.log("[camera] stream started", activeStream);
-
+  console.log("[camera] stream attached; capture UI may be enabled", activeStream);
   return activeStream;
 }
 
-export function captureFrame(videoElement, canvasElement) {
-  if (!videoElement.videoWidth || !videoElement.videoHeight) {
-    throw new Error("\u30ab\u30e1\u30e9\u6620\u50cf\u306e\u6e96\u5099\u304c\u307e\u3060\u5b8c\u4e86\u3057\u3066\u3044\u307e\u305b\u3093\u3002");
+export function hasLiveCameraStream(videoElement) {
+  const stream = videoElement?.srcObject;
+  if (!stream || typeof stream.getVideoTracks !== "function") return false;
+  return stream.getVideoTracks().some((track) => track.readyState === "live");
+}
+
+export function getCoverSourceRect(videoElement, guideElement) {
+  const videoWidth = videoElement.videoWidth;
+  const videoHeight = videoElement.videoHeight;
+  if (!videoWidth || !videoHeight) {
+    throw new Error("カメラ映像の準備中です。少し待ってからもう一度「読み取り」を押してください。");
   }
 
-  canvasElement.width = videoElement.videoWidth;
-  canvasElement.height = videoElement.videoHeight;
+  const videoRect = videoElement.getBoundingClientRect();
+  const guideRect = guideElement.getBoundingClientRect();
+  if (!videoRect.width || !videoRect.height || !guideRect.width || !guideRect.height) {
+    throw new Error("画面上のガイド位置を取得できませんでした。");
+  }
 
-  const context = canvasElement.getContext("2d");
-  context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+  const coverScale = Math.max(videoRect.width / videoWidth, videoRect.height / videoHeight);
+  const renderedWidth = videoWidth * coverScale;
+  const renderedHeight = videoHeight * coverScale;
+  const cropLeft = (renderedWidth - videoRect.width) / 2;
+  const cropTop = (renderedHeight - videoRect.height) / 2;
+  const guideX = guideRect.left - videoRect.left;
+  const guideY = guideRect.top - videoRect.top;
+  const rawX = (guideX + cropLeft) / coverScale;
+  const rawY = (guideY + cropTop) / coverScale;
+  const rawWidth = guideRect.width / coverScale;
+  const rawHeight = guideRect.height / coverScale;
+  const sourceX = clamp(rawX, 0, videoWidth);
+  const sourceY = clamp(rawY, 0, videoHeight);
+  const sourceRight = clamp(rawX + rawWidth, 0, videoWidth);
+  const sourceBottom = clamp(rawY + rawHeight, 0, videoHeight);
+  const sourceWidth = sourceRight - sourceX;
+  const sourceHeight = sourceBottom - sourceY;
 
-  console.log("[camera] frame captured", {
-    width: canvasElement.width,
-    height: canvasElement.height
+  if (sourceWidth <= 0 || sourceHeight <= 0) {
+    throw new Error("ガイドがカメラ映像の外にあります。画面を再読み込みしてください。");
+  }
+
+  console.log("[camera] guide crop geometry", {
+    videoVideoWidth: videoWidth,
+    videoVideoHeight: videoHeight,
+    videoDisplayWidth: videoRect.width,
+    videoDisplayHeight: videoRect.height,
+    guideViewportRect: { left: guideRect.left, top: guideRect.top, width: guideRect.width, height: guideRect.height },
+    guideInVideoDisplay: { x: guideX, y: guideY, width: guideRect.width, height: guideRect.height },
+    objectFitCover: {
+      scale: coverScale,
+      renderedWidth,
+      renderedHeight,
+      cropLeft,
+      cropRight: cropLeft,
+      cropTop,
+      cropBottom: cropTop
+    },
+    sourceCrop: { x: sourceX, y: sourceY, width: sourceWidth, height: sourceHeight }
   });
 
-  return canvasElement.toDataURL("image/png");
+  return { x: sourceX, y: sourceY, width: sourceWidth, height: sourceHeight };
+}
+
+export function captureGuideArea(videoElement, guideElement, outputCanvas, outputSize = 900) {
+  const sourceRect = getCoverSourceRect(videoElement, guideElement);
+  const size = Math.max(1, Math.round(outputSize));
+  outputCanvas.width = size;
+  outputCanvas.height = size;
+  const context = outputCanvas.getContext("2d");
+  context.clearRect(0, 0, size, size);
+  context.drawImage(
+    videoElement,
+    sourceRect.x,
+    sourceRect.y,
+    sourceRect.width,
+    sourceRect.height,
+    0,
+    0,
+    size,
+    size
+  );
+
+  console.log("[camera] guide area captured", {
+    outputWidth: outputCanvas.width,
+    outputHeight: outputCanvas.height,
+    sourceCrop: sourceRect
+  });
+  return sourceRect;
 }
 
 export function stopCamera(videoElement) {
@@ -134,7 +154,6 @@ export function stopCamera(videoElement) {
     videoElement.pause();
     videoElement.srcObject = null;
   }
-
   stopTracks(activeStream);
   activeStream = null;
   console.log("[camera] stream stopped");

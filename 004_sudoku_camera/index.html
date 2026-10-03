@@ -3,93 +3,70 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Sudoku Camera OCR</title>
+  <title>ナンプレ カメラ読み取り</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">ナンプレ OCR テスト</p>
-      <h1>長方形トリミング + 9×9 分割 OCR</h1>
-      <p class="lead">
-        iPhone で安定して操作できることを優先し、撮影した盤面を長方形で切り出してから 9×9 に分割し、各マス中央だけを OCR します。
-      </p>
+      <p class="eyebrow">SUDOKU CAMERA</p>
+      <h1>ナンプレをガイドに合わせる</h1>
+      <p class="lead">盤面を正面から映し、外枠とマス目がガイドに重なるようにiPhoneを動かしてください。</p>
     </header>
 
-    <section class="panel">
-      <h2>操作順</h2>
-      <ol class="stepList">
-        <li>1. カメラ開始</li>
-        <li>2. 撮影</li>
-        <li>3. 長方形の範囲を調整</li>
-        <li>4. この範囲を確定</li>
-        <li>5. 9×9分割OCR実行</li>
-        <li>6. OCR結果を手修正</li>
-        <li>7. 解く</li>
-      </ol>
-    </section>
-
-    <section class="panel">
-      <h2>1. カメラ開始</h2>
-      <video id="cameraPreview" class="preview" playsinline autoplay muted></video>
-      <button id="startCameraButton" class="primary" type="button">カメラ開始</button>
-      <button id="captureButton" class="secondary" type="button" disabled>撮影</button>
-    </section>
-
-    <section class="panel">
-      <h2>2. トリミング範囲</h2>
-      <p class="panelCopy">
-        枠の内側をドラッグすると移動、四隅と辺のマーカーをドラッグするとサイズ変更できます。
-      </p>
-      <div class="canvasStack">
-        <canvas id="captureCanvas" class="captureCanvas" aria-label="撮影画像"></canvas>
-        <canvas id="cropOverlayCanvas" class="overlayCanvas" aria-label="トリミング編集"></canvas>
+    <section id="cameraSection" class="panel" aria-labelledby="cameraHeading">
+      <div class="sectionHeading">
+        <div>
+          <p class="stepLabel">STEP 1</p>
+          <h2 id="cameraHeading">カメラで盤面を合わせる</h2>
+        </div>
+        <span id="cameraState" class="stateBadge">未起動</span>
       </div>
-      <button id="cropButton" class="primary" type="button" disabled>この範囲を確定</button>
-    </section>
 
-    <section class="panel">
-      <h2>3. 切り出し画像</h2>
-      <canvas id="croppedCanvas" class="captureCanvas squareCanvas" aria-label="切り出し画像"></canvas>
-    </section>
-
-    <section class="panel">
-      <h2>4. OCR設定</h2>
-      <div class="sliderGroup">
-        <label class="sliderLabel" for="innerCropRange">
-          外周カット率
-          <span id="innerCropValue">20%</span>
-        </label>
-        <input id="innerCropRange" class="slider" type="range" min="10" max="35" step="1" value="20">
+      <div id="cameraStage" class="cameraStage">
+        <video id="cameraPreview" class="preview" playsinline autoplay muted></video>
+        <div id="cameraGuide" class="sudokuGuide" aria-hidden="true">
+          <div class="gridLines"></div>
+        </div>
+        <div class="cameraPlaceholder" id="cameraPlaceholder">
+          <span>カメラを開始してください</span>
+        </div>
       </div>
-      <p class="panelCopy">
-        各マスの外周を除外し、中央部分だけを OCR します。
-      </p>
-      <button id="runOcrButton" class="primary" type="button" disabled>9×9分割OCR実行</button>
-      <p id="statusMessage" class="status" role="status" aria-live="polite">
-        1. カメラ開始 → 2. 撮影 → 3. 枠調整 → 4. この範囲を確定 → 5. OCR実行
-      </p>
-    </section>
 
-    <section class="panel">
-      <h2>5. OCR結果 9×9</h2>
-      <div id="resultGrid" class="resultGrid" aria-label="OCR結果9×9"></div>
-      <div class="actions">
-        <button id="solveButton" class="primary" type="button">解く</button>
-        <button id="clearButton" class="secondary" type="button">クリア</button>
+      <p class="guideInstruction">ナンプレの外枠とマス目を<br>ガイドに合わせてください</p>
+
+      <div class="buttonStack">
+        <button id="startCameraButton" class="secondary" type="button">カメラ開始</button>
+        <button id="captureButton" class="primary captureButton" type="button" disabled>読み取り</button>
       </div>
     </section>
 
-    <section class="panel">
-      <h2>6. デバッグ用各マス画像</h2>
-      <p class="panelCopy">
-        OCR に使った各マス中央の画像です。誤認識時の確認に使えます。
-      </p>
-      <div id="debugGrid" class="debugGrid" aria-label="デバッグ用各マス画像"></div>
+    <section id="resultSection" class="panel" aria-labelledby="resultHeading" hidden>
+      <div class="sectionHeading">
+        <div>
+          <p class="stepLabel">STEP 2</p>
+          <h2 id="resultHeading">切り出し結果を確認</h2>
+        </div>
+        <span class="stateBadge success">撮影済み</span>
+      </div>
+
+      <p class="panelCopy">ガイド内に見えていた盤面が、そのまま正方形に切り出されているか確認してください。</p>
+
+      <div class="resultStage">
+        <canvas id="croppedCanvas" aria-label="ガイド内から切り出した画像"></canvas>
+        <div class="resultGuide sudokuGuide" aria-hidden="true">
+          <div class="gridLines"></div>
+        </div>
+      </div>
+
+      <button id="retakeButton" class="secondary" type="button">再撮影</button>
     </section>
+
+    <p id="statusMessage" class="status" role="status" aria-live="polite">
+      「カメラ開始」を押して、背面カメラの使用を許可してください。
+    </p>
   </main>
 
-  <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
