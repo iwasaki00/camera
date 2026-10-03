@@ -9,7 +9,7 @@
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">SUDOKU CAMERA · v0.2.0</p>
+      <p class="eyebrow">SUDOKU CAMERA · v0.3.0</p>
       <h1>ナンプレをガイドに合わせる</h1>
       <p class="lead">盤面を正面から映し、外枠とマス目がガイドに重なるようにiPhoneを動かしてください。</p>
     </header>
@@ -92,6 +92,18 @@
         <p id="cellViewHelp" class="panelCopy">元セルとOCR対象セルを並べて表示しています。セルをタップすると拡大できます。</p>
         <div id="cellList" class="cellList" aria-label="81セル比較一覧"></div>
         <div id="boardGrid" class="boardGrid" aria-label="9×9セル配置" hidden></div>
+
+        <section class="ocrHistorySection" aria-labelledby="ocrHistoryHeading">
+          <div class="historyHeading">
+            <div>
+              <p class="stepLabel">SINGLE CELL OCR</p>
+              <h2 id="ocrHistoryHeading">OCRテスト履歴</h2>
+            </div>
+            <span id="historyCount" class="stateBadge">0件</span>
+          </div>
+          <p id="emptyHistoryMessage" class="panelCopy">セルを拡大し、「このセルをOCR」を押すと結果がここに追加されます。</p>
+          <ol id="ocrHistory" class="ocrHistory" aria-label="OCRテスト履歴"></ol>
+        </section>
       </div>
     </section>
 
@@ -115,14 +127,61 @@
           <canvas id="modalOriginalCanvas"></canvas>
         </figure>
         <figure>
-          <figcaption>OCR対象セル</figcaption>
+          <figcaption>A：外周除外後</figcaption>
           <canvas id="modalInnerCanvas"></canvas>
         </figure>
       </div>
       <p id="modalCropInfo" class="modalCropInfo"></p>
+
+      <section class="ocrTestPanel" aria-labelledby="ocrTestHeading">
+        <div>
+          <p class="stepLabel">ONE CHARACTER OCR</p>
+          <h3 id="ocrTestHeading">1セルOCRテスト</h3>
+        </div>
+
+        <div class="preprocessControl" role="group" aria-label="OCR前処理">
+          <button id="preprocessOnButton" class="viewButton active" type="button" aria-pressed="true">前処理あり</button>
+          <button id="preprocessOffButton" class="viewButton" type="button" aria-pressed="false">前処理なし</button>
+        </div>
+
+        <div class="ocrImageFlow">
+          <figure>
+            <figcaption>B：240px拡大画像</figcaption>
+            <canvas id="ocrScaledCanvas"></canvas>
+          </figure>
+          <figure>
+            <figcaption>C：実際のOCR入力</figcaption>
+            <canvas id="ocrInputCanvas"></canvas>
+          </figure>
+        </div>
+
+        <p id="preprocessDescription" class="preprocessDescription">グレースケール → コントラスト調整 → 二値化</p>
+        <button id="runSingleOcrButton" class="primary" type="button">このセルをOCR</button>
+        <p id="ocrProgress" class="ocrProgress" role="status" aria-live="polite">OCRはまだ実行していません。</p>
+
+        <dl class="ocrResultGrid">
+          <div class="rawResultRow">
+            <dt>OCR生結果</dt>
+            <dd><pre id="ocrRawResult">未実行</pre></dd>
+          </div>
+          <div>
+            <dt>整形後結果</dt>
+            <dd id="ocrNormalizedResult">未実行</dd>
+          </div>
+          <div>
+            <dt>confidence</dt>
+            <dd id="ocrConfidence">-</dd>
+          </div>
+          <div>
+            <dt>OCR処理時間</dt>
+            <dd id="ocrElapsedTime">-</dd>
+          </div>
+        </dl>
+      </section>
     </div>
   </div>
 
+  <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>

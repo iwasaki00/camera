@@ -59,7 +59,7 @@ button {
   margin-bottom: 14px;
 }
 
-.eyebrow, .stepLabel, h1, h2, p { margin: 0; }
+.eyebrow, .stepLabel, h1, h2, h3, p { margin: 0; }
 
 .eyebrow, .stepLabel {
   color: var(--accent);
@@ -78,6 +78,8 @@ h2 {
   margin-top: 3px;
   font-size: 1.13rem;
 }
+
+h3 { font-size: 1.05rem; }
 
 .lead, .panelCopy, .status {
   color: var(--muted);
@@ -502,6 +504,139 @@ button.closeButton {
   text-align: center;
 }
 
+.ocrTestPanel {
+  display: grid;
+  gap: 14px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.preprocessControl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #edf1ef;
+}
+
+.ocrImageFlow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.ocrImageFlow figure {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  min-width: 0;
+}
+
+.ocrImageFlow figcaption {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.ocrImageFlow canvas {
+  width: 100%;
+  aspect-ratio: 1;
+  display: block;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.preprocessDescription,
+.ocrProgress {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.ocrResultGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0;
+}
+
+.ocrResultGrid > div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f7faf8;
+}
+
+.ocrResultGrid .rawResultRow { grid-column: 1 / -1; }
+
+.ocrResultGrid dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.ocrResultGrid dd {
+  margin: 5px 0 0;
+  font-size: 1rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.ocrResultGrid pre {
+  margin: 0;
+  font: inherit;
+  white-space: pre-wrap;
+}
+
+[data-status="digit"] { color: var(--accent-dark); }
+[data-status="empty"] { color: var(--muted); }
+[data-status="multiple"] { color: #a44425; }
+
+.ocrHistorySection {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #f7faf8;
+}
+
+.historyHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ocrHistory {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ocrHistoryItem {
+  display: grid;
+  grid-template-columns: 0.7fr 0.8fr 1.4fr 0.7fr 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: #fff;
+  font-size: 0.76rem;
+}
+
+.historyPreprocess {
+  color: var(--muted);
+  text-align: right;
+}
+
 .status {
   min-height: 3.4em;
   padding: 4px 8px;
@@ -521,4 +656,11 @@ button.closeButton {
   .panel { padding: 12px; }
   .cellList { grid-template-columns: 1fr; }
   .modalCard { padding: 14px; }
+  .ocrHistoryItem {
+    grid-template-columns: 0.7fr 0.8fr 1.35fr 0.65fr;
+  }
+  .historyPreprocess {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
 }

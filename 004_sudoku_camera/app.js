@@ -1,5 +1,7 @@
 import { captureGuideArea, hasLiveCameraStream, startCamera, stopCamera } from "./camera.js";
 import { drawCellCrop, drawOriginalCell, splitBoardIntoCells } from "./gridOcr.js";
+import { recognizeSingleDigit, setOcrProgressListener } from "./ocr.js";
+import { OCR_INPUT_SIZE, prepareOcrImages } from "./ocrImage.js";
 
 const cameraSection = document.getElementById("cameraSection");
 const resultSection = document.getElementById("resultSection");
@@ -27,11 +29,27 @@ const modalOriginalCanvas = document.getElementById("modalOriginalCanvas");
 const modalInnerCanvas = document.getElementById("modalInnerCanvas");
 const modalCropInfo = document.getElementById("modalCropInfo");
 const closeModalButton = document.getElementById("closeModalButton");
+const preprocessOnButton = document.getElementById("preprocessOnButton");
+const preprocessOffButton = document.getElementById("preprocessOffButton");
+const preprocessDescription = document.getElementById("preprocessDescription");
+const ocrScaledCanvas = document.getElementById("ocrScaledCanvas");
+const ocrInputCanvas = document.getElementById("ocrInputCanvas");
+const runSingleOcrButton = document.getElementById("runSingleOcrButton");
+const ocrProgress = document.getElementById("ocrProgress");
+const ocrRawResult = document.getElementById("ocrRawResult");
+const ocrNormalizedResult = document.getElementById("ocrNormalizedResult");
+const ocrConfidence = document.getElementById("ocrConfidence");
+const ocrElapsedTime = document.getElementById("ocrElapsedTime");
+const ocrHistory = document.getElementById("ocrHistory");
+const historyCount = document.getElementById("historyCount");
+const emptyHistoryMessage = document.getElementById("emptyHistoryMessage");
 
 let cells = [];
 let cellViews = [];
 let selectedCellIndex = null;
 let modalReturnTarget = null;
+let preprocessEnabled = true;
+let historyEntries = 0;
 
 function setStatus(message) {
   statusMessage.textContent = message;
@@ -124,6 +142,114 @@ function renderModalCell(index) {
   drawOriginalCell(croppedCanvas, cell, modalOriginalCanvas);
   drawCellCrop(croppedCanvas, cell, modalInnerCanvas);
   modalCropInfo.textContent = `元セル ${cell.originalWidth}×${cell.originalHeight}px ／ OCR対象 ${cell.sourceWidth}×${cell.sourceHeight}px ／ 外周 ${innerCropRange.value}% 除外`;
+  prepareSelectedCellOcrImages();
+  resetOcrResult();
+}
+
+function prepareSelectedCellOcrImages() {
+  prepareOcrImages(modalInnerCanvas, ocrScaledCanvas, ocrInputCanvas, preprocessEnabled);
+  preprocessDescription.textContent = preprocessEnabled
+    ? `A：外周除外 → B：${OCR_INPUT_SIZE}px拡大 → C：グレースケール・コントラスト調整・二値化`
+    : `A：外周除外 → B：${OCR_INPUT_SIZE}px拡大 → C：前処理なし（Bと同じ画像）`;
+}
+
+function resetOcrResult() {
+  ocrProgress.textContent = "OCRはまだ実行していません。";
+  ocrRawResult.textContent = "未実行";
+  ocrNormalizedResult.textContent = "未実行";
+  ocrNormalizedResult.dataset.status = "idle";
+  ocrConfidence.textContent = "-";
+  ocrElapsedTime.textContent = "-";
+}
+
+function setPreprocessing(enabled) {
+  preprocessEnabled = enabled;
+  preprocessOnButton.classList.toggle("active", enabled);
+  preprocessOffButton.classList.toggle("active", !enabled);
+  preprocessOnButton.setAttribute("aria-pressed", String(enabled));
+  preprocessOffButton.setAttribute("aria-pressed", String(!enabled));
+
+  if (selectedCellIndex !== null) {
+    prepareSelectedCellOcrImages();
+    resetOcrResult();
+  }
+}
+
+function formatConfidence(confidence) {
+  return confidence === null ? "-" : confidence.toFixed(1);
+}
+
+function addOcrHistoryEntry(cellLabel, result, usedPreprocessing) {
+  historyEntries += 1;
+  const item = document.createElement("li");
+  item.className = "ocrHistoryItem";
+
+  const cell = document.createElement("strong");
+  cell.textContent = cellLabel;
+  const normalized = document.createElement("span");
+  normalized.textContent = result.display;
+  normalized.dataset.status = result.status;
+  const confidence = document.createElement("span");
+  confidence.textContent = `confidence ${formatConfidence(result.confidence)}`;
+  const elapsed = document.createElement("span");
+  elapsed.textContent = `${result.elapsedMs}ms`;
+  const preprocessing = document.createElement("span");
+  preprocessing.className = "historyPreprocess";
+  preprocessing.textContent = usedPreprocessing ? "前処理あり" : "前処理なし";
+
+  item.append(cell, normalized, confidence, elapsed, preprocessing);
+  ocrHistory.prepend(item);
+  historyCount.textContent = `${historyEntries}件`;
+  emptyHistoryMessage.hidden = true;
+}
+
+function clearOcrHistory() {
+  ocrHistory.replaceChildren();
+  historyEntries = 0;
+  historyCount.textContent = "0件";
+  emptyHistoryMessage.hidden = false;
+}
+
+async function handleRunSingleOcr() {
+  const cell = cells[selectedCellIndex];
+  if (!cell) return;
+
+  const cellIndex = selectedCellIndex;
+  const cellLabel = getCellLabel(cell);
+  const usedPreprocessing = preprocessEnabled;
+  const ocrSnapshot = document.createElement("canvas");
+  ocrSnapshot.width = ocrInputCanvas.width;
+  ocrSnapshot.height = ocrInputCanvas.height;
+  ocrSnapshot.getContext("2d").drawImage(ocrInputCanvas, 0, 0);
+  runSingleOcrButton.disabled = true;
+  preprocessOnButton.disabled = true;
+  preprocessOffButton.disabled = true;
+  ocrProgress.textContent = "Tesseract.jsを準備しています…";
+  setOcrProgressListener((message) => {
+    const percent = Number.isFinite(message.progress) ? ` ${Math.round(message.progress * 100)}%` : "";
+    ocrProgress.textContent = `${message.status || "OCR処理中"}${percent}`;
+  });
+
+  try {
+    const result = await recognizeSingleDigit(ocrSnapshot);
+    if (selectedCellIndex === cellIndex) {
+      ocrRawResult.textContent = JSON.stringify(result.rawText);
+      ocrNormalizedResult.textContent = result.display;
+      ocrNormalizedResult.dataset.status = result.status;
+      ocrConfidence.textContent = formatConfidence(result.confidence);
+      ocrElapsedTime.textContent = `${result.elapsedMs}ms`;
+      ocrProgress.textContent = "1セルOCRが完了しました。";
+    }
+    addOcrHistoryEntry(cellLabel, result, usedPreprocessing);
+  } catch (error) {
+    console.error("[ocr] single cell OCR failed", error);
+    ocrProgress.textContent = error instanceof Error ? error.message : "OCRの実行に失敗しました。";
+  } finally {
+    setOcrProgressListener(null);
+    runSingleOcrButton.disabled = false;
+    preprocessOnButton.disabled = false;
+    preprocessOffButton.disabled = false;
+  }
 }
 
 function renderCellImages() {
@@ -218,6 +344,7 @@ async function handleStartCamera() {
 function handleCapture() {
   try {
     captureGuideArea(cameraPreview, cameraGuide, croppedCanvas, 900);
+    clearOcrHistory();
     renderCellImages();
     cameraSection.hidden = true;
     resultSection.hidden = false;
@@ -256,6 +383,9 @@ boardViewButton.addEventListener("click", () => setCellView("board"));
 cellList.addEventListener("click", handleCellSelection);
 boardGrid.addEventListener("click", handleCellSelection);
 closeModalButton.addEventListener("click", closeCellModal);
+preprocessOnButton.addEventListener("click", () => setPreprocessing(true));
+preprocessOffButton.addEventListener("click", () => setPreprocessing(false));
+runSingleOcrButton.addEventListener("click", handleRunSingleOcr);
 cellModal.addEventListener("click", (event) => {
   if (event.target === cellModal) closeCellModal();
 });
