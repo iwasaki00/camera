@@ -49,6 +49,7 @@ const alignmentButtons = Array.from(document.querySelectorAll("[data-align-actio
 const alignmentXValue = document.getElementById("alignmentXValue");
 const alignmentYValue = document.getElementById("alignmentYValue");
 const alignmentZoomValue = document.getElementById("alignmentZoomValue");
+const alignmentRotationValue = document.getElementById("alignmentRotationValue");
 const fullPreprocessOnButton = document.getElementById("fullPreprocessOnButton");
 const fullPreprocessOffButton = document.getElementById("fullPreprocessOffButton");
 const runFullOcrButton = document.getElementById("runFullOcrButton");
@@ -58,6 +59,7 @@ const fullOcrPercent = document.getElementById("fullOcrPercent");
 const fullOcrProgressBar = document.getElementById("fullOcrProgressBar");
 const fullOcrCurrentCell = document.getElementById("fullOcrCurrentCell");
 const fullOcrNotice = document.getElementById("fullOcrNotice");
+const ocrConditionSummary = document.getElementById("ocrConditionSummary");
 const ocrResultBoard = document.getElementById("ocrResultBoard");
 
 const capturedSourceCanvas = document.createElement("canvas");
@@ -348,6 +350,8 @@ function clearFullOcrResults(message, badgeText = "未実行") {
   fullOcrProgressText.textContent = message;
   fullOcrNotice.textContent = message;
   fullOcrNotice.classList.toggle("stale", badgeText === "要再OCR");
+  ocrConditionSummary.hidden = true;
+  ocrConditionSummary.textContent = "";
 }
 
 function invalidateFullOcrResults(message = "画像調整後、再OCRしてください。") {
@@ -366,10 +370,16 @@ function formatSignedPixels(value) {
   return `${value >= 0 ? "+" : ""}${value}px`;
 }
 
+function formatRotation(value) {
+  if (value === 0) return "0.0°";
+  return `${value > 0 ? "+" : ""}${value.toFixed(1)}°`;
+}
+
 function updateAlignmentDisplay() {
   alignmentXValue.textContent = formatSignedPixels(alignment.x);
   alignmentYValue.textContent = formatSignedPixels(alignment.y);
   alignmentZoomValue.textContent = `${Math.round(alignment.scale * 100)}%`;
+  alignmentRotationValue.textContent = formatRotation(alignment.rotation);
 }
 
 function regenerateFromAlignment() {
@@ -381,7 +391,12 @@ function regenerateFromAlignment() {
 function applyAlignmentAction(action) {
   if (isFullOcrRunning || !capturedSourceCanvas.width) return;
   const next = action === "reset" ? createDefaultAlignment() : updateAlignment(alignment, action);
-  if (next.x === alignment.x && next.y === alignment.y && next.scale === alignment.scale) return;
+  if (
+    next.x === alignment.x
+    && next.y === alignment.y
+    && next.scale === alignment.scale
+    && next.rotation === alignment.rotation
+  ) return;
 
   alignment = next;
   alignmentRevision += 1;
@@ -412,6 +427,14 @@ async function handleRunFullOcr() {
   regenerateFromAlignment();
   const revisionAtStart = alignmentRevision;
   const preprocessAtStart = preprocessEnabled;
+  const ocrConditions = {
+    x: alignment.x,
+    y: alignment.y,
+    scale: alignment.scale,
+    rotation: alignment.rotation,
+    outerCrop: Number(innerCropRange.value),
+    preprocess: preprocessAtStart
+  };
   fullOcrResults = Array.from({ length: 81 }, () => null);
   renderOcrResultBoard();
   setFullOcrControlsDisabled(true);
@@ -476,6 +499,8 @@ async function handleRunFullOcr() {
     fullOcrProgressText.textContent = `OCR完了　81 / 81（${totalElapsed}ms）`;
     fullOcrCurrentCell.textContent = "現在：完了";
     fullOcrNotice.textContent = "OCR結果を確認し、必要なセルを手修正してください。";
+    ocrConditionSummary.textContent = `OCR条件 — X: ${formatSignedPixels(ocrConditions.x)} / Y: ${formatSignedPixels(ocrConditions.y)} / Zoom: ${Math.round(ocrConditions.scale * 100)}% / Rotation: ${formatRotation(ocrConditions.rotation)} / Outer Crop: ${ocrConditions.outerCrop}% / Preprocess: ${ocrConditions.preprocess ? "ON" : "OFF"}`;
+    ocrConditionSummary.hidden = false;
     setStatus("81セルOCRが完了しました。低confidenceセルを確認し、必要なら手修正してください。");
   } catch (error) {
     console.error("[ocr] full grid OCR failed", error);

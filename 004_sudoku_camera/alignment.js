@@ -3,7 +3,10 @@ export const ALIGNMENT_LIMITS = Object.freeze({
   minScale: 0.9,
   maxScale: 1.2,
   translateStep: 8,
-  scaleStep: 0.02
+  scaleStep: 0.02,
+  minRotation: -5,
+  maxRotation: 5,
+  rotationStep: 0.1
 });
 
 function clamp(value, min, max) {
@@ -11,12 +14,21 @@ function clamp(value, min, max) {
 }
 
 export function createDefaultAlignment() {
-  return { x: 0, y: 0, scale: 1 };
+  return { x: 0, y: 0, scale: 1, rotation: 0 };
 }
 
 export function updateAlignment(current, action) {
   const next = { ...current };
-  const { maxOffset, minScale, maxScale, translateStep, scaleStep } = ALIGNMENT_LIMITS;
+  const {
+    maxOffset,
+    minScale,
+    maxScale,
+    translateStep,
+    scaleStep,
+    minRotation,
+    maxRotation,
+    rotationStep
+  } = ALIGNMENT_LIMITS;
 
   if (action === "up") next.y -= translateStep;
   if (action === "down") next.y += translateStep;
@@ -24,10 +36,13 @@ export function updateAlignment(current, action) {
   if (action === "right") next.x += translateStep;
   if (action === "zoomIn") next.scale += scaleStep;
   if (action === "zoomOut") next.scale -= scaleStep;
+  if (action === "rotateLeft") next.rotation -= rotationStep;
+  if (action === "rotateRight") next.rotation += rotationStep;
 
   next.x = clamp(next.x, -maxOffset, maxOffset);
   next.y = clamp(next.y, -maxOffset, maxOffset);
   next.scale = Math.round(clamp(next.scale, minScale, maxScale) * 100) / 100;
+  next.rotation = Math.round(clamp(next.rotation, minRotation, maxRotation) * 10) / 10;
   return next;
 }
 
@@ -41,6 +56,7 @@ export function renderAlignedSquare(sourceCanvas, outputCanvas, alignment) {
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, size, size);
   context.translate(size / 2 + alignment.x, size / 2 + alignment.y);
+  context.rotate((alignment.rotation * Math.PI) / 180);
   context.scale(alignment.scale, alignment.scale);
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = "high";

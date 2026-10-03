@@ -271,7 +271,7 @@ button.compactButton {
 
 .alignmentValues {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
 }
 
@@ -293,7 +293,7 @@ button.compactButton {
 
 .alignmentControls {
   display: grid;
-  grid-template-columns: minmax(170px, 0.9fr) minmax(150px, 1.1fr);
+  grid-template-columns: minmax(170px, 1.1fr) repeat(2, minmax(130px, 0.9fr));
   gap: 14px;
   align-items: center;
 }
@@ -313,6 +313,7 @@ button.alignmentButton {
   background: #fff;
   box-shadow: 0 3px 8px rgba(20, 48, 36, 0.08);
   font-size: 1.25rem;
+  touch-action: manipulation;
 }
 
 button.alignmentButton small {
@@ -330,15 +331,28 @@ button.alignmentButton small {
   font-size: 0.72rem;
 }
 
-.zoomControls {
+.zoomControls,
+.rotationControls {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
-.zoomControls button.alignmentButton {
+.zoomControls button.alignmentButton,
+.rotationControls button.alignmentButton {
   min-height: 74px;
   font-size: 1.6rem;
+}
+
+.ocrConditionSummary {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: #fff;
+  font-size: 0.76rem;
+  line-height: 1.55;
 }
 
 .stateBadge.warning {
@@ -864,7 +878,9 @@ button.closeButton {
   .panel { padding: 12px; }
   .alignmentControls { grid-template-columns: 1fr; }
   .directionPad { width: min(100%, 230px); margin: 0 auto; }
-  .zoomControls button.alignmentButton { min-height: 58px; }
+  .alignmentValues { grid-template-columns: 1fr 1fr; }
+  .zoomControls button.alignmentButton,
+  .rotationControls button.alignmentButton { min-height: 58px; }
   .cellList { grid-template-columns: 1fr; }
   .modalCard { padding: 14px; }
   .ocrHistoryItem {
