@@ -251,6 +251,257 @@ button.secondary {
   box-shadow: none;
 }
 
+.cellDebugSection {
+  display: grid;
+  gap: 16px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.cropControl {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #f7faf8;
+}
+
+.cropControl label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 800;
+}
+
+.cropControl output {
+  min-width: 3.5em;
+  color: var(--accent-dark);
+  font-size: 1.1rem;
+  text-align: right;
+}
+
+.cropControl input[type="range"] {
+  width: 100%;
+  min-height: 36px;
+  margin: 0;
+  accent-color: var(--accent);
+  touch-action: pan-y;
+}
+
+.rangeLabels {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.viewSwitcher {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #edf1ef;
+}
+
+button.viewButton {
+  min-height: 44px;
+  padding: 8px 12px;
+  color: var(--muted);
+  background: transparent;
+  box-shadow: none;
+}
+
+button.viewButton.active {
+  color: var(--accent-dark);
+  background: #fff;
+  box-shadow: 0 3px 10px rgba(20, 48, 36, 0.1);
+}
+
+.cellList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+button.cellCard {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--text);
+  background: #fff;
+  box-shadow: none;
+  text-align: left;
+}
+
+.cellCardHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.cellDimensions {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cellComparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: end;
+  gap: 8px;
+}
+
+.cellImageGroup {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.cellCanvas {
+  width: 100%;
+  aspect-ratio: 1;
+  display: block;
+  border: 1px solid #c9d2cd;
+  border-radius: 6px;
+  background: #fff;
+  image-rendering: auto;
+}
+
+.boardGrid {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+  border: 3px solid var(--text);
+  border-radius: 8px;
+  background: #fff;
+}
+
+button.boardCell {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-right: 1px solid rgba(24, 33, 29, 0.3);
+  border-bottom: 1px solid rgba(24, 33, 29, 0.3);
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+}
+
+button.boardCell:nth-child(3n) { border-right: 3px solid var(--text); }
+button.boardCell:nth-child(9n) { border-right: 0; }
+button.boardCell:nth-child(n+19):nth-child(-n+27),
+button.boardCell:nth-child(n+46):nth-child(-n+54) { border-bottom: 3px solid var(--text); }
+button.boardCell:nth-child(n+73) { border-bottom: 0; }
+
+.boardCellCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.boardCell > span {
+  position: absolute;
+  left: 1px;
+  top: 1px;
+  padding: 1px 2px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.62);
+  font-size: clamp(0.34rem, 1.35vw, 0.65rem);
+  line-height: 1.1;
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: max(16px, env(safe-area-inset-top)) 12px max(16px, env(safe-area-inset-bottom));
+  background: rgba(8, 17, 13, 0.76);
+}
+
+.modalCard {
+  display: grid;
+  gap: 16px;
+  width: min(100%, 650px);
+  padding: 18px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+button.closeButton {
+  width: auto;
+  min-height: 44px;
+  padding: 8px 16px;
+  color: var(--text);
+  background: #edf1ef;
+}
+
+.modalComparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.modalComparison figure {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+
+.modalComparison figcaption {
+  font-size: 0.88rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.modalComparison canvas {
+  width: 100%;
+  aspect-ratio: 1;
+  display: block;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.modalCropInfo {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
 .status {
   min-height: 3.4em;
   padding: 4px 8px;
@@ -261,10 +512,13 @@ button.secondary {
 
 @media (min-width: 560px) {
   .buttonStack { grid-template-columns: 0.72fr 1.28fr; }
+  .cellList { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 420px) {
   .hero, .panel { border-radius: 18px; }
   .hero { padding: 17px; }
   .panel { padding: 12px; }
+  .cellList { grid-template-columns: 1fr; }
+  .modalCard { padding: 14px; }
 }

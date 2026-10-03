@@ -34,24 +34,34 @@ export function extractSquareBoard(sourceCanvas, outputCanvas, sourceRect) {
 }
 
 export function splitBoardIntoCells(boardCanvas, innerCropRate) {
-  const cellSize = boardCanvas.width / GRID_SIZE;
-  const margin = cellSize * innerCropRate;
+  const cellWidth = boardCanvas.width / GRID_SIZE;
+  const cellHeight = boardCanvas.height / GRID_SIZE;
   const cells = [];
 
   for (let row = 0; row < GRID_SIZE; row += 1) {
     for (let col = 0; col < GRID_SIZE; col += 1) {
-      const baseX = col * cellSize;
-      const baseY = row * cellSize;
-      const innerX = clamp(Math.round(baseX + margin), 0, boardCanvas.width);
-      const innerY = clamp(Math.round(baseY + margin), 0, boardCanvas.height);
-      const innerRight = clamp(Math.round(baseX + cellSize - margin), 0, boardCanvas.width);
-      const innerBottom = clamp(Math.round(baseY + cellSize - margin), 0, boardCanvas.height);
+      const originalX = Math.round(col * cellWidth);
+      const originalY = Math.round(row * cellHeight);
+      const originalRight = Math.round((col + 1) * cellWidth);
+      const originalBottom = Math.round((row + 1) * cellHeight);
+      const originalWidth = originalRight - originalX;
+      const originalHeight = originalBottom - originalY;
+      const marginX = originalWidth * innerCropRate;
+      const marginY = originalHeight * innerCropRate;
+      const innerX = clamp(Math.round(originalX + marginX), 0, boardCanvas.width);
+      const innerY = clamp(Math.round(originalY + marginY), 0, boardCanvas.height);
+      const innerRight = clamp(Math.round(originalRight - marginX), 0, boardCanvas.width);
+      const innerBottom = clamp(Math.round(originalBottom - marginY), 0, boardCanvas.height);
       const width = Math.max(1, innerRight - innerX);
       const height = Math.max(1, innerBottom - innerY);
 
       cells.push({
         row,
         col,
+        originalX,
+        originalY,
+        originalWidth,
+        originalHeight,
         sourceX: innerX,
         sourceY: innerY,
         sourceWidth: width,
@@ -63,25 +73,36 @@ export function splitBoardIntoCells(boardCanvas, innerCropRate) {
   return cells;
 }
 
-export function drawCellCrop(boardCanvas, cell, outputCanvas) {
-  outputCanvas.width = cell.sourceWidth;
-  outputCanvas.height = cell.sourceHeight;
+export function drawOriginalCell(boardCanvas, cell, outputCanvas) {
+  return drawCanvasRegion(
+    boardCanvas,
+    outputCanvas,
+    cell.originalX,
+    cell.originalY,
+    cell.originalWidth,
+    cell.originalHeight
+  );
+}
+
+function drawCanvasRegion(sourceCanvas, outputCanvas, x, y, width, height) {
+  outputCanvas.width = width;
+  outputCanvas.height = height;
 
   const context = outputCanvas.getContext("2d");
-  context.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
-  context.drawImage(
+  context.clearRect(0, 0, width, height);
+  context.drawImage(sourceCanvas, x, y, width, height, 0, 0, width, height);
+  return outputCanvas;
+}
+
+export function drawCellCrop(boardCanvas, cell, outputCanvas) {
+  return drawCanvasRegion(
     boardCanvas,
+    outputCanvas,
     cell.sourceX,
     cell.sourceY,
     cell.sourceWidth,
-    cell.sourceHeight,
-    0,
-    0,
-    outputCanvas.width,
-    outputCanvas.height
+    cell.sourceHeight
   );
-
-  return outputCanvas;
 }
 
 export function createEmptyBoard() {

@@ -9,7 +9,7 @@
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">SUDOKU CAMERA</p>
+      <p class="eyebrow">SUDOKU CAMERA · v0.2.0</p>
       <h1>ナンプレをガイドに合わせる</h1>
       <p class="lead">盤面を正面から映し、外枠とマス目がガイドに重なるようにiPhoneを動かしてください。</p>
     </header>
@@ -60,12 +60,68 @@
       </div>
 
       <button id="retakeButton" class="secondary" type="button">再撮影</button>
+
+      <div class="cellDebugSection" aria-labelledby="cellDebugHeading">
+        <div class="sectionHeading">
+          <div>
+            <p class="stepLabel">STEP 3</p>
+            <h2 id="cellDebugHeading">81セルの分割確認</h2>
+          </div>
+          <span id="cellCountBadge" class="stateBadge success">81セル</span>
+        </div>
+
+        <div class="cropControl">
+          <label for="innerCropRange">
+            外周除外率
+            <output id="innerCropValue" for="innerCropRange">20%</output>
+          </label>
+          <input id="innerCropRange" type="range" min="10" max="30" step="5" value="20">
+          <div class="rangeLabels" aria-hidden="true">
+            <span>10%</span>
+            <span>20%</span>
+            <span>30%</span>
+          </div>
+          <p class="panelCopy">各セルの上下左右を除外し、中央部分をOCR対象画像として表示します。OCR処理はまだ実行しません。</p>
+        </div>
+
+        <div class="viewSwitcher" role="group" aria-label="セル確認表示">
+          <button id="listViewButton" class="viewButton active" type="button" aria-pressed="true">比較一覧</button>
+          <button id="boardViewButton" class="viewButton" type="button" aria-pressed="false">9×9配置</button>
+        </div>
+
+        <p id="cellViewHelp" class="panelCopy">元セルとOCR対象セルを並べて表示しています。セルをタップすると拡大できます。</p>
+        <div id="cellList" class="cellList" aria-label="81セル比較一覧"></div>
+        <div id="boardGrid" class="boardGrid" aria-label="9×9セル配置" hidden></div>
+      </div>
     </section>
 
     <p id="statusMessage" class="status" role="status" aria-live="polite">
       「カメラ開始」を押して、背面カメラの使用を許可してください。
     </p>
   </main>
+
+  <div id="cellModal" class="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="modalCellLabel" hidden>
+    <div class="modalCard">
+      <div class="modalHeader">
+        <div>
+          <p class="stepLabel">CELL PREVIEW</p>
+          <h2 id="modalCellLabel">R1C1</h2>
+        </div>
+        <button id="closeModalButton" class="closeButton" type="button" aria-label="拡大表示を閉じる">閉じる</button>
+      </div>
+      <div class="modalComparison">
+        <figure>
+          <figcaption>元セル</figcaption>
+          <canvas id="modalOriginalCanvas"></canvas>
+        </figure>
+        <figure>
+          <figcaption>OCR対象セル</figcaption>
+          <canvas id="modalInnerCanvas"></canvas>
+        </figure>
+      </div>
+      <p id="modalCropInfo" class="modalCropInfo"></p>
+    </div>
+  </div>
 
   <script type="module" src="./app.js"></script>
 </body>
