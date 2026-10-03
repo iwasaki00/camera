@@ -253,6 +253,214 @@ button.secondary {
   box-shadow: none;
 }
 
+.alignmentPanel,
+.fullOcrSection {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #f7faf8;
+}
+
+button.compactButton {
+  width: auto;
+  min-height: 44px;
+  padding: 8px 14px;
+}
+
+.alignmentValues {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.alignmentValues span {
+  padding: 8px 5px;
+  border-radius: 9px;
+  color: var(--muted);
+  background: #fff;
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+.alignmentValues strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.alignmentControls {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.9fr) minmax(150px, 1.1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.directionPad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+button.alignmentButton {
+  min-height: 54px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  color: var(--text);
+  background: #fff;
+  box-shadow: 0 3px 8px rgba(20, 48, 36, 0.08);
+  font-size: 1.25rem;
+}
+
+button.alignmentButton small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 700;
+}
+
+.padCenter {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.zoomControls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.zoomControls button.alignmentButton {
+  min-height: 74px;
+  font-size: 1.6rem;
+}
+
+.stateBadge.warning {
+  color: #8b3f21;
+  background: #ffeadf;
+}
+
+.fullOcrProgress {
+  display: grid;
+  gap: 7px;
+  padding: 11px;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.progressSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.82rem;
+}
+
+.fullOcrProgress progress {
+  width: 100%;
+  height: 14px;
+  accent-color: var(--accent);
+}
+
+.fullOcrProgress > span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.ocrNotice {
+  padding: 9px 10px;
+  border-radius: 9px;
+  color: var(--accent-dark);
+  background: #e7f5ee;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.ocrNotice.stale {
+  color: #8b3f21;
+  background: #fff0e8;
+}
+
+.ocrResultBoard {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  overflow: hidden;
+  border: 3px solid var(--text);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.ocrResultCell {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 1;
+  border-right: 1px solid rgba(24, 33, 29, 0.3);
+  border-bottom: 1px solid rgba(24, 33, 29, 0.3);
+  background: #fff;
+}
+
+.ocrResultCell:nth-child(3n) { border-right: 3px solid var(--text); }
+.ocrResultCell:nth-child(9n) { border-right: 0; }
+.ocrResultCell:nth-child(n+19):nth-child(-n+27),
+.ocrResultCell:nth-child(n+46):nth-child(-n+54) { border-bottom: 3px solid var(--text); }
+.ocrResultCell:nth-child(n+73) { border-bottom: 0; }
+
+.ocrResultCell input {
+  width: 100%;
+  height: 100%;
+  padding: 1px 1px 13px;
+  border: 0;
+  border-radius: 0;
+  outline-offset: -2px;
+  color: var(--text);
+  background: transparent;
+  font-size: clamp(0.9rem, 4.2vw, 1.5rem);
+  font-weight: 800;
+  text-align: center;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.ocrResultCell.lowConfidence {
+  background: #fff0d9;
+  box-shadow: inset 0 0 0 2px #e2923f;
+}
+
+.ocrResultCell.manuallyEdited::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #2a77c7;
+  pointer-events: none;
+}
+
+button.resultDetailButton {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 1px;
+  width: calc(100% - 4px);
+  min-height: 11px;
+  padding: 1px;
+  border-radius: 3px;
+  color: #fff;
+  background: rgba(11, 92, 62, 0.78);
+  box-shadow: none;
+  font-size: clamp(0.38rem, 1.4vw, 0.58rem);
+  line-height: 1;
+}
+
 .cellDebugSection {
   display: grid;
   gap: 16px;
@@ -654,6 +862,9 @@ button.closeButton {
   .hero, .panel { border-radius: 18px; }
   .hero { padding: 17px; }
   .panel { padding: 12px; }
+  .alignmentControls { grid-template-columns: 1fr; }
+  .directionPad { width: min(100%, 230px); margin: 0 auto; }
+  .zoomControls button.alignmentButton { min-height: 58px; }
   .cellList { grid-template-columns: 1fr; }
   .modalCard { padding: 14px; }
   .ocrHistoryItem {

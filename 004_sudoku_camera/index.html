@@ -9,7 +9,7 @@
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">SUDOKU CAMERA · v0.3.0</p>
+      <p class="eyebrow">SUDOKU CAMERA · v0.4.0</p>
       <h1>ナンプレをガイドに合わせる</h1>
       <p class="lead">盤面を正面から映し、外枠とマス目がガイドに重なるようにiPhoneを動かしてください。</p>
     </header>
@@ -59,12 +59,74 @@
         </div>
       </div>
 
+      <section class="alignmentPanel" aria-labelledby="alignmentHeading">
+        <div class="sectionHeading">
+          <div>
+            <p class="stepLabel">MANUAL ALIGNMENT</p>
+            <h2 id="alignmentHeading">画像位置を微調整</h2>
+          </div>
+          <button id="resetAlignmentButton" class="compactButton secondary alignmentButton" type="button">リセット</button>
+        </div>
+        <p class="panelCopy">画像を上下左右へ8px、ズームを2%ずつ調整します。黄色の9×9ガイドに罫線を合わせてください。</p>
+        <div class="alignmentValues" aria-live="polite">
+          <span>X: <strong id="alignmentXValue">+0px</strong></span>
+          <span>Y: <strong id="alignmentYValue">+0px</strong></span>
+          <span>Zoom: <strong id="alignmentZoomValue">100%</strong></span>
+        </div>
+        <div class="alignmentControls">
+          <div class="directionPad" aria-label="画像位置調整">
+            <span></span>
+            <button class="alignmentButton" type="button" data-align-action="up" aria-label="画像を上へ">↑<small>上</small></button>
+            <span></span>
+            <button class="alignmentButton" type="button" data-align-action="left" aria-label="画像を左へ">←<small>左</small></button>
+            <span class="padCenter" aria-hidden="true">移動</span>
+            <button class="alignmentButton" type="button" data-align-action="right" aria-label="画像を右へ">→<small>右</small></button>
+            <span></span>
+            <button class="alignmentButton" type="button" data-align-action="down" aria-label="画像を下へ">↓<small>下</small></button>
+            <span></span>
+          </div>
+          <div class="zoomControls" aria-label="画像ズーム調整">
+            <button class="alignmentButton" type="button" data-align-action="zoomOut" aria-label="ズームアウト">−<small>ズームアウト</small></button>
+            <button class="alignmentButton" type="button" data-align-action="zoomIn" aria-label="ズームイン">＋<small>ズームイン</small></button>
+          </div>
+        </div>
+      </section>
+
       <button id="retakeButton" class="secondary" type="button">再撮影</button>
+
+      <section class="fullOcrSection" aria-labelledby="fullOcrHeading">
+        <div class="sectionHeading">
+          <div>
+            <p class="stepLabel">STEP 3</p>
+            <h2 id="fullOcrHeading">81セル一括OCR</h2>
+          </div>
+          <span id="fullOcrStateBadge" class="stateBadge">未実行</span>
+        </div>
+
+        <div class="preprocessControl" role="group" aria-label="全セルOCR前処理">
+          <button id="fullPreprocessOnButton" class="viewButton active fullOcrControl" type="button" aria-pressed="true">前処理あり</button>
+          <button id="fullPreprocessOffButton" class="viewButton fullOcrControl" type="button" aria-pressed="false">前処理なし</button>
+        </div>
+
+        <button id="runFullOcrButton" class="primary fullOcrControl" type="button">全セルOCR</button>
+        <div class="fullOcrProgress" role="status" aria-live="polite">
+          <div class="progressSummary">
+            <strong id="fullOcrProgressText">OCRはまだ実行していません。</strong>
+            <span id="fullOcrPercent">0%</span>
+          </div>
+          <progress id="fullOcrProgressBar" max="81" value="0">0 / 81</progress>
+          <span id="fullOcrCurrentCell">現在：-</span>
+        </div>
+
+        <p id="fullOcrNotice" class="ocrNotice">画像調整後、「全セルOCR」を実行してください。</p>
+        <div id="ocrResultBoard" class="ocrResultBoard" aria-label="9×9 OCR結果"></div>
+        <p class="panelCopy">各セルは空欄または1～9へ直接修正できます。右上の「詳細」からセル画像とOCR情報を確認できます。</p>
+      </section>
 
       <div class="cellDebugSection" aria-labelledby="cellDebugHeading">
         <div class="sectionHeading">
           <div>
-            <p class="stepLabel">STEP 3</p>
+            <p class="stepLabel">STEP 4</p>
             <h2 id="cellDebugHeading">81セルの分割確認</h2>
           </div>
           <span id="cellCountBadge" class="stateBadge success">81セル</span>

@@ -2,6 +2,7 @@ import { captureGuideArea, hasLiveCameraStream, startCamera, stopCamera } from "
 import { drawCellCrop, drawOriginalCell, splitBoardIntoCells } from "./gridOcr.js";
 import { recognizeSingleDigit, setOcrProgressListener } from "./ocr.js";
 import { OCR_INPUT_SIZE, prepareOcrImages } from "./ocrImage.js";
+import { createDefaultAlignment, renderAlignedSquare, updateAlignment } from "./alignment.js";
 
 const cameraSection = document.getElementById("cameraSection");
 const resultSection = document.getElementById("resultSection");
@@ -43,6 +44,26 @@ const ocrElapsedTime = document.getElementById("ocrElapsedTime");
 const ocrHistory = document.getElementById("ocrHistory");
 const historyCount = document.getElementById("historyCount");
 const emptyHistoryMessage = document.getElementById("emptyHistoryMessage");
+const resetAlignmentButton = document.getElementById("resetAlignmentButton");
+const alignmentButtons = Array.from(document.querySelectorAll("[data-align-action]"));
+const alignmentXValue = document.getElementById("alignmentXValue");
+const alignmentYValue = document.getElementById("alignmentYValue");
+const alignmentZoomValue = document.getElementById("alignmentZoomValue");
+const fullPreprocessOnButton = document.getElementById("fullPreprocessOnButton");
+const fullPreprocessOffButton = document.getElementById("fullPreprocessOffButton");
+const runFullOcrButton = document.getElementById("runFullOcrButton");
+const fullOcrStateBadge = document.getElementById("fullOcrStateBadge");
+const fullOcrProgressText = document.getElementById("fullOcrProgressText");
+const fullOcrPercent = document.getElementById("fullOcrPercent");
+const fullOcrProgressBar = document.getElementById("fullOcrProgressBar");
+const fullOcrCurrentCell = document.getElementById("fullOcrCurrentCell");
+const fullOcrNotice = document.getElementById("fullOcrNotice");
+const ocrResultBoard = document.getElementById("ocrResultBoard");
+
+const capturedSourceCanvas = document.createElement("canvas");
+const batchCellCanvas = document.createElement("canvas");
+const batchScaledCanvas = document.createElement("canvas");
+const batchInputCanvas = document.createElement("canvas");
 
 let cells = [];
 let cellViews = [];
@@ -50,6 +71,13 @@ let selectedCellIndex = null;
 let modalReturnTarget = null;
 let preprocessEnabled = true;
 let historyEntries = 0;
+let alignment = createDefaultAlignment();
+let alignmentRevision = 0;
+let fullOcrRevision = null;
+let fullOcrResults = Array.from({ length: 81 }, () => null);
+let ocrResultInputs = [];
+let ocrResultCells = [];
+let isFullOcrRunning = false;
 
 function setStatus(message) {
   statusMessage.textContent = message;
@@ -134,6 +162,79 @@ function buildCellViews() {
   boardGrid.appendChild(boardFragment);
 }
 
+function sanitizeOcrInput(value) {
+  return String(value || "").replace(/[^1-9]/g, "").slice(0, 1);
+}
+
+function buildOcrResultBoard() {
+  const fragment = document.createDocumentFragment();
+
+  for (let index = 0; index < 81; index += 1) {
+    const row = Math.floor(index / 9);
+    const col = index % 9;
+    const label = `R${row + 1}C${col + 1}`;
+    const cell = document.createElement("div");
+    cell.className = "ocrResultCell";
+    cell.dataset.cellIndex = String(index);
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.inputMode = "numeric";
+    input.maxLength = 1;
+    input.autocomplete = "off";
+    input.setAttribute("aria-label", `${label} OCR結果`);
+    input.addEventListener("input", () => {
+      input.value = sanitizeOcrInput(input.value);
+      const existing = fullOcrResults[index] || {
+        rawText: "",
+        confidence: null,
+        elapsedMs: null,
+        status: "manual"
+      };
+      existing.value = input.value ? Number(input.value) : 0;
+      existing.manuallyEdited = true;
+      fullOcrResults[index] = existing;
+      cell.classList.add("manuallyEdited");
+    });
+
+    const detailButton = document.createElement("button");
+    detailButton.type = "button";
+    detailButton.className = "resultDetailButton";
+    detailButton.textContent = "詳細";
+    detailButton.dataset.cellIndex = String(index);
+    detailButton.setAttribute("aria-label", `${label}のOCR詳細を表示`);
+
+    cell.append(input, detailButton);
+    fragment.appendChild(cell);
+    ocrResultInputs.push(input);
+    ocrResultCells.push(cell);
+  }
+
+  ocrResultBoard.appendChild(fragment);
+}
+
+function updateOcrResultCell(index) {
+  const metadata = fullOcrResults[index];
+  const input = ocrResultInputs[index];
+  const cell = ocrResultCells[index];
+  input.value = metadata?.value ? String(metadata.value) : "";
+  cell.classList.remove("lowConfidence", "manuallyEdited");
+
+  if (metadata && Number.isFinite(metadata.confidence) && metadata.confidence < 70) {
+    cell.classList.add("lowConfidence");
+  }
+  if (metadata?.manuallyEdited) cell.classList.add("manuallyEdited");
+
+  const confidenceLabel = metadata && Number.isFinite(metadata.confidence)
+    ? metadata.confidence.toFixed(1)
+    : "-";
+  cell.title = `${Math.floor(index / 9) + 1}行${index % 9 + 1}列 / confidence ${confidenceLabel}`;
+}
+
+function renderOcrResultBoard() {
+  for (let index = 0; index < 81; index += 1) updateOcrResultCell(index);
+}
+
 function renderModalCell(index) {
   const cell = cells[index];
   if (!cell) return;
@@ -144,6 +245,21 @@ function renderModalCell(index) {
   modalCropInfo.textContent = `元セル ${cell.originalWidth}×${cell.originalHeight}px ／ OCR対象 ${cell.sourceWidth}×${cell.sourceHeight}px ／ 外周 ${innerCropRange.value}% 除外`;
   prepareSelectedCellOcrImages();
   resetOcrResult();
+  showStoredOcrResult(index);
+}
+
+function showStoredOcrResult(index) {
+  const stored = fullOcrResults[index];
+  if (!stored || fullOcrRevision !== alignmentRevision) return;
+
+  ocrRawResult.textContent = JSON.stringify(stored.rawText || "");
+  ocrNormalizedResult.textContent = stored.value ? String(stored.value) : "空欄";
+  ocrNormalizedResult.dataset.status = stored.value ? "digit" : "empty";
+  ocrConfidence.textContent = formatConfidence(stored.confidence);
+  ocrElapsedTime.textContent = Number.isFinite(stored.elapsedMs) ? `${stored.elapsedMs}ms` : "-";
+  ocrProgress.textContent = stored.manuallyEdited
+    ? "一括OCR後に手修正された結果です。"
+    : "一括OCRで取得した結果です。必要ならこのセルだけ再OCRできます。";
 }
 
 function prepareSelectedCellOcrImages() {
@@ -163,15 +279,24 @@ function resetOcrResult() {
 }
 
 function setPreprocessing(enabled) {
+  const changed = preprocessEnabled !== enabled;
   preprocessEnabled = enabled;
   preprocessOnButton.classList.toggle("active", enabled);
   preprocessOffButton.classList.toggle("active", !enabled);
   preprocessOnButton.setAttribute("aria-pressed", String(enabled));
   preprocessOffButton.setAttribute("aria-pressed", String(!enabled));
+  fullPreprocessOnButton.classList.toggle("active", enabled);
+  fullPreprocessOffButton.classList.toggle("active", !enabled);
+  fullPreprocessOnButton.setAttribute("aria-pressed", String(enabled));
+  fullPreprocessOffButton.setAttribute("aria-pressed", String(!enabled));
 
   if (selectedCellIndex !== null) {
     prepareSelectedCellOcrImages();
     resetOcrResult();
+  }
+  if (changed) {
+    alignmentRevision += 1;
+    invalidateFullOcrResults("前処理を変更しました。再OCRしてください。");
   }
 }
 
@@ -208,6 +333,164 @@ function clearOcrHistory() {
   historyEntries = 0;
   historyCount.textContent = "0件";
   emptyHistoryMessage.hidden = false;
+}
+
+function clearFullOcrResults(message, badgeText = "未実行") {
+  fullOcrRevision = null;
+  fullOcrResults = Array.from({ length: 81 }, () => null);
+  renderOcrResultBoard();
+  fullOcrStateBadge.textContent = badgeText;
+  fullOcrStateBadge.classList.remove("success", "active", "warning");
+  if (badgeText === "要再OCR") fullOcrStateBadge.classList.add("warning");
+  fullOcrProgressBar.value = 0;
+  fullOcrPercent.textContent = "0%";
+  fullOcrCurrentCell.textContent = "現在：-";
+  fullOcrProgressText.textContent = message;
+  fullOcrNotice.textContent = message;
+  fullOcrNotice.classList.toggle("stale", badgeText === "要再OCR");
+}
+
+function invalidateFullOcrResults(message = "画像調整後、再OCRしてください。") {
+  clearFullOcrResults(message, "要再OCR");
+}
+
+function copyCapturedImageToSource() {
+  capturedSourceCanvas.width = croppedCanvas.width;
+  capturedSourceCanvas.height = croppedCanvas.height;
+  const context = capturedSourceCanvas.getContext("2d");
+  context.clearRect(0, 0, capturedSourceCanvas.width, capturedSourceCanvas.height);
+  context.drawImage(croppedCanvas, 0, 0);
+}
+
+function formatSignedPixels(value) {
+  return `${value >= 0 ? "+" : ""}${value}px`;
+}
+
+function updateAlignmentDisplay() {
+  alignmentXValue.textContent = formatSignedPixels(alignment.x);
+  alignmentYValue.textContent = formatSignedPixels(alignment.y);
+  alignmentZoomValue.textContent = `${Math.round(alignment.scale * 100)}%`;
+}
+
+function regenerateFromAlignment() {
+  renderAlignedSquare(capturedSourceCanvas, croppedCanvas, alignment);
+  renderCellImages();
+  updateAlignmentDisplay();
+}
+
+function applyAlignmentAction(action) {
+  if (isFullOcrRunning || !capturedSourceCanvas.width) return;
+  const next = action === "reset" ? createDefaultAlignment() : updateAlignment(alignment, action);
+  if (next.x === alignment.x && next.y === alignment.y && next.scale === alignment.scale) return;
+
+  alignment = next;
+  alignmentRevision += 1;
+  regenerateFromAlignment();
+  clearOcrHistory();
+  invalidateFullOcrResults("画像調整後、再OCRしてください。");
+  setStatus("画像位置を調整しました。81セルを再生成したため、全セルOCRを再実行してください。");
+}
+
+function setFullOcrControlsDisabled(disabled) {
+  isFullOcrRunning = disabled;
+  runFullOcrButton.disabled = disabled;
+  fullPreprocessOnButton.disabled = disabled;
+  fullPreprocessOffButton.disabled = disabled;
+  preprocessOnButton.disabled = disabled;
+  preprocessOffButton.disabled = disabled;
+  runSingleOcrButton.disabled = disabled;
+  innerCropRange.disabled = disabled;
+  resetAlignmentButton.disabled = disabled;
+  retakeButton.disabled = disabled;
+  for (const button of alignmentButtons) button.disabled = disabled;
+}
+
+async function handleRunFullOcr() {
+  if (isFullOcrRunning || cells.length !== 81) return;
+
+  closeCellModal();
+  regenerateFromAlignment();
+  const revisionAtStart = alignmentRevision;
+  const preprocessAtStart = preprocessEnabled;
+  fullOcrResults = Array.from({ length: 81 }, () => null);
+  renderOcrResultBoard();
+  setFullOcrControlsDisabled(true);
+  fullOcrStateBadge.textContent = "OCR中";
+  fullOcrStateBadge.classList.remove("success", "warning");
+  fullOcrStateBadge.classList.add("active");
+  fullOcrNotice.classList.remove("stale");
+  fullOcrNotice.textContent = "81セルを順番にOCRしています。画面を閉じずにお待ちください。";
+  fullOcrProgressBar.value = 0;
+  fullOcrPercent.textContent = "0%";
+  const batchStartedAt = performance.now();
+  let currentIndex = 0;
+
+  setOcrProgressListener((message) => {
+    const workerPercent = Number.isFinite(message.progress) ? ` ${Math.round(message.progress * 100)}%` : "";
+    fullOcrProgressText.textContent = `${currentIndex} / 81　${message.status || "OCR処理中"}${workerPercent}`;
+  });
+
+  try {
+    for (let index = 0; index < cells.length; index += 1) {
+      currentIndex = index + 1;
+      const cell = cells[index];
+      const label = getCellLabel(cell);
+      fullOcrCurrentCell.textContent = `現在：${label}`;
+      fullOcrProgressText.textContent = `OCR中… ${index} / 81`;
+
+      drawCellCrop(croppedCanvas, cell, batchCellCanvas);
+      prepareOcrImages(
+        batchCellCanvas,
+        batchScaledCanvas,
+        batchInputCanvas,
+        preprocessAtStart
+      );
+      const result = await recognizeSingleDigit(batchInputCanvas);
+      fullOcrResults[index] = {
+        value: result.digit ? Number(result.digit) : 0,
+        rawText: result.rawText,
+        confidence: result.confidence,
+        elapsedMs: result.elapsedMs,
+        status: result.status,
+        manuallyEdited: false
+      };
+      updateOcrResultCell(index);
+
+      const completed = index + 1;
+      const percent = Math.round((completed / 81) * 100);
+      fullOcrProgressBar.value = completed;
+      fullOcrPercent.textContent = `${percent}%`;
+      fullOcrProgressText.textContent = `OCR中… ${completed} / 81`;
+    }
+
+    if (alignmentRevision !== revisionAtStart) {
+      invalidateFullOcrResults("画像状態が変わりました。再OCRしてください。");
+      return;
+    }
+
+    fullOcrRevision = revisionAtStart;
+    const totalElapsed = Math.round(performance.now() - batchStartedAt);
+    fullOcrStateBadge.textContent = "完了";
+    fullOcrStateBadge.classList.remove("active", "warning");
+    fullOcrStateBadge.classList.add("success");
+    fullOcrProgressText.textContent = `OCR完了　81 / 81（${totalElapsed}ms）`;
+    fullOcrCurrentCell.textContent = "現在：完了";
+    fullOcrNotice.textContent = "OCR結果を確認し、必要なセルを手修正してください。";
+    setStatus("81セルOCRが完了しました。低confidenceセルを確認し、必要なら手修正してください。");
+  } catch (error) {
+    console.error("[ocr] full grid OCR failed", error);
+    fullOcrRevision = null;
+    fullOcrStateBadge.textContent = "エラー";
+    fullOcrStateBadge.classList.remove("active", "success");
+    fullOcrStateBadge.classList.add("warning");
+    const message = error instanceof Error ? error.message : "全セルOCRに失敗しました。";
+    fullOcrProgressText.textContent = message;
+    fullOcrNotice.textContent = "途中結果は参考表示です。問題を確認して再OCRしてください。";
+    setStatus(message);
+  } finally {
+    setOcrProgressListener(null);
+    setFullOcrControlsDisabled(false);
+  }
 }
 
 async function handleRunSingleOcr() {
@@ -322,6 +605,20 @@ function handleCellSelection(event) {
   openCellModal(Number(target.dataset.cellIndex), target);
 }
 
+function handleOcrResultDetail(event) {
+  const button = event.target.closest(".resultDetailButton");
+  if (!button || isFullOcrRunning) return;
+  openCellModal(Number(button.dataset.cellIndex), button);
+}
+
+function handleInnerCropChange() {
+  if (isFullOcrRunning) return;
+  alignmentRevision += 1;
+  renderCellImages();
+  clearOcrHistory();
+  invalidateFullOcrResults("外周除外率を変更しました。再OCRしてください。");
+}
+
 async function handleStartCamera() {
   startCameraButton.disabled = true;
   captureButton.disabled = true;
@@ -344,8 +641,12 @@ async function handleStartCamera() {
 function handleCapture() {
   try {
     captureGuideArea(cameraPreview, cameraGuide, croppedCanvas, 900);
+    copyCapturedImageToSource();
+    alignment = createDefaultAlignment();
+    alignmentRevision += 1;
     clearOcrHistory();
-    renderCellImages();
+    regenerateFromAlignment();
+    clearFullOcrResults("画像を確認・調整してから全セルOCRを実行してください。", "未実行");
     cameraSection.hidden = true;
     resultSection.hidden = false;
     setStatus("切り出し結果を確認してください。ずれている場合は「再撮影」で戻れます。");
@@ -373,19 +674,30 @@ function handleRetake() {
 }
 
 buildCellViews();
+buildOcrResultBoard();
+updateAlignmentDisplay();
+clearFullOcrResults("画像を撮影してから全セルOCRを実行してください。", "未実行");
 
 startCameraButton.addEventListener("click", handleStartCamera);
 captureButton.addEventListener("click", handleCapture);
 retakeButton.addEventListener("click", handleRetake);
-innerCropRange.addEventListener("input", renderCellImages);
+innerCropRange.addEventListener("input", handleInnerCropChange);
 listViewButton.addEventListener("click", () => setCellView("list"));
 boardViewButton.addEventListener("click", () => setCellView("board"));
 cellList.addEventListener("click", handleCellSelection);
 boardGrid.addEventListener("click", handleCellSelection);
+ocrResultBoard.addEventListener("click", handleOcrResultDetail);
 closeModalButton.addEventListener("click", closeCellModal);
 preprocessOnButton.addEventListener("click", () => setPreprocessing(true));
 preprocessOffButton.addEventListener("click", () => setPreprocessing(false));
+fullPreprocessOnButton.addEventListener("click", () => setPreprocessing(true));
+fullPreprocessOffButton.addEventListener("click", () => setPreprocessing(false));
 runSingleOcrButton.addEventListener("click", handleRunSingleOcr);
+runFullOcrButton.addEventListener("click", handleRunFullOcr);
+resetAlignmentButton.addEventListener("click", () => applyAlignmentAction("reset"));
+for (const button of alignmentButtons) {
+  button.addEventListener("click", () => applyAlignmentAction(button.dataset.alignAction));
+}
 cellModal.addEventListener("click", (event) => {
   if (event.target === cellModal) closeCellModal();
 });
