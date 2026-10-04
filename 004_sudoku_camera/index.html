@@ -9,7 +9,7 @@
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">SUDOKU CAMERA · v0.5.0</p>
+      <p class="eyebrow">SUDOKU CAMERA · v0.5.1</p>
       <h1>ナンプレをガイドに合わせる</h1>
     </header>
 
@@ -38,6 +38,31 @@
         <button id="captureButton" type="button" hidden disabled>読み取り</button>
       </div>
     </section>
+
+    <details class="debugDisclosure testInputDisclosure">
+      <summary>DEBUG / OCR詳細 — テスト画像入力</summary>
+      <section class="testInputSection" aria-labelledby="testInputHeading">
+        <div class="sectionHeading">
+          <div>
+            <p class="stepLabel">PC BROWSER TEST</p>
+            <h2 id="testInputHeading">画像ファイルから盤面を読み込む</h2>
+          </div>
+        </div>
+        <p class="panelCopy">PNG / JPEG / WebPを中央で正方形に切り出し、900×900へ正規化して既存OCR処理へ渡します。</p>
+        <p class="inputSourceLine">Input: <strong id="inputSourceValue">CAMERA</strong></p>
+        <div class="testInputActions">
+          <label class="filePickerButton secondary" for="testImageInput">
+            ファイル選択
+            <input id="testImageInput" class="visuallyHidden" type="file" accept="image/png,image/jpeg,image/webp">
+          </label>
+          <button id="loadSampleButton" class="secondary" type="button">サンプル01を読み込む</button>
+        </div>
+        <div id="testImageDropZone" class="testImageDropZone" tabindex="0">
+          ここへ画像をドラッグ＆ドロップ
+        </div>
+        <p id="testImageInfo" class="testImageInfo" aria-live="polite">画像はまだ選択されていません。</p>
+      </section>
+    </details>
 
     <section id="resultSection" class="panel compactResultPanel" aria-labelledby="resultHeading" hidden>
       <h2 id="resultHeading" class="visuallyHidden">撮影画像の調整とOCR</h2>

@@ -433,6 +433,80 @@ button.resetAlignment { grid-area: reset; font-size: 0.62rem; }
   padding: 12px;
 }
 
+.testInputDisclosure {
+  margin-bottom: 10px;
+  background: var(--panel);
+}
+
+.testInputSection {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.testInputSection h2 { font-size: 1rem; }
+
+.inputSourceLine,
+.testImageInfo {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.inputSourceLine strong { color: var(--text); }
+
+.testInputActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.filePickerButton {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 800;
+  touch-action: manipulation;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.filePickerButton:focus-within {
+  outline: 3px solid rgba(44, 122, 93, 0.25);
+  outline-offset: 2px;
+}
+
+.filePickerButton.isDisabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.testImageDropZone {
+  min-height: 58px;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  border: 2px dashed var(--line);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.testImageDropZone.isDragging {
+  border-color: var(--accent);
+  color: var(--accent-dark);
+  background: rgba(44, 122, 93, 0.08);
+}
+
+.testImageDropZone[aria-disabled="true"] { opacity: 0.55; }
+
 .benchmarkSection {
   display: grid;
   gap: 13px;

@@ -3,6 +3,7 @@ import { drawCellCrop, drawOriginalCell, splitBoardIntoCells } from "./gridOcr.j
 import { recognizeSingleDigit, setOcrProgressListener } from "./ocr.js";
 import { OCR_INPUT_SIZE, prepareBenchmarkOcrImages, prepareOcrImages } from "./ocrImage.js";
 import { createDefaultAlignment, renderAlignedSquare, updateAlignment } from "./alignment.js";
+import { isSupportedImageFile, loadImageBlobIntoCanvas } from "./imageInput.js";
 import {
   BENCHMARK_METHODS,
   buildBenchmarkReport,
@@ -24,6 +25,11 @@ const captureButton = document.getElementById("captureButton");
 const retakeButton = document.getElementById("retakeButton");
 const croppedCanvas = document.getElementById("croppedCanvas");
 const statusMessage = document.getElementById("statusMessage");
+const testImageInput = document.getElementById("testImageInput");
+const loadSampleButton = document.getElementById("loadSampleButton");
+const testImageDropZone = document.getElementById("testImageDropZone");
+const testImageInfo = document.getElementById("testImageInfo");
+const inputSourceValue = document.getElementById("inputSourceValue");
 const innerCropRange = document.getElementById("innerCropRange");
 const innerCropValue = document.getElementById("innerCropValue");
 const listViewButton = document.getElementById("listViewButton");
@@ -119,6 +125,7 @@ let ocrResultCells = [];
 let isFullOcrRunning = false;
 let isCaptureInProgress = false;
 let isBenchmarkRunning = false;
+let isImageLoading = false;
 let benchmarkTruth = Array.from({ length: 81 }, () => 0);
 let benchmarkTruthInputs = [];
 let benchmarkResults = {};
@@ -362,6 +369,23 @@ function handleCopyOcrToTruth() {
 function clearBenchmarkTruth() {
   benchmarkTruth = Array.from({ length: 81 }, () => 0);
   for (const input of benchmarkTruthInputs) input.value = "";
+}
+
+function setBenchmarkTruth(values) {
+  if (!Array.isArray(values) || values.length !== 81) {
+    throw new Error("正解JSONは0～9の値を81個含む必要があります。");
+  }
+
+  benchmarkTruth = values.map((value) => {
+    const number = Number(value);
+    if (!Number.isInteger(number) || number < 0 || number > 9) {
+      throw new Error("正解JSONには0～9の整数だけを指定してください。");
+    }
+    return number;
+  });
+  benchmarkTruthInputs.forEach((input, index) => {
+    input.value = benchmarkTruth[index] ? String(benchmarkTruth[index]) : "";
+  });
 }
 
 function renderBenchmarkComparisonBoard() {
@@ -614,6 +638,31 @@ function copyCapturedImageToSource() {
   context.drawImage(croppedCanvas, 0, 0);
 }
 
+function activatePreparedBoard({ sourceLabel, imageInfo, truth = null }) {
+  closeCellModal();
+  closeBenchmarkModal();
+  copyCapturedImageToSource();
+  alignment = createDefaultAlignment();
+  alignmentRevision += 1;
+  clearOcrHistory();
+  regenerateFromAlignment();
+  clearFullOcrResults("画像を確認・調整してから全セルOCRを実行してください。", "未実行");
+
+  if (truth) setBenchmarkTruth(truth);
+  else clearBenchmarkTruth();
+  clearBenchmarkResults(
+    truth
+      ? "サンプル正解盤面を設定しました。Benchmarkを実行できます。"
+      : "正解盤面を設定してBenchmarkを実行してください。",
+    "未実行"
+  );
+
+  inputSourceValue.textContent = sourceLabel;
+  testImageInfo.textContent = imageInfo;
+  cameraSection.hidden = true;
+  resultSection.hidden = false;
+}
+
 function formatSignedPixels(value) {
   return `${value >= 0 ? "+" : ""}${value}px`;
 }
@@ -667,6 +716,14 @@ function setFullOcrControlsDisabled(disabled) {
   resetAlignmentButton.disabled = disabled;
   retakeButton.disabled = disabled;
   for (const button of alignmentButtons) button.disabled = disabled;
+  setTestInputControlsDisabled(disabled);
+}
+
+function setTestInputControlsDisabled(disabled) {
+  testImageInput.disabled = disabled;
+  loadSampleButton.disabled = disabled;
+  testImageInput.closest(".filePickerButton")?.classList.toggle("isDisabled", disabled);
+  testImageDropZone.setAttribute("aria-disabled", String(disabled));
 }
 
 function setBenchmarkControlsDisabled(disabled) {
@@ -1100,6 +1157,81 @@ function handleInnerCropChange() {
   invalidateBenchmarkResults("外周除外率を変更しました。Benchmarkを再実行してください。");
 }
 
+async function loadBoardImage(blob, { sourceLabel, displayName, truth = null }) {
+  if (isImageLoading || isFullOcrRunning || isBenchmarkRunning) return;
+  if (!isSupportedImageFile(blob)) {
+    throw new Error("PNG / JPEG / WebP画像を選択してください。");
+  }
+
+  isImageLoading = true;
+  setTestInputControlsDisabled(true);
+  setStatus(`${displayName} を読み込んでいます…`);
+
+  try {
+    const metadata = await loadImageBlobIntoCanvas(blob, croppedCanvas, 900);
+    activatePreparedBoard({
+      sourceLabel,
+      imageInfo: `${displayName} / 元画像 ${metadata.width}×${metadata.height}px / 入力 900×900px`,
+      truth
+    });
+    setStatus("画像を読み込みました。位置を確認し、「全セルOCR」またはBenchmarkを実行してください。");
+    resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  } finally {
+    isImageLoading = false;
+    setTestInputControlsDisabled(false);
+  }
+}
+
+async function handleTestImageFile(file) {
+  if (!file) return;
+  try {
+    await loadBoardImage(file, {
+      sourceLabel: `FILE — ${file.name}`,
+      displayName: file.name
+    });
+  } catch (error) {
+    console.error("[image-input] file load failed", error);
+    const message = error instanceof Error ? error.message : "画像ファイルの読み込みに失敗しました。";
+    testImageInfo.textContent = message;
+    setStatus(message);
+  }
+}
+
+async function handleLoadSample() {
+  if (isImageLoading || isFullOcrRunning || isBenchmarkRunning) return;
+  isImageLoading = true;
+  setTestInputControlsDisabled(true);
+  setStatus("サンプル01と正解JSONを読み込んでいます…");
+
+  try {
+    const imageResponse = await fetch("./test-images/sudoku-sample-01.png");
+    if (!imageResponse.ok) throw new Error("サンプル画像を取得できませんでした。");
+    const imageBlob = await imageResponse.blob();
+
+    const truthResponse = await fetch("./test-images/sudoku-sample-01.json");
+    if (!truthResponse.ok) throw new Error("サンプル正解JSONを取得できませんでした。");
+    const truthJson = await truthResponse.json();
+    const truth = Array.isArray(truthJson) ? truthJson : truthJson.grid;
+
+    const metadata = await loadImageBlobIntoCanvas(imageBlob, croppedCanvas, 900);
+    activatePreparedBoard({
+      sourceLabel: "SAMPLE — sudoku-sample-01",
+      imageInfo: `sudoku-sample-01.png / 元画像 ${metadata.width}×${metadata.height}px / 入力 900×900px`,
+      truth
+    });
+    setStatus("サンプル01を読み込み、Benchmark正解盤面を自動設定しました。");
+    resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    console.error("[image-input] sample load failed", error);
+    const message = error instanceof Error ? error.message : "サンプル01の読み込みに失敗しました。";
+    testImageInfo.textContent = message;
+    setStatus(message);
+  } finally {
+    isImageLoading = false;
+    setTestInputControlsDisabled(false);
+  }
+}
+
 async function handleStartCamera() {
   startCameraButton.disabled = true;
   isCaptureInProgress = false;
@@ -1122,6 +1254,7 @@ async function handleStartCamera() {
 function handleCapture() {
   if (
     isCaptureInProgress
+    || isImageLoading
     || captureButton.disabled
     || !hasLiveCameraStream(cameraPreview)
   ) return;
@@ -1135,16 +1268,10 @@ function handleCapture() {
 
   try {
     captureGuideArea(cameraPreview, cameraGuide, croppedCanvas, 900);
-    copyCapturedImageToSource();
-    alignment = createDefaultAlignment();
-    alignmentRevision += 1;
-    clearOcrHistory();
-    regenerateFromAlignment();
-    clearFullOcrResults("画像を確認・調整してから全セルOCRを実行してください。", "未実行");
-    clearBenchmarkTruth();
-    clearBenchmarkResults("正解盤面を設定してBenchmarkを実行してください。", "未実行");
-    cameraSection.hidden = true;
-    resultSection.hidden = false;
+    activatePreparedBoard({
+      sourceLabel: "CAMERA",
+      imageInfo: "カメラ撮影 / 入力 900×900px"
+    });
     captureCompleted = true;
     setStatus("画像を微調整し、「全セルOCR」を実行してください。");
     resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1184,6 +1311,35 @@ updateAlignmentDisplay();
 clearFullOcrResults("画像を撮影してから全セルOCRを実行してください。", "未実行");
 clearBenchmarkResults("正解盤面を設定してBenchmarkを実行してください。", "未実行");
 
+testImageInput.addEventListener("click", () => {
+  testImageInput.value = "";
+});
+testImageInput.addEventListener("change", async () => {
+  const [file] = testImageInput.files;
+  await handleTestImageFile(file);
+  testImageInput.value = "";
+});
+loadSampleButton.addEventListener("click", handleLoadSample);
+testImageDropZone.addEventListener("dragover", (event) => {
+  event.preventDefault();
+  if (!isImageLoading && !isFullOcrRunning && !isBenchmarkRunning) {
+    testImageDropZone.classList.add("isDragging");
+  }
+});
+testImageDropZone.addEventListener("dragleave", () => {
+  testImageDropZone.classList.remove("isDragging");
+});
+testImageDropZone.addEventListener("drop", async (event) => {
+  event.preventDefault();
+  testImageDropZone.classList.remove("isDragging");
+  if (isImageLoading || isFullOcrRunning || isBenchmarkRunning) return;
+  await handleTestImageFile(event.dataTransfer?.files?.[0]);
+});
+testImageDropZone.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  if (!testImageInput.disabled) testImageInput.click();
+});
 startCameraButton.addEventListener("click", handleStartCamera);
 captureButton.addEventListener("click", handleCapture);
 cameraStage.addEventListener("click", handleCapture);
