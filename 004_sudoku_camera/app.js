@@ -1,8 +1,15 @@
 import { captureGuideArea, hasLiveCameraStream, startCamera, stopCamera } from "./camera.js";
 import { drawCellCrop, drawOriginalCell, splitBoardIntoCells } from "./gridOcr.js";
 import { recognizeSingleDigit, setOcrProgressListener } from "./ocr.js";
-import { OCR_INPUT_SIZE, prepareOcrImages } from "./ocrImage.js";
+import { OCR_INPUT_SIZE, prepareBenchmarkOcrImages, prepareOcrImages } from "./ocrImage.js";
 import { createDefaultAlignment, renderAlignedSquare, updateAlignment } from "./alignment.js";
+import {
+  BENCHMARK_METHODS,
+  buildBenchmarkReport,
+  evaluateBenchmarkMethod,
+  formatAccuracy,
+  selectBestBenchmarkMethod
+} from "./benchmark.js";
 
 const cameraSection = document.getElementById("cameraSection");
 const resultSection = document.getElementById("resultSection");
@@ -62,11 +69,40 @@ const fullOcrCurrentCell = document.getElementById("fullOcrCurrentCell");
 const fullOcrNotice = document.getElementById("fullOcrNotice");
 const ocrConditionSummary = document.getElementById("ocrConditionSummary");
 const ocrResultBoard = document.getElementById("ocrResultBoard");
+const benchmarkStateBadge = document.getElementById("benchmarkStateBadge");
+const copyOcrToTruthButton = document.getElementById("copyOcrToTruthButton");
+const runBenchmarkButton = document.getElementById("runBenchmarkButton");
+const benchmarkTruthBoard = document.getElementById("benchmarkTruthBoard");
+const benchmarkCurrentMethod = document.getElementById("benchmarkCurrentMethod");
+const benchmarkPercent = document.getElementById("benchmarkPercent");
+const benchmarkMethodProgress = document.getElementById("benchmarkMethodProgress");
+const benchmarkProgressBar = document.getElementById("benchmarkProgressBar");
+const benchmarkTotalProgress = document.getElementById("benchmarkTotalProgress");
+const benchmarkMessage = document.getElementById("benchmarkMessage");
+const benchmarkConditions = document.getElementById("benchmarkConditions");
+const benchmarkResultsSection = document.getElementById("benchmarkResults");
+const copyBenchmarkButton = document.getElementById("copyBenchmarkButton");
+const benchmarkSummaryBody = document.getElementById("benchmarkSummaryBody");
+const benchmarkComparisonBoard = document.getElementById("benchmarkComparisonBoard");
+const benchmarkErrorLists = document.getElementById("benchmarkErrorLists");
+const benchmarkModal = document.getElementById("benchmarkModal");
+const benchmarkModalLabel = document.getElementById("benchmarkModalLabel");
+const closeBenchmarkModalButton = document.getElementById("closeBenchmarkModalButton");
+const benchmarkCellResults = document.getElementById("benchmarkCellResults");
+const benchmarkMethodSwitcher = document.getElementById("benchmarkMethodSwitcher");
+const benchmarkOriginalCanvas = document.getElementById("benchmarkOriginalCanvas");
+const benchmarkInnerCanvas = document.getElementById("benchmarkInnerCanvas");
+const benchmarkScaledCanvas = document.getElementById("benchmarkScaledCanvas");
+const benchmarkInputCanvas = document.getElementById("benchmarkInputCanvas");
+const benchmarkImageDescription = document.getElementById("benchmarkImageDescription");
 
 const capturedSourceCanvas = document.createElement("canvas");
 const batchCellCanvas = document.createElement("canvas");
 const batchScaledCanvas = document.createElement("canvas");
 const batchInputCanvas = document.createElement("canvas");
+const benchmarkCellCanvas = document.createElement("canvas");
+const benchmarkWorkScaledCanvas = document.createElement("canvas");
+const benchmarkWorkInputCanvas = document.createElement("canvas");
 
 let cells = [];
 let cellViews = [];
@@ -82,6 +118,13 @@ let ocrResultInputs = [];
 let ocrResultCells = [];
 let isFullOcrRunning = false;
 let isCaptureInProgress = false;
+let isBenchmarkRunning = false;
+let benchmarkTruth = Array.from({ length: 81 }, () => 0);
+let benchmarkTruthInputs = [];
+let benchmarkResults = {};
+let benchmarkConditionsSnapshot = null;
+let benchmarkSelectedCell = null;
+let benchmarkSelectedMethod = "current";
 
 function setStatus(message) {
   statusMessage.textContent = message;
@@ -219,6 +262,205 @@ function buildOcrResultBoard() {
   }
 
   ocrResultBoard.appendChild(fragment);
+}
+
+function benchmarkValueLabel(value) {
+  return value ? String(value) : ".";
+}
+
+function buildBenchmarkUi() {
+  const truthFragment = document.createDocumentFragment();
+  const comparisonFragment = document.createDocumentFragment();
+
+  for (let index = 0; index < 81; index += 1) {
+    const row = Math.floor(index / 9);
+    const col = index % 9;
+    const label = `R${row + 1}C${col + 1}`;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.inputMode = "numeric";
+    input.maxLength = 1;
+    input.autocomplete = "off";
+    input.className = "benchmarkTruthCell";
+    input.setAttribute("aria-label", `${label} 正解`);
+    input.addEventListener("input", () => {
+      input.value = sanitizeOcrInput(input.value);
+      benchmarkTruth[index] = input.value ? Number(input.value) : 0;
+      invalidateBenchmarkResults("正解盤面を変更しました。Benchmarkを再実行してください。");
+    });
+    benchmarkTruthInputs.push(input);
+    truthFragment.appendChild(input);
+
+    const comparison = document.createElement("button");
+    comparison.type = "button";
+    comparison.className = "benchmarkComparisonCell";
+    comparison.dataset.cellIndex = String(index);
+    comparison.setAttribute("aria-label", `${label} Benchmark比較詳細`);
+    comparisonFragment.appendChild(comparison);
+  }
+
+  benchmarkTruthBoard.appendChild(truthFragment);
+  benchmarkComparisonBoard.appendChild(comparisonFragment);
+
+  for (const method of BENCHMARK_METHODS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary";
+    button.dataset.benchmarkMethod = method.id;
+    button.textContent = method.label;
+    button.addEventListener("click", () => {
+      benchmarkSelectedMethod = method.id;
+      renderBenchmarkModalImages();
+    });
+    benchmarkMethodSwitcher.appendChild(button);
+  }
+
+  renderBenchmarkComparisonBoard();
+}
+
+function resetBenchmarkProgress() {
+  benchmarkCurrentMethod.textContent = "方式：-";
+  benchmarkMethodProgress.textContent = "方式内：0 / 81";
+  benchmarkTotalProgress.textContent = "全体：0 / 324";
+  benchmarkPercent.textContent = "0%";
+  benchmarkProgressBar.value = 0;
+}
+
+function clearBenchmarkResults(message, badgeText = "未実行") {
+  benchmarkResults = {};
+  benchmarkConditionsSnapshot = null;
+  benchmarkStateBadge.textContent = badgeText;
+  benchmarkStateBadge.classList.remove("active", "success", "warning");
+  if (badgeText === "要再実行") benchmarkStateBadge.classList.add("warning");
+  benchmarkMessage.textContent = message;
+  benchmarkMessage.classList.toggle("stale", badgeText === "要再実行");
+  benchmarkConditions.hidden = true;
+  benchmarkConditions.textContent = "";
+  benchmarkResultsSection.hidden = true;
+  benchmarkSummaryBody.replaceChildren();
+  benchmarkErrorLists.replaceChildren();
+  resetBenchmarkProgress();
+  renderBenchmarkComparisonBoard();
+}
+
+function invalidateBenchmarkResults(message = "画像条件を変更しました。Benchmarkを再実行してください。") {
+  if (isBenchmarkRunning) return;
+  const hadResults = Object.keys(benchmarkResults).length > 0;
+  clearBenchmarkResults(message, hadResults ? "要再実行" : "未実行");
+}
+
+function handleCopyOcrToTruth() {
+  if (isBenchmarkRunning) return;
+  benchmarkTruth = ocrResultInputs.map((input) => Number(sanitizeOcrInput(input.value)) || 0);
+  benchmarkTruthInputs.forEach((input, index) => {
+    input.value = benchmarkTruth[index] ? String(benchmarkTruth[index]) : "";
+  });
+  clearBenchmarkResults("通常OCR結果をコピーしました。誤認識セルを修正してから実行してください。", "未実行");
+}
+
+function clearBenchmarkTruth() {
+  benchmarkTruth = Array.from({ length: 81 }, () => 0);
+  for (const input of benchmarkTruthInputs) input.value = "";
+}
+
+function renderBenchmarkComparisonBoard() {
+  const buttons = benchmarkComparisonBoard.querySelectorAll(".benchmarkComparisonCell");
+  buttons.forEach((button, index) => {
+    const lines = [{ label: "正", value: benchmarkTruth[index] }];
+    let hasError = false;
+    BENCHMARK_METHODS.forEach((method, methodIndex) => {
+      const value = benchmarkResults[method.id]?.cells[index]?.value ?? 0;
+      lines.push({ label: String.fromCharCode(65 + methodIndex), value });
+      if (benchmarkResults[method.id] && value !== benchmarkTruth[index]) hasError = true;
+    });
+    button.replaceChildren();
+    for (const line of lines) {
+      const span = document.createElement("span");
+      const prefix = document.createElement(line.label === "正" ? "strong" : "b");
+      prefix.textContent = `${line.label}:`;
+      span.append(prefix, benchmarkValueLabel(line.value));
+      button.appendChild(span);
+    }
+    button.classList.toggle("hasError", hasError);
+  });
+}
+
+function formatBenchmarkTime(milliseconds) {
+  return `${(milliseconds / 1000).toFixed(1)}s`;
+}
+
+function renderBenchmarkResults() {
+  const best = selectBestBenchmarkMethod(benchmarkResults);
+  benchmarkSummaryBody.replaceChildren();
+
+  for (const method of BENCHMARK_METHODS) {
+    const result = benchmarkResults[method.id];
+    if (!result) continue;
+    const row = document.createElement("tr");
+    if (best?.id === method.id) row.classList.add("bestMethod");
+    const methodCell = document.createElement("th");
+    methodCell.scope = "row";
+    methodCell.textContent = method.label;
+    if (best?.id === method.id) {
+      const badge = document.createElement("span");
+      badge.className = "bestBadge";
+      badge.textContent = "BEST";
+      methodCell.appendChild(badge);
+    }
+    const digit = document.createElement("td");
+    digit.className = "digitAccuracy";
+    digit.textContent = `${result.metrics.digitCorrect}/${result.metrics.digitCells} ${formatAccuracy(result.metrics.digitAccuracy)}`;
+    const blank = document.createElement("td");
+    blank.textContent = `${result.metrics.blankCorrect}/${result.metrics.blankCells} ${formatAccuracy(result.metrics.blankAccuracy)}`;
+    const total = document.createElement("td");
+    total.textContent = `${result.metrics.totalCorrect}/81 ${formatAccuracy(result.metrics.totalAccuracy)}`;
+    const time = document.createElement("td");
+    time.textContent = formatBenchmarkTime(result.metrics.elapsedMs);
+    row.append(methodCell, digit, blank, total, time);
+    benchmarkSummaryBody.appendChild(row);
+  }
+
+  benchmarkErrorLists.replaceChildren();
+  for (const method of BENCHMARK_METHODS) {
+    const result = benchmarkResults[method.id];
+    if (!result) continue;
+    const group = document.createElement("details");
+    group.className = "benchmarkErrorGroup";
+    const summary = document.createElement("summary");
+    summary.textContent = `${method.label} — ${result.metrics.errors.length}件（数字誤認識 ${result.metrics.digitMisrecognized} / 未認識 ${result.metrics.digitUnrecognized} / 空欄→数字 ${result.metrics.blankFalsePositive}）`;
+    const items = document.createElement("div");
+    items.className = "benchmarkErrorItems";
+    if (!result.metrics.errors.length) {
+      const empty = document.createElement("p");
+      empty.className = "panelCopy";
+      empty.textContent = "誤認識はありません。";
+      items.appendChild(empty);
+    }
+    for (const error of result.metrics.errors) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "benchmarkErrorItem";
+      button.dataset.cellIndex = String(error.index);
+      button.dataset.benchmarkMethod = method.id;
+      for (const text of [
+        `R${Math.floor(error.index / 9) + 1}C${error.index % 9 + 1}`,
+        `正解 ${benchmarkValueLabel(error.expected)}`,
+        `認識 ${benchmarkValueLabel(error.actual)}`,
+        `conf ${Number.isFinite(error.confidence) ? error.confidence.toFixed(1) : "-"}`
+      ]) {
+        const span = document.createElement("span");
+        span.textContent = text;
+        button.appendChild(span);
+      }
+      items.appendChild(button);
+    }
+    group.append(summary, items);
+    benchmarkErrorLists.appendChild(group);
+  }
+
+  renderBenchmarkComparisonBoard();
+  benchmarkResultsSection.hidden = false;
 }
 
 function updateOcrResultCell(index) {
@@ -409,6 +651,7 @@ function applyAlignmentAction(action) {
   regenerateFromAlignment();
   clearOcrHistory();
   invalidateFullOcrResults("画像調整後、再OCRしてください。");
+  invalidateBenchmarkResults("画像調整後、Benchmarkを再実行してください。");
   setStatus("画像位置を調整しました。81セルを再生成したため、全セルOCRを再実行してください。");
 }
 
@@ -424,6 +667,212 @@ function setFullOcrControlsDisabled(disabled) {
   resetAlignmentButton.disabled = disabled;
   retakeButton.disabled = disabled;
   for (const button of alignmentButtons) button.disabled = disabled;
+}
+
+function setBenchmarkControlsDisabled(disabled) {
+  isBenchmarkRunning = disabled;
+  setFullOcrControlsDisabled(disabled);
+  copyOcrToTruthButton.disabled = disabled;
+  runBenchmarkButton.disabled = disabled;
+  copyBenchmarkButton.disabled = disabled;
+  for (const input of benchmarkTruthInputs) input.disabled = disabled;
+}
+
+function benchmarkConditionsText(conditions) {
+  return `X: ${formatSignedPixels(conditions.x)} / Y: ${formatSignedPixels(conditions.y)} / Zoom: ${Math.round(conditions.scale * 100)}% / Rotation: ${formatRotation(conditions.rotation)} / Outer Crop: ${conditions.outerCrop}% / OCR Size: ${OCR_INPUT_SIZE}px / PSM: SINGLE_CHAR`;
+}
+
+async function handleRunBenchmark() {
+  if (isBenchmarkRunning || isFullOcrRunning || cells.length !== 81) return;
+  if (!benchmarkTruth.some((value) => value > 0)) {
+    benchmarkStateBadge.textContent = "正解未設定";
+    benchmarkStateBadge.classList.add("warning");
+    benchmarkMessage.textContent = "正解盤面に少なくとも1つ数字を設定してください。";
+    return;
+  }
+
+  closeCellModal();
+  closeBenchmarkModal();
+  regenerateFromAlignment();
+  const truthSnapshot = [...benchmarkTruth];
+  const revisionAtStart = alignmentRevision;
+  const conditions = {
+    x: alignment.x,
+    y: alignment.y,
+    scale: alignment.scale,
+    rotation: alignment.rotation,
+    outerCrop: Number(innerCropRange.value)
+  };
+
+  benchmarkResults = {};
+  benchmarkConditionsSnapshot = null;
+  benchmarkResultsSection.hidden = true;
+  benchmarkStateBadge.textContent = "実行中";
+  benchmarkStateBadge.classList.remove("success", "warning");
+  benchmarkStateBadge.classList.add("active");
+  benchmarkMessage.classList.remove("stale");
+  benchmarkMessage.textContent = "4方式を順番に処理しています。画面を閉じずにお待ちください。";
+  resetBenchmarkProgress();
+  setBenchmarkControlsDisabled(true);
+  setOcrProgressListener(null);
+  let totalCompleted = 0;
+
+  try {
+    for (const method of BENCHMARK_METHODS) {
+      const methodCells = [];
+      let methodElapsedMs = 0;
+      benchmarkCurrentMethod.textContent = `方式：${method.label}`;
+
+      for (let index = 0; index < 81; index += 1) {
+        benchmarkMethodProgress.textContent = `方式内：${index} / 81　現在 R${Math.floor(index / 9) + 1}C${index % 9 + 1}`;
+        drawCellCrop(croppedCanvas, cells[index], benchmarkCellCanvas);
+        prepareBenchmarkOcrImages(
+          benchmarkCellCanvas,
+          benchmarkWorkScaledCanvas,
+          benchmarkWorkInputCanvas,
+          method.id
+        );
+        const result = await recognizeSingleDigit(benchmarkWorkInputCanvas);
+        methodElapsedMs += result.elapsedMs;
+        methodCells.push({
+          value: result.digit ? Number(result.digit) : 0,
+          rawText: result.rawText,
+          confidence: result.confidence,
+          elapsedMs: result.elapsedMs,
+          status: result.status
+        });
+
+        totalCompleted += 1;
+        const methodCompleted = index + 1;
+        const percent = Math.round((totalCompleted / 324) * 100);
+        benchmarkMethodProgress.textContent = `方式内：${methodCompleted} / 81`;
+        benchmarkTotalProgress.textContent = `全体：${totalCompleted} / 324`;
+        benchmarkPercent.textContent = `${percent}%`;
+        benchmarkProgressBar.value = totalCompleted;
+      }
+
+      benchmarkResults[method.id] = {
+        id: method.id,
+        label: method.label,
+        cells: methodCells,
+        metrics: evaluateBenchmarkMethod(truthSnapshot, methodCells, methodElapsedMs)
+      };
+    }
+
+    if (alignmentRevision !== revisionAtStart) {
+      throw new Error("Benchmark中に画像条件が変更されました。再実行してください。");
+    }
+
+    benchmarkConditionsSnapshot = conditions;
+    benchmarkStateBadge.textContent = "完了";
+    benchmarkStateBadge.classList.remove("active", "warning");
+    benchmarkStateBadge.classList.add("success");
+    benchmarkCurrentMethod.textContent = "方式：完了";
+    benchmarkMethodProgress.textContent = "方式内：81 / 81";
+    benchmarkMessage.textContent = "Benchmarkが完了しました。数字セル正解率を優先して比較してください。";
+    benchmarkConditions.textContent = benchmarkConditionsText(conditions);
+    benchmarkConditions.hidden = false;
+    renderBenchmarkResults();
+    setStatus("OCR Benchmarkが完了しました。結果をコピーして比較できます。");
+  } catch (error) {
+    console.error("[benchmark] failed", error);
+    benchmarkResults = {};
+    benchmarkConditionsSnapshot = null;
+    benchmarkStateBadge.textContent = "エラー";
+    benchmarkStateBadge.classList.remove("active", "success");
+    benchmarkStateBadge.classList.add("warning");
+    benchmarkMessage.textContent = error instanceof Error ? error.message : "Benchmarkに失敗しました。";
+    benchmarkResultsSection.hidden = true;
+  } finally {
+    setOcrProgressListener(null);
+    setBenchmarkControlsDisabled(false);
+  }
+}
+
+let benchmarkModalReturnTarget = null;
+
+function renderBenchmarkModalImages() {
+  if (benchmarkSelectedCell === null || !benchmarkResults[benchmarkSelectedMethod]) return;
+  const cell = cells[benchmarkSelectedCell];
+  if (!cell) return;
+
+  drawOriginalCell(croppedCanvas, cell, benchmarkOriginalCanvas);
+  drawCellCrop(croppedCanvas, cell, benchmarkInnerCanvas);
+  prepareBenchmarkOcrImages(
+    benchmarkInnerCanvas,
+    benchmarkScaledCanvas,
+    benchmarkInputCanvas,
+    benchmarkSelectedMethod
+  );
+
+  for (const button of benchmarkMethodSwitcher.querySelectorAll("button")) {
+    button.classList.toggle("active", button.dataset.benchmarkMethod === benchmarkSelectedMethod);
+  }
+
+  const descriptions = {
+    raw: "RAW：拡大のみ。前処理なし。",
+    current: "CURRENT：グレースケール → コントラスト1.35 → 平均輝度二値化。",
+    grayscale: "GRAYSCALE：グレースケールのみ。二値化なし。",
+    contrast: "CONTRAST：グレースケール → コントラスト1.35。二値化なし。"
+  };
+  benchmarkImageDescription.textContent = descriptions[benchmarkSelectedMethod];
+}
+
+function openBenchmarkModal(index, methodId, returnTarget) {
+  if (!benchmarkResults[methodId] || !cells[index]) return;
+  benchmarkSelectedCell = index;
+  benchmarkSelectedMethod = methodId;
+  benchmarkModalReturnTarget = returnTarget;
+  benchmarkModalLabel.textContent = `R${Math.floor(index / 9) + 1}C${index % 9 + 1}`;
+  const lines = [`正解：${benchmarkValueLabel(benchmarkTruth[index])}`];
+  for (const method of BENCHMARK_METHODS) {
+    const result = benchmarkResults[method.id]?.cells[index];
+    lines.push(`${method.label}：${benchmarkValueLabel(result?.value || 0)} / confidence ${Number.isFinite(result?.confidence) ? result.confidence.toFixed(1) : "-"}`);
+  }
+  benchmarkCellResults.textContent = lines.join("\n");
+  renderBenchmarkModalImages();
+  benchmarkModal.hidden = false;
+  closeBenchmarkModalButton.focus({ preventScroll: true });
+}
+
+function closeBenchmarkModal() {
+  if (benchmarkModal.hidden) return;
+  benchmarkModal.hidden = true;
+  benchmarkSelectedCell = null;
+  if (benchmarkModalReturnTarget instanceof HTMLElement) {
+    benchmarkModalReturnTarget.focus({ preventScroll: true });
+  }
+  benchmarkModalReturnTarget = null;
+}
+
+function buildBenchmarkCopyText() {
+  return buildBenchmarkReport(benchmarkResults, {
+    ...benchmarkConditionsSnapshot,
+    ocrSize: OCR_INPUT_SIZE,
+    psm: "SINGLE_CHAR"
+  });
+}
+
+async function handleCopyBenchmark() {
+  if (!benchmarkConditionsSnapshot || !Object.keys(benchmarkResults).length) return;
+  const text = buildBenchmarkCopyText();
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(text);
+    copied = true;
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    copied = document.execCommand("copy");
+    textarea.remove();
+  }
+  benchmarkMessage.textContent = copied
+    ? "Benchmark結果をクリップボードへコピーしました。"
+    : "クリップボードへコピーできませんでした。HTTPS環境で再度お試しください。";
 }
 
 async function handleRunFullOcr() {
@@ -648,6 +1097,7 @@ function handleInnerCropChange() {
   renderCellImages();
   clearOcrHistory();
   invalidateFullOcrResults("外周除外率を変更しました。再OCRしてください。");
+  invalidateBenchmarkResults("外周除外率を変更しました。Benchmarkを再実行してください。");
 }
 
 async function handleStartCamera() {
@@ -691,6 +1141,8 @@ function handleCapture() {
     clearOcrHistory();
     regenerateFromAlignment();
     clearFullOcrResults("画像を確認・調整してから全セルOCRを実行してください。", "未実行");
+    clearBenchmarkTruth();
+    clearBenchmarkResults("正解盤面を設定してBenchmarkを実行してください。", "未実行");
     cameraSection.hidden = true;
     resultSection.hidden = false;
     captureCompleted = true;
@@ -727,8 +1179,10 @@ function handleRetake() {
 
 buildCellViews();
 buildOcrResultBoard();
+buildBenchmarkUi();
 updateAlignmentDisplay();
 clearFullOcrResults("画像を撮影してから全セルOCRを実行してください。", "未実行");
+clearBenchmarkResults("正解盤面を設定してBenchmarkを実行してください。", "未実行");
 
 startCameraButton.addEventListener("click", handleStartCamera);
 captureButton.addEventListener("click", handleCapture);
@@ -752,6 +1206,23 @@ fullPreprocessOnButton.addEventListener("click", () => setPreprocessing(true));
 fullPreprocessOffButton.addEventListener("click", () => setPreprocessing(false));
 runSingleOcrButton.addEventListener("click", handleRunSingleOcr);
 runFullOcrButton.addEventListener("click", handleRunFullOcr);
+copyOcrToTruthButton.addEventListener("click", handleCopyOcrToTruth);
+runBenchmarkButton.addEventListener("click", handleRunBenchmark);
+copyBenchmarkButton.addEventListener("click", handleCopyBenchmark);
+benchmarkComparisonBoard.addEventListener("click", (event) => {
+  const target = event.target.closest(".benchmarkComparisonCell");
+  if (!target || isBenchmarkRunning) return;
+  openBenchmarkModal(Number(target.dataset.cellIndex), "current", target);
+});
+benchmarkErrorLists.addEventListener("click", (event) => {
+  const target = event.target.closest(".benchmarkErrorItem");
+  if (!target || isBenchmarkRunning) return;
+  openBenchmarkModal(Number(target.dataset.cellIndex), target.dataset.benchmarkMethod, target);
+});
+closeBenchmarkModalButton.addEventListener("click", closeBenchmarkModal);
+benchmarkModal.addEventListener("click", (event) => {
+  if (event.target === benchmarkModal) closeBenchmarkModal();
+});
 resetAlignmentButton.addEventListener("click", () => applyAlignmentAction("reset"));
 for (const button of alignmentButtons) {
   button.addEventListener("click", () => applyAlignmentAction(button.dataset.alignAction));
@@ -760,7 +1231,10 @@ cellModal.addEventListener("click", (event) => {
   if (event.target === cellModal) closeCellModal();
 });
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeCellModal();
+  if (event.key === "Escape") {
+    closeCellModal();
+    closeBenchmarkModal();
+  }
 });
 
 window.addEventListener("pagehide", () => {

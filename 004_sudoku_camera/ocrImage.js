@@ -61,3 +61,52 @@ export function applySimplePreprocessing(context, width, height) {
   context.putImageData(imageData, 0, 0);
   return threshold;
 }
+
+export function prepareBenchmarkOcrImages(sourceCanvas, scaledCanvas, inputCanvas, mode) {
+  if (mode === "raw") {
+    prepareOcrImages(sourceCanvas, scaledCanvas, inputCanvas, false);
+    return;
+  }
+  if (mode === "current") {
+    prepareOcrImages(sourceCanvas, scaledCanvas, inputCanvas, true);
+    return;
+  }
+
+  const size = OCR_INPUT_SIZE;
+  scaledCanvas.width = size;
+  scaledCanvas.height = size;
+  const scaledContext = scaledCanvas.getContext("2d", { willReadFrequently: true });
+  scaledContext.clearRect(0, 0, size, size);
+  scaledContext.imageSmoothingEnabled = true;
+  scaledContext.imageSmoothingQuality = "high";
+  scaledContext.drawImage(sourceCanvas, 0, 0, sourceCanvas.width, sourceCanvas.height, 0, 0, size, size);
+
+  inputCanvas.width = size;
+  inputCanvas.height = size;
+  const inputContext = inputCanvas.getContext("2d", { willReadFrequently: true });
+  inputContext.clearRect(0, 0, size, size);
+  inputContext.drawImage(scaledCanvas, 0, 0);
+
+  if (mode === "grayscale") applyGrayscale(inputContext, size, size, 1);
+  if (mode === "contrast") applyGrayscale(inputContext, size, size, 1.35);
+}
+
+function applyGrayscale(context, width, height, contrast) {
+  const imageData = context.getImageData(0, 0, width, height);
+  const pixels = imageData.data;
+
+  for (let index = 0; index < pixels.length; index += 4) {
+    const grayscale = Math.round(
+      pixels[index] * 0.299
+      + pixels[index + 1] * 0.587
+      + pixels[index + 2] * 0.114
+    );
+    const adjusted = Math.max(0, Math.min(255, Math.round((grayscale - 128) * contrast + 128)));
+    pixels[index] = adjusted;
+    pixels[index + 1] = adjusted;
+    pixels[index + 2] = adjusted;
+    pixels[index + 3] = 255;
+  }
+
+  context.putImageData(imageData, 0, 0);
+}

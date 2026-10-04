@@ -433,6 +433,187 @@ button.resetAlignment { grid-area: reset; font-size: 0.62rem; }
   padding: 12px;
 }
 
+.benchmarkSection {
+  display: grid;
+  gap: 13px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.benchmarkActionRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.benchmarkActionRow button { min-height: 48px; padding: 8px 10px; font-size: 0.82rem; }
+
+.benchmarkTruthBoard,
+.benchmarkComparisonBoard {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  overflow: hidden;
+  margin-top: 7px;
+  border: 3px solid var(--text);
+  border-radius: 7px;
+  background: #fff;
+}
+
+.benchmarkTruthCell,
+.benchmarkComparisonCell {
+  min-width: 0;
+  aspect-ratio: 1;
+  border: 0;
+  border-right: 1px solid rgba(24, 33, 29, 0.3);
+  border-bottom: 1px solid rgba(24, 33, 29, 0.3);
+  border-radius: 0;
+}
+
+.benchmarkTruthCell:nth-child(3n),
+.benchmarkComparisonCell:nth-child(3n) { border-right: 3px solid var(--text); }
+.benchmarkTruthCell:nth-child(9n),
+.benchmarkComparisonCell:nth-child(9n) { border-right: 0; }
+.benchmarkTruthCell:nth-child(n+19):nth-child(-n+27),
+.benchmarkTruthCell:nth-child(n+46):nth-child(-n+54),
+.benchmarkComparisonCell:nth-child(n+19):nth-child(-n+27),
+.benchmarkComparisonCell:nth-child(n+46):nth-child(-n+54) { border-bottom: 3px solid var(--text); }
+.benchmarkTruthCell:nth-child(n+73),
+.benchmarkComparisonCell:nth-child(n+73) { border-bottom: 0; }
+
+.benchmarkTruthCell {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  color: var(--text);
+  background: #fff;
+  font-size: clamp(0.82rem, 4vw, 1.25rem);
+  font-weight: 800;
+  text-align: center;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.benchmarkProgress {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #f1f5f3;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.benchmarkProgress > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text);
+}
+
+.benchmarkProgress progress { width: 100%; height: 14px; accent-color: var(--accent); }
+
+.benchmarkResultHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+button.smallActionButton { width: auto; min-height: 44px; padding: 7px 13px; font-size: 0.78rem; }
+
+.benchmarkTableWrap { overflow-x: auto; margin-bottom: 14px; }
+
+.benchmarkTable {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 0.74rem;
+}
+
+.benchmarkTable th,
+.benchmarkTable td { padding: 8px 6px; border: 1px solid var(--line); text-align: center; }
+.benchmarkTable th { color: var(--muted); background: #f1f5f3; }
+.benchmarkTable td.digitAccuracy { color: var(--accent-dark); font-size: 0.9rem; font-weight: 900; }
+.benchmarkTable tr.bestMethod { background: #e3f6eb; }
+.bestBadge { display: inline-block; margin-left: 3px; color: #07583a; font-size: 0.6rem; font-weight: 900; }
+
+.benchmarkComparisonCell {
+  width: 100%;
+  min-height: 0;
+  padding: 2px 1px;
+  color: var(--text);
+  background: #fff;
+  box-shadow: none;
+  font-size: clamp(0.34rem, 1.6vw, 0.58rem);
+  line-height: 1.18;
+  text-align: left;
+}
+
+.benchmarkComparisonCell.hasError { background: #fff0e8; }
+.benchmarkComparisonCell span { display: block; white-space: nowrap; }
+.benchmarkComparisonCell strong { color: var(--accent-dark); }
+
+.benchmarkLegend {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+
+.benchmarkErrorLists { display: grid; gap: 8px; margin-top: 7px; }
+.benchmarkErrorGroup { border: 1px solid var(--line); border-radius: 10px; background: #f7faf8; }
+.benchmarkErrorGroup summary { min-height: 44px; padding: 11px; cursor: pointer; font-weight: 800; }
+.benchmarkErrorItems { display: grid; gap: 5px; padding: 0 8px 8px; }
+button.benchmarkErrorItem {
+  display: grid;
+  grid-template-columns: 0.7fr 1fr 1fr 1.2fr;
+  gap: 5px;
+  min-height: 44px;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  background: #fff;
+  box-shadow: none;
+  font-size: 0.7rem;
+  text-align: left;
+}
+
+.benchmarkCellResults {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.65;
+  white-space: pre-line;
+}
+
+.benchmarkMethodSwitcher {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.benchmarkMethodSwitcher button { min-height: 44px; padding: 5px 2px; font-size: 0.66rem; }
+.benchmarkMethodSwitcher button.active { color: #fff; background: var(--accent); }
+
+.benchmarkImageGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.benchmarkImageGrid figure { display: grid; gap: 5px; margin: 0; min-width: 0; }
+.benchmarkImageGrid figcaption { color: var(--muted); font-size: 0.72rem; font-weight: 800; text-align: center; }
+.benchmarkImageGrid canvas {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 2px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+}
+
 .ocrConditionSummary {
   margin: 0;
   padding: 10px;
@@ -966,6 +1147,7 @@ button.closeButton {
   .hero h1 { font-size: 1.45rem; }
   .panel { padding: 12px; }
   .compactResultPanel { gap: 7px; padding: 8px; }
+  button.benchmarkErrorItem { grid-template-columns: 1fr 1fr; }
   .cellList { grid-template-columns: 1fr; }
   .modalCard { padding: 14px; }
   .ocrHistoryItem {

@@ -9,7 +9,7 @@
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">SUDOKU CAMERA · v0.4.2</p>
+      <p class="eyebrow">SUDOKU CAMERA · v0.5.0</p>
       <h1>ナンプレをガイドに合わせる</h1>
     </header>
 
@@ -105,6 +105,57 @@
 
       <details class="debugDisclosure">
         <summary>DEBUG / OCR詳細</summary>
+      <section class="benchmarkSection" aria-labelledby="benchmarkHeading">
+        <div class="sectionHeading">
+          <div>
+            <p class="stepLabel">OCR BENCHMARK</p>
+            <h2 id="benchmarkHeading">4方式を同じ81セルで比較</h2>
+          </div>
+          <span id="benchmarkStateBadge" class="stateBadge">未実行</span>
+        </div>
+
+        <p class="panelCopy">正解は完成解答ではなく、問題に印刷されている数字だけを入力します。</p>
+        <div class="benchmarkActionRow">
+          <button id="copyOcrToTruthButton" class="secondary" type="button">通常OCRからコピー</button>
+          <button id="runBenchmarkButton" class="primary" type="button">OCR Benchmark実行</button>
+        </div>
+
+        <div>
+          <h3>正解盤面</h3>
+          <div id="benchmarkTruthBoard" class="benchmarkTruthBoard" aria-label="Benchmark正解盤面"></div>
+        </div>
+
+        <div class="benchmarkProgress" role="status" aria-live="polite">
+          <div><strong id="benchmarkCurrentMethod">方式：-</strong><span id="benchmarkPercent">0%</span></div>
+          <span id="benchmarkMethodProgress">方式内：0 / 81</span>
+          <progress id="benchmarkProgressBar" max="324" value="0">0 / 324</progress>
+          <span id="benchmarkTotalProgress">全体：0 / 324</span>
+        </div>
+        <p id="benchmarkMessage" class="ocrNotice">正解盤面を設定してBenchmarkを実行してください。</p>
+        <p id="benchmarkConditions" class="ocrConditionSummary" hidden></p>
+
+        <div id="benchmarkResults" hidden>
+          <div class="benchmarkResultHeading">
+            <h3>結果サマリー</h3>
+            <button id="copyBenchmarkButton" class="secondary smallActionButton" type="button">結果をコピー</button>
+          </div>
+          <div class="benchmarkTableWrap">
+            <table class="benchmarkTable">
+              <thead>
+                <tr><th>方式</th><th>数字正解率</th><th>空欄正解率</th><th>全体</th><th>時間</th></tr>
+              </thead>
+              <tbody id="benchmarkSummaryBody"></tbody>
+            </table>
+          </div>
+
+          <h3>セル別比較</h3>
+          <p class="benchmarkLegend">正=正解 / A=RAW / B=CURRENT / C=GRAYSCALE / D=CONTRAST</p>
+          <div id="benchmarkComparisonBoard" class="benchmarkComparisonBoard" aria-label="Benchmarkセル別比較"></div>
+
+          <h3>誤認識セル</h3>
+          <div id="benchmarkErrorLists" class="benchmarkErrorLists"></div>
+        </div>
+      </section>
       <div class="cellDebugSection" aria-labelledby="cellDebugHeading">
         <div class="sectionHeading">
           <div>
@@ -223,6 +274,27 @@
           </div>
         </dl>
       </section>
+    </div>
+  </div>
+
+  <div id="benchmarkModal" class="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="benchmarkModalLabel" hidden>
+    <div class="modalCard benchmarkModalCard">
+      <div class="modalHeader">
+        <div>
+          <p class="stepLabel">BENCHMARK CELL</p>
+          <h2 id="benchmarkModalLabel">R1C1</h2>
+        </div>
+        <button id="closeBenchmarkModalButton" class="closeButton" type="button" aria-label="Benchmark詳細を閉じる">閉じる</button>
+      </div>
+      <p id="benchmarkCellResults" class="benchmarkCellResults"></p>
+      <div id="benchmarkMethodSwitcher" class="benchmarkMethodSwitcher" role="group" aria-label="確認するOCR方式"></div>
+      <div class="benchmarkImageGrid">
+        <figure><figcaption>元セル</figcaption><canvas id="benchmarkOriginalCanvas"></canvas></figure>
+        <figure><figcaption>外周除外後</figcaption><canvas id="benchmarkInnerCanvas"></canvas></figure>
+        <figure><figcaption>240px拡大</figcaption><canvas id="benchmarkScaledCanvas"></canvas></figure>
+        <figure><figcaption>OCR入力画像</figcaption><canvas id="benchmarkInputCanvas"></canvas></figure>
+      </div>
+      <p id="benchmarkImageDescription" class="preprocessDescription"></p>
     </div>
   </div>
 
