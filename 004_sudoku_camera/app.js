@@ -10,6 +10,7 @@ const cameraStage = document.getElementById("cameraStage");
 const cameraPreview = document.getElementById("cameraPreview");
 const cameraGuide = document.getElementById("cameraGuide");
 const cameraPlaceholder = document.getElementById("cameraPlaceholder");
+const cameraTapHint = document.getElementById("cameraTapHint");
 const cameraState = document.getElementById("cameraState");
 const startCameraButton = document.getElementById("startCameraButton");
 const captureButton = document.getElementById("captureButton");
@@ -80,6 +81,7 @@ let fullOcrResults = Array.from({ length: 81 }, () => null);
 let ocrResultInputs = [];
 let ocrResultCells = [];
 let isFullOcrRunning = false;
+let isCaptureInProgress = false;
 
 function setStatus(message) {
   statusMessage.textContent = message;
@@ -91,6 +93,10 @@ function setCameraActive(active) {
   cameraState.textContent = active ? "起動中" : "未起動";
   cameraState.classList.toggle("active", active);
   startCameraButton.textContent = active ? "カメラを再起動" : "カメラ開始";
+  const captureReady = active && !isCaptureInProgress;
+  captureButton.disabled = !captureReady;
+  cameraTapHint.hidden = !captureReady;
+  cameraStage.setAttribute("aria-disabled", String(!captureReady));
 }
 
 function getCellLabel(cell) {
@@ -646,12 +652,12 @@ function handleInnerCropChange() {
 
 async function handleStartCamera() {
   startCameraButton.disabled = true;
-  captureButton.disabled = true;
+  isCaptureInProgress = false;
+  setCameraActive(false);
   setStatus("カメラを起動しています…");
 
   try {
     await startCamera(cameraPreview);
-    captureButton.disabled = false;
     setCameraActive(true);
     setStatus("盤面をガイドに合わせて「読み取り」を押してください。");
   } catch (error) {
@@ -664,6 +670,19 @@ async function handleStartCamera() {
 }
 
 function handleCapture() {
+  if (
+    isCaptureInProgress
+    || captureButton.disabled
+    || !hasLiveCameraStream(cameraPreview)
+  ) return;
+
+  isCaptureInProgress = true;
+  captureButton.disabled = true;
+  cameraTapHint.hidden = true;
+  cameraStage.setAttribute("aria-disabled", "true");
+  cameraStage.classList.add("capturing");
+  let captureCompleted = false;
+
   try {
     captureGuideArea(cameraPreview, cameraGuide, croppedCanvas, 900);
     copyCapturedImageToSource();
@@ -674,11 +693,18 @@ function handleCapture() {
     clearFullOcrResults("画像を確認・調整してから全セルOCRを実行してください。", "未実行");
     cameraSection.hidden = true;
     resultSection.hidden = false;
-    setStatus("切り出し結果を確認してください。ずれている場合は「再撮影」で戻れます。");
+    captureCompleted = true;
+    setStatus("画像を微調整し、「全セルOCR」を実行してください。");
     resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     console.error("[app] capture failed", error);
     setStatus(error instanceof Error ? error.message : "画像の切り出しに失敗しました。");
+  } finally {
+    cameraStage.classList.remove("capturing");
+    if (!captureCompleted) {
+      isCaptureInProgress = false;
+      setCameraActive(hasLiveCameraStream(cameraPreview));
+    }
   }
 }
 
@@ -686,6 +712,7 @@ function handleRetake() {
   closeCellModal();
   resultSection.hidden = true;
   cameraSection.hidden = false;
+  isCaptureInProgress = false;
 
   const streamIsLive = hasLiveCameraStream(cameraPreview);
   setCameraActive(streamIsLive);
@@ -705,6 +732,12 @@ clearFullOcrResults("画像を撮影してから全セルOCRを実行してく�
 
 startCameraButton.addEventListener("click", handleStartCamera);
 captureButton.addEventListener("click", handleCapture);
+cameraStage.addEventListener("click", handleCapture);
+cameraStage.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  handleCapture();
+});
 retakeButton.addEventListener("click", handleRetake);
 innerCropRange.addEventListener("input", handleInnerCropChange);
 listViewButton.addEventListener("click", () => setCellView("list"));

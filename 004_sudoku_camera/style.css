@@ -61,6 +61,18 @@ button {
 
 .eyebrow, .stepLabel, h1, h2, h3, p { margin: 0; }
 
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .eyebrow, .stepLabel {
   color: var(--accent);
   font-size: 0.76rem;
@@ -118,7 +130,18 @@ h3 { font-size: 1.05rem; }
   overflow: hidden;
   border-radius: 18px;
   background: #111815;
+  cursor: pointer;
+  touch-action: manipulation;
 }
+
+.cameraStage[aria-disabled="true"] { cursor: default; }
+
+.cameraStage:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.cameraStage.capturing { opacity: 0.72; }
 
 .preview {
   position: absolute;
@@ -143,6 +166,22 @@ h3 { font-size: 1.05rem; }
 }
 
 .cameraPlaceholder[hidden] { display: none; }
+
+.cameraTapHint {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  z-index: 4;
+  transform: translateX(-50%);
+  padding: 7px 13px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.68);
+  font-size: 0.8rem;
+  font-weight: 800;
+  pointer-events: none;
+  white-space: nowrap;
+}
 
 .sudokuGuide {
   position: absolute;
@@ -253,95 +292,145 @@ button.secondary {
   box-shadow: none;
 }
 
-.alignmentPanel,
 .fullOcrSection {
   display: grid;
-  gap: 14px;
-  padding: 14px;
+  gap: 10px;
+  padding: 10px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 13px;
   background: #f7faf8;
 }
 
-button.compactButton {
-  width: auto;
-  min-height: 44px;
-  padding: 8px 14px;
+.compactResultPanel {
+  gap: 8px;
+  padding: 10px;
 }
 
-.alignmentValues {
+.compactAlignment {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
-}
-
-.alignmentValues span {
-  padding: 8px 5px;
-  border-radius: 9px;
-  color: var(--muted);
-  background: #fff;
-  font-size: 0.76rem;
-  text-align: center;
-}
-
-.alignmentValues strong {
-  display: block;
-  margin-top: 2px;
-  color: var(--text);
-  font-size: 0.92rem;
 }
 
 .alignmentControls {
   display: grid;
-  grid-template-columns: minmax(170px, 1.1fr) repeat(2, minmax(130px, 0.9fr));
-  gap: 14px;
-  align-items: center;
-}
-
-.directionPad {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(5, 44px);
+  grid-template-rows: repeat(4, 44px);
+  grid-template-areas:
+    ". . up . ."
+    "rotateLeft left center right rotateRight"
+    ". . down . ."
+    ". zoomOut zoomIn reset .";
+  gap: 4px 6px;
+  width: max-content;
+  margin: 0 auto;
 }
 
 button.alignmentButton {
-  min-height: 54px;
-  padding: 6px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
   border: 1px solid var(--line);
-  border-radius: 13px;
+  border-radius: 12px;
   color: var(--text);
   background: #fff;
-  box-shadow: 0 3px 8px rgba(20, 48, 36, 0.08);
-  font-size: 1.25rem;
+  box-shadow: 0 2px 6px rgba(20, 48, 36, 0.09);
+  font-size: 1.35rem;
+  line-height: 1;
   touch-action: manipulation;
 }
 
-button.alignmentButton small {
-  display: block;
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: 0.58rem;
-  font-weight: 700;
-}
+.moveUp { grid-area: up; }
+.moveDown { grid-area: down; }
+.moveLeft { grid-area: left; }
+.moveRight { grid-area: right; }
+.rotateLeft { grid-area: rotateLeft; }
+.rotateRight { grid-area: rotateRight; }
+.zoomOut { grid-area: zoomOut; }
+.zoomIn { grid-area: zoomIn; }
+button.resetAlignment { grid-area: reset; font-size: 0.62rem; }
 
 .padCenter {
+  grid-area: center;
   display: grid;
   place-items: center;
-  color: var(--muted);
-  font-size: 0.72rem;
+  color: var(--accent);
+  font-size: 0.68rem;
 }
 
-.zoomControls,
-.rotationControls {
+.alignmentValues {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3px 10px;
+  min-height: 28px;
+  padding: 5px 8px;
+  border-radius: 9px;
+  color: var(--muted);
+  background: #f1f5f3;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.alignmentValues strong {
+  margin-left: 2px;
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+.primaryActionRow {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 0.8fr);
   gap: 8px;
 }
 
-.zoomControls button.alignmentButton,
-.rotationControls button.alignmentButton {
-  min-height: 74px;
-  font-size: 1.6rem;
+.primaryActionRow button {
+  min-height: 50px;
+  padding: 9px 12px;
+}
+
+.compactRetakeButton { font-size: 0.88rem; }
+
+.compactOcrStatus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ocrSettings summary,
+.debugDisclosure > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  touch-action: manipulation;
+}
+
+.ocrSettings[open] summary { margin-bottom: 7px; }
+
+.debugDisclosure {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #f7faf8;
+}
+
+.debugDisclosure > summary {
+  padding: 0 12px;
+  color: var(--text);
+}
+
+.debugDisclosure[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.debugDisclosure .cellDebugSection {
+  padding: 12px;
 }
 
 .ocrConditionSummary {
@@ -868,19 +957,15 @@ button.closeButton {
 [hidden] { display: none !important; }
 
 @media (min-width: 560px) {
-  .buttonStack { grid-template-columns: 0.72fr 1.28fr; }
   .cellList { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 420px) {
   .hero, .panel { border-radius: 18px; }
-  .hero { padding: 17px; }
+  .hero { padding: 13px 15px; margin-bottom: 8px; }
+  .hero h1 { font-size: 1.45rem; }
   .panel { padding: 12px; }
-  .alignmentControls { grid-template-columns: 1fr; }
-  .directionPad { width: min(100%, 230px); margin: 0 auto; }
-  .alignmentValues { grid-template-columns: 1fr 1fr; }
-  .zoomControls button.alignmentButton,
-  .rotationControls button.alignmentButton { min-height: 58px; }
+  .compactResultPanel { gap: 7px; padding: 8px; }
   .cellList { grid-template-columns: 1fr; }
   .modalCard { padding: 14px; }
   .ocrHistoryItem {
