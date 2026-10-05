@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>ナンプレ カメラ読み取り</title>
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=0.5.3">
 </head>
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">SUDOKU CAMERA · v0.5.2</p>
+      <p class="eyebrow">SUDOKU CAMERA · v0.5.3</p>
       <h1>ナンプレをガイドに合わせる</h1>
     </header>
 
@@ -126,7 +126,7 @@
         <p id="fullOcrNotice" class="ocrNotice">画像調整後、「全セルOCR」を実行してください。</p>
         <p id="ocrConditionSummary" class="ocrConditionSummary" hidden></p>
         <div id="ocrResultBoard" class="ocrResultBoard" aria-label="9×9 OCR結果"></div>
-        <p class="panelCopy">各セルは空欄または1～9へ直接修正できます。右上の「詳細」からセル画像とOCR情報を確認できます。</p>
+        <p class="panelCopy">セルをタップするとミニテンキーで空欄または1～9へ修正できます。「詳細」からセル画像とOCR情報を確認できます。</p>
       </section>
 
       <details class="debugDisclosure">
@@ -262,6 +262,28 @@
     </p>
   </main>
 
+  <div id="miniKeypad" class="miniKeypad" role="dialog" aria-modal="false" aria-labelledby="miniKeypadLabel" hidden>
+    <div class="miniKeypadHeader">
+      <strong id="miniKeypadLabel">R1C1</strong>
+      <span id="miniKeypadCurrent">現在：空欄</span>
+    </div>
+    <div class="miniKeypadDigits" aria-label="入力する数字">
+      <button type="button" data-keypad-value="1">1</button>
+      <button type="button" data-keypad-value="2">2</button>
+      <button type="button" data-keypad-value="3">3</button>
+      <button type="button" data-keypad-value="4">4</button>
+      <button type="button" data-keypad-value="5">5</button>
+      <button type="button" data-keypad-value="6">6</button>
+      <button type="button" data-keypad-value="7">7</button>
+      <button type="button" data-keypad-value="8">8</button>
+      <button type="button" data-keypad-value="9">9</button>
+    </div>
+    <div class="miniKeypadActions">
+      <button type="button" class="clearKey" data-keypad-value="0">消去</button>
+      <button id="closeMiniKeypadButton" type="button" class="closeKey" aria-label="ミニテンキーを閉じる">×</button>
+    </div>
+  </div>
+
   <div id="cellModal" class="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="modalCellLabel" hidden>
     <div class="modalCard">
       <div class="modalHeader">
@@ -353,6 +375,6 @@
   </div>
 
   <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script type="module" src="./app.js?v=0.5.2"></script>
+  <script type="module" src="./app.js?v=0.5.3"></script>
 </body>
 </html>

@@ -77,6 +77,11 @@ const fullOcrCurrentCell = document.getElementById("fullOcrCurrentCell");
 const fullOcrNotice = document.getElementById("fullOcrNotice");
 const ocrConditionSummary = document.getElementById("ocrConditionSummary");
 const ocrResultBoard = document.getElementById("ocrResultBoard");
+const miniKeypad = document.getElementById("miniKeypad");
+const miniKeypadLabel = document.getElementById("miniKeypadLabel");
+const miniKeypadCurrent = document.getElementById("miniKeypadCurrent");
+const closeMiniKeypadButton = document.getElementById("closeMiniKeypadButton");
+const miniKeypadValueButtons = Array.from(document.querySelectorAll("[data-keypad-value]"));
 const benchmarkStateBadge = document.getElementById("benchmarkStateBadge");
 const copyOcrToTruthButton = document.getElementById("copyOcrToTruthButton");
 const runBenchmarkButton = document.getElementById("runBenchmarkButton");
@@ -133,6 +138,8 @@ let fullOcrRevision = null;
 let fullOcrResults = Array.from({ length: 81 }, () => null);
 let ocrResultInputs = [];
 let ocrResultCells = [];
+let keypadCellIndex = null;
+let keypadAnchor = null;
 let isFullOcrRunning = false;
 let isCaptureInProgress = false;
 let isBenchmarkRunning = false;
@@ -247,25 +254,11 @@ function buildOcrResultBoard() {
     cell.className = "ocrResultCell";
     cell.dataset.cellIndex = String(index);
 
-    const input = document.createElement("input");
-    input.type = "text";
-    input.inputMode = "numeric";
-    input.maxLength = 1;
-    input.autocomplete = "off";
-    input.setAttribute("aria-label", `${label} OCR結果`);
-    input.addEventListener("input", () => {
-      input.value = sanitizeOcrInput(input.value);
-      const existing = fullOcrResults[index] || {
-        rawText: "",
-        confidence: null,
-        elapsedMs: null,
-        status: "manual"
-      };
-      existing.value = input.value ? Number(input.value) : 0;
-      existing.manuallyEdited = true;
-      fullOcrResults[index] = existing;
-      cell.classList.add("manuallyEdited");
-    });
+    const input = document.createElement("button");
+    input.type = "button";
+    input.className = "resultValueButton";
+    input.dataset.cellIndex = String(index);
+    input.setAttribute("aria-label", `${label} OCR結果を修正`);
 
     const detailButton = document.createElement("button");
     detailButton.type = "button";
@@ -281,6 +274,77 @@ function buildOcrResultBoard() {
   }
 
   ocrResultBoard.appendChild(fragment);
+}
+
+function positionMiniKeypad() {
+  if (miniKeypad.hidden || !(keypadAnchor instanceof HTMLElement)) return;
+
+  const viewportPadding = 8;
+  const anchorRect = keypadAnchor.getBoundingClientRect();
+  const keypadRect = miniKeypad.getBoundingClientRect();
+  const gap = 8;
+  let left = anchorRect.left + (anchorRect.width - keypadRect.width) / 2;
+  let top = anchorRect.bottom + gap;
+
+  if (top + keypadRect.height > window.innerHeight - viewportPadding) {
+    top = anchorRect.top - keypadRect.height - gap;
+  }
+
+  left = Math.max(viewportPadding, Math.min(left, window.innerWidth - keypadRect.width - viewportPadding));
+  top = Math.max(viewportPadding, Math.min(top, window.innerHeight - keypadRect.height - viewportPadding));
+  miniKeypad.style.left = `${Math.round(left)}px`;
+  miniKeypad.style.top = `${Math.round(top)}px`;
+  miniKeypad.style.visibility = "visible";
+}
+
+function refreshMiniKeypad() {
+  if (keypadCellIndex === null) return;
+  const metadata = fullOcrResults[keypadCellIndex];
+  const value = metadata?.value || 0;
+  miniKeypadLabel.textContent = `R${Math.floor(keypadCellIndex / 9) + 1}C${keypadCellIndex % 9 + 1}`;
+  miniKeypadCurrent.textContent = `現在：${value || "空欄"}`;
+  for (const button of miniKeypadValueButtons) {
+    const buttonValue = Number(button.dataset.keypadValue);
+    button.classList.toggle("current", buttonValue === value);
+    button.setAttribute("aria-pressed", String(buttonValue === value));
+  }
+}
+
+function closeMiniKeypad({ restoreFocus = false } = {}) {
+  if (keypadCellIndex !== null) ocrResultCells[keypadCellIndex]?.classList.remove("selectedForEdit");
+  const returnTarget = keypadAnchor;
+  keypadCellIndex = null;
+  keypadAnchor = null;
+  miniKeypad.hidden = true;
+  miniKeypad.style.visibility = "hidden";
+  if (restoreFocus && returnTarget instanceof HTMLElement) returnTarget.focus({ preventScroll: true });
+}
+
+function openMiniKeypad(index, anchor) {
+  if (isFullOcrRunning || !fullOcrResults[index] || fullOcrRevision !== alignmentRevision) return;
+  if (keypadCellIndex !== null && keypadCellIndex !== index) {
+    ocrResultCells[keypadCellIndex]?.classList.remove("selectedForEdit");
+  }
+  keypadCellIndex = index;
+  keypadAnchor = anchor;
+  ocrResultCells[index]?.classList.add("selectedForEdit");
+  miniKeypad.hidden = false;
+  miniKeypad.style.visibility = "hidden";
+  refreshMiniKeypad();
+  positionMiniKeypad();
+}
+
+function applyManualOcrValue(value) {
+  if (keypadCellIndex === null) return;
+  const metadata = fullOcrResults[keypadCellIndex];
+  if (!metadata || fullOcrRevision !== alignmentRevision) {
+    closeMiniKeypad();
+    return;
+  }
+  metadata.value = value;
+  metadata.manuallyEdited = true;
+  updateOcrResultCell(keypadCellIndex);
+  closeMiniKeypad({ restoreFocus: true });
 }
 
 function benchmarkValueLabel(value) {
@@ -382,7 +446,7 @@ function invalidateBenchmarkResults(message = "画像条件を変更しました
 
 function handleCopyOcrToTruth() {
   if (isBenchmarkRunning) return;
-  benchmarkTruth = ocrResultInputs.map((input) => Number(sanitizeOcrInput(input.value)) || 0);
+  benchmarkTruth = fullOcrResults.map((result) => result?.value || 0);
   benchmarkTruthInputs.forEach((input, index) => {
     input.value = benchmarkTruth[index] ? String(benchmarkTruth[index]) : "";
   });
@@ -514,7 +578,13 @@ function updateOcrResultCell(index) {
   const metadata = fullOcrResults[index];
   const input = ocrResultInputs[index];
   const cell = ocrResultCells[index];
-  input.value = metadata?.value ? String(metadata.value) : "";
+  const currentValue = metadata?.value || 0;
+  const originalValue = metadata?.ocrValue || 0;
+  input.textContent = currentValue ? String(currentValue) : "";
+  input.dataset.value = String(currentValue);
+  input.dataset.ocrValue = String(originalValue);
+  input.dataset.manuallyEdited = String(Boolean(metadata?.manuallyEdited));
+  input.setAttribute("aria-disabled", String(!metadata || fullOcrRevision !== alignmentRevision));
   cell.classList.remove("lowConfidence", "manuallyEdited");
 
   if (metadata && Number.isFinite(metadata.confidence) && metadata.confidence < 70) {
@@ -526,6 +596,7 @@ function updateOcrResultCell(index) {
     ? metadata.confidence.toFixed(1)
     : "-";
   cell.title = `${Math.floor(index / 9) + 1}行${index % 9 + 1}列 / confidence ${confidenceLabel}`;
+  input.setAttribute("aria-label", `R${Math.floor(index / 9) + 1}C${index % 9 + 1} OCR結果 ${currentValue || "空欄"} を修正`);
 }
 
 function renderOcrResultBoard() {
@@ -555,7 +626,7 @@ function showStoredOcrResult(index) {
   ocrConfidence.textContent = formatConfidence(stored.confidence);
   ocrElapsedTime.textContent = Number.isFinite(stored.elapsedMs) ? `${stored.elapsedMs}ms` : "-";
   ocrProgress.textContent = stored.manuallyEdited
-    ? "一括OCR後に手修正された結果です。"
+    ? `一括OCR後に手修正された結果です（OCR元値：${stored.ocrValue || "空欄"}／現在値：${stored.value || "空欄"}）。`
     : "一括OCRで取得した結果です。必要ならこのセルだけ再OCRできます。";
 }
 
@@ -634,6 +705,7 @@ function clearOcrHistory() {
 }
 
 function clearFullOcrResults(message, badgeText = "未実行") {
+  closeMiniKeypad();
   fullOcrRevision = null;
   fullOcrResults = Array.from({ length: 81 }, () => null);
   renderOcrResultBoard();
@@ -964,6 +1036,7 @@ async function handleCopyBenchmark() {
 async function handleRunFullOcr() {
   if (isFullOcrRunning || cells.length !== 81) return;
 
+  closeMiniKeypad();
   closeCellModal();
   regenerateFromAlignment();
   const revisionAtStart = alignmentRevision;
@@ -1012,8 +1085,10 @@ async function handleRunFullOcr() {
         else prepareOcrImages(batchCellCanvas, batchScaledCanvas, batchInputCanvas, false);
         result = await recognizeSingleDigit(batchInputCanvas);
       }
+      const recognizedValue = result.digit ? Number(result.digit) : 0;
       fullOcrResults[index] = {
-        value: result.digit ? Number(result.digit) : 0,
+        ocrValue: recognizedValue,
+        value: recognizedValue,
         rawText: result.rawText,
         confidence: result.confidence,
         elapsedMs: result.elapsedMs,
@@ -1035,6 +1110,7 @@ async function handleRunFullOcr() {
     }
 
     fullOcrRevision = revisionAtStart;
+    renderOcrResultBoard();
     const totalElapsed = Math.round(performance.now() - batchStartedAt);
     fullOcrStateBadge.textContent = "完了";
     fullOcrStateBadge.classList.remove("active", "warning");
@@ -1178,8 +1254,16 @@ function handleCellSelection(event) {
 
 function handleOcrResultDetail(event) {
   const button = event.target.closest(".resultDetailButton");
-  if (!button || isFullOcrRunning) return;
-  openCellModal(Number(button.dataset.cellIndex), button);
+  if (button) {
+    if (isFullOcrRunning) return;
+    closeMiniKeypad();
+    openCellModal(Number(button.dataset.cellIndex), button);
+    return;
+  }
+
+  const cell = event.target.closest(".ocrResultCell");
+  if (!cell) return;
+  openMiniKeypad(Number(cell.dataset.cellIndex), cell.querySelector(".resultValueButton") || cell);
 }
 
 function handleInnerCropChange() {
@@ -1455,6 +1539,7 @@ function handleCapture() {
 }
 
 function handleRetake() {
+  closeMiniKeypad();
   closeCellModal();
   resultSection.hidden = true;
   cameraSection.hidden = false;
@@ -1558,11 +1643,39 @@ cellModal.addEventListener("click", (event) => {
   if (event.target === cellModal) closeCellModal();
 });
 document.addEventListener("keydown", (event) => {
+  if (keypadCellIndex !== null) {
+    const typingTarget = event.target instanceof HTMLElement
+      && (event.target.matches("input, textarea, select") || event.target.isContentEditable);
+    if (!typingTarget && /^[1-9]$/.test(event.key)) {
+      event.preventDefault();
+      applyManualOcrValue(Number(event.key));
+      return;
+    }
+    if (!typingTarget && (event.key === "0" || event.key === "Backspace" || event.key === "Delete")) {
+      event.preventDefault();
+      applyManualOcrValue(0);
+      return;
+    }
+  }
   if (event.key === "Escape") {
+    closeMiniKeypad({ restoreFocus: true });
     closeCellModal();
     closeBenchmarkModal();
   }
 });
+
+miniKeypad.addEventListener("click", (event) => {
+  const valueButton = event.target.closest("[data-keypad-value]");
+  if (valueButton) applyManualOcrValue(Number(valueButton.dataset.keypadValue));
+});
+closeMiniKeypadButton.addEventListener("click", () => closeMiniKeypad({ restoreFocus: true }));
+document.addEventListener("pointerdown", (event) => {
+  if (miniKeypad.hidden || miniKeypad.contains(event.target)) return;
+  if (event.target instanceof Element && event.target.closest(".ocrResultCell")) return;
+  closeMiniKeypad();
+});
+window.addEventListener("resize", positionMiniKeypad);
+window.addEventListener("scroll", positionMiniKeypad, { passive: true });
 
 window.addEventListener("pagehide", () => {
   stopCamera(cameraPreview);

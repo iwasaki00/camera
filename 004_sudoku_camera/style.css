@@ -796,7 +796,7 @@ button.benchmarkErrorItem {
 .ocrResultCell:nth-child(n+46):nth-child(-n+54) { border-bottom: 3px solid var(--text); }
 .ocrResultCell:nth-child(n+73) { border-bottom: 0; }
 
-.ocrResultCell input {
+.ocrResultCell .resultValueButton {
   width: 100%;
   height: 100%;
   padding: 1px 1px 13px;
@@ -810,6 +810,12 @@ button.benchmarkErrorItem {
   text-align: center;
   appearance: none;
   -webkit-appearance: none;
+}
+
+.ocrResultCell.selectedForEdit {
+  z-index: 1;
+  outline: 3px solid #2a77c7;
+  outline-offset: -3px;
 }
 
 .ocrResultCell.lowConfidence {
@@ -843,6 +849,80 @@ button.resultDetailButton {
   box-shadow: none;
   font-size: clamp(0.38rem, 1.4vw, 0.58rem);
   line-height: 1;
+}
+
+.miniKeypad {
+  position: fixed;
+  z-index: 80;
+  width: 164px;
+  padding: 8px;
+  border: 1px solid rgba(24, 33, 29, 0.22);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(24, 33, 29, 0.28);
+}
+
+.miniKeypad[hidden] {
+  display: none;
+}
+
+.miniKeypadHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 2px 6px;
+}
+
+.miniKeypadHeader span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.miniKeypadDigits {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.miniKeypad button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 9px;
+  font-size: 1rem;
+  font-weight: 800;
+  box-shadow: none;
+}
+
+.miniKeypad button.current {
+  color: #fff;
+  background: #2a77c7;
+  box-shadow: inset 0 0 0 2px #174d82;
+}
+
+.miniKeypadActions {
+  display: grid;
+  grid-template-columns: 1fr 44px;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.miniKeypadActions .clearKey {
+  color: #8b3f21;
+  background: #fff0e8;
+}
+
+.miniKeypadActions .closeKey {
+  color: var(--text);
+  background: #edf1ef;
+}
+
+.miniKeypadActions button.current {
+  color: #fff;
+  background: #2a77c7;
 }
 
 .cellDebugSection {
