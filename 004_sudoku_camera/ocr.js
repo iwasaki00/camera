@@ -1,5 +1,6 @@
 let workerPromise = null;
 let progressListener = null;
+let activePageSegmentationMode = "10";
 
 async function getWorker() {
   if (!window.Tesseract) {
@@ -18,7 +19,7 @@ async function getWorker() {
 
       await worker.setParameters({
         tessedit_char_whitelist: "123456789",
-        tessedit_pageseg_mode: "10"
+        tessedit_pageseg_mode: activePageSegmentationMode
       });
 
       console.log("[ocr] worker ready");
@@ -27,6 +28,20 @@ async function getWorker() {
   }
 
   return workerPromise;
+}
+
+export async function setOcrPageSegmentationMode(mode) {
+  const normalized = String(mode);
+  if (!/^(6|8|10)$/.test(normalized)) {
+    throw new Error(`未対応のPSMです: ${normalized}`);
+  }
+  const worker = await getWorker();
+  if (normalized === activePageSegmentationMode) return;
+  await worker.setParameters({
+    tessedit_char_whitelist: "123456789",
+    tessedit_pageseg_mode: normalized
+  });
+  activePageSegmentationMode = normalized;
 }
 
 export function classifySingleDigit(text) {

@@ -515,6 +515,30 @@ button.resetAlignment { grid-area: reset; font-size: 0.62rem; }
   background: #fff;
 }
 
+.tuningSection {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  background: #f7faf8;
+}
+
+.tuningProgress { display: grid; gap: 7px; color: var(--muted); font-size: 0.8rem; }
+.tuningProgress progress { width: 100%; }
+.tuningTable td:nth-child(2) { min-width: 300px; white-space: normal; }
+.tuningAnalysis {
+  max-height: 280px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
 .benchmarkActionRow {
   display: grid;
   grid-template-columns: 1fr 1fr;

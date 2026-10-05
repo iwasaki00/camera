@@ -9,7 +9,7 @@
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">SUDOKU CAMERA · v0.5.1</p>
+      <p class="eyebrow">SUDOKU CAMERA · v0.5.2</p>
       <h1>ナンプレをガイドに合わせる</h1>
     </header>
 
@@ -56,6 +56,7 @@
             <input id="testImageInput" class="visuallyHidden" type="file" accept="image/png,image/jpeg,image/webp">
           </label>
           <button id="loadSampleButton" class="secondary" type="button">サンプル01を読み込む</button>
+          <button id="loadSample02Button" class="secondary" type="button">サンプル02を読み込む</button>
         </div>
         <div id="testImageDropZone" class="testImageDropZone" tabindex="0">
           ここへ画像をドラッグ＆ドロップ
@@ -130,6 +131,31 @@
 
       <details class="debugDisclosure">
         <summary>DEBUG / OCR詳細</summary>
+      <section class="tuningSection" aria-labelledby="tuningHeading">
+        <div class="sectionHeading">
+          <div>
+            <p class="stepLabel">OCR TUNING</p>
+            <h2 id="tuningHeading">OCR条件を自動比較</h2>
+          </div>
+          <span id="tuningStateBadge" class="stateBadge">未実行</span>
+        </div>
+        <p class="panelCopy">現在の画像と正解盤面で、前処理・PSM・入力サイズ・Crop・二値化・余白・空欄判定を順番に比較します。</p>
+        <button id="runTuningButton" class="secondary" type="button">OCR TUNING実行</button>
+        <div class="tuningProgress" role="status" aria-live="polite">
+          <strong id="tuningProgressText">チューニングはまだ実行していません。</strong>
+          <progress id="tuningProgressBar" max="2187" value="0">0</progress>
+        </div>
+        <div id="tuningResults" hidden>
+          <p id="tuningBest" class="ocrConditionSummary"></p>
+          <div class="benchmarkTableWrap">
+            <table class="benchmarkTable tuningTable">
+              <thead><tr><th>ID</th><th>条件</th><th>数字</th><th>空欄</th><th>全体</th><th>時間</th></tr></thead>
+              <tbody id="tuningSummaryBody"></tbody>
+            </table>
+          </div>
+          <pre id="tuningAnalysis" class="tuningAnalysis"></pre>
+        </div>
+      </section>
       <section class="benchmarkSection" aria-labelledby="benchmarkHeading">
         <div class="sectionHeading">
           <div>

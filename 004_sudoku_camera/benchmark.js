@@ -90,7 +90,7 @@ function reportValue(value) {
   return value ? String(value) : ".";
 }
 
-export function buildBenchmarkReport(methodResults, conditions, version = "v0.5.1") {
+export function buildBenchmarkReport(methodResults, conditions, version = "v0.5.2") {
   const best = selectBestBenchmarkMethod(methodResults);
   const lines = [
     "OCR BENCHMARK",
