@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>ナンプレ カメラ読み取り</title>
-  <link rel="stylesheet" href="./style.css?v=0.5.3">
+  <link rel="stylesheet" href="./style.css?v=0.6.0">
 </head>
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">SUDOKU CAMERA · v0.5.3</p>
+      <p class="eyebrow">SUDOKU CAMERA · v0.6.0</p>
       <h1>ナンプレをガイドに合わせる</h1>
     </header>
 
@@ -125,6 +125,7 @@
 
         <p id="fullOcrNotice" class="ocrNotice">画像調整後、「全セルOCR」を実行してください。</p>
         <p id="ocrConditionSummary" class="ocrConditionSummary" hidden></p>
+        <p id="validationSummary" class="validationSummary" role="status" aria-live="polite">検証待ち</p>
         <div id="ocrResultBoard" class="ocrResultBoard" aria-label="9×9 OCR結果"></div>
         <p class="panelCopy">セルをタップするとミニテンキーで空欄または1～9へ修正できます。「詳細」からセル画像とOCR情報を確認できます。</p>
       </section>
@@ -267,6 +268,7 @@
       <strong id="miniKeypadLabel">R1C1</strong>
       <span id="miniKeypadCurrent">現在：空欄</span>
     </div>
+    <p id="miniKeypadIssues" class="miniKeypadIssues" hidden></p>
     <div class="miniKeypadDigits" aria-label="入力する数字">
       <button type="button" data-keypad-value="1">1</button>
       <button type="button" data-keypad-value="2">2</button>
@@ -375,6 +377,6 @@
   </div>
 
   <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script type="module" src="./app.js?v=0.5.3"></script>
+  <script type="module" src="./app.js?v=0.6.0"></script>
 </body>
 </html>

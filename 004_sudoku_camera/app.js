@@ -5,6 +5,7 @@ import { isClearlyBlankCell, OCR_INPUT_SIZE, prepareBenchmarkOcrImages, prepareF
 import { createDefaultAlignment, renderAlignedSquare, updateAlignment } from "./alignment.js";
 import { isSupportedImageFile, loadImageBlobIntoCanvas } from "./imageInput.js";
 import { runFinalCandidate, runOcrTuning, tuningConfigLabel } from "./tuning.js?v=0.5.2";
+import { validateSudokuGrid } from "./validation.mjs";
 import {
   BENCHMARK_METHODS,
   buildBenchmarkReport,
@@ -76,10 +77,12 @@ const fullOcrProgressBar = document.getElementById("fullOcrProgressBar");
 const fullOcrCurrentCell = document.getElementById("fullOcrCurrentCell");
 const fullOcrNotice = document.getElementById("fullOcrNotice");
 const ocrConditionSummary = document.getElementById("ocrConditionSummary");
+const validationSummary = document.getElementById("validationSummary");
 const ocrResultBoard = document.getElementById("ocrResultBoard");
 const miniKeypad = document.getElementById("miniKeypad");
 const miniKeypadLabel = document.getElementById("miniKeypadLabel");
 const miniKeypadCurrent = document.getElementById("miniKeypadCurrent");
+const miniKeypadIssues = document.getElementById("miniKeypadIssues");
 const closeMiniKeypadButton = document.getElementById("closeMiniKeypadButton");
 const miniKeypadValueButtons = Array.from(document.querySelectorAll("[data-keypad-value]"));
 const benchmarkStateBadge = document.getElementById("benchmarkStateBadge");
@@ -303,6 +306,9 @@ function refreshMiniKeypad() {
   const value = metadata?.value || 0;
   miniKeypadLabel.textContent = `R${Math.floor(keypadCellIndex / 9) + 1}C${keypadCellIndex % 9 + 1}`;
   miniKeypadCurrent.textContent = `現在：${value || "空欄"}`;
+  const issueLabels = (metadata?.validationIssues || []).map(validationIssueLabel);
+  miniKeypadIssues.textContent = issueLabels.length > 0 ? `要確認：${issueLabels.join(" / ")}` : "";
+  miniKeypadIssues.hidden = issueLabels.length === 0;
   for (const button of miniKeypadValueButtons) {
     const buttonValue = Number(button.dataset.keypadValue);
     button.classList.toggle("current", buttonValue === value);
@@ -343,7 +349,7 @@ function applyManualOcrValue(value) {
   }
   metadata.value = value;
   metadata.manuallyEdited = true;
-  updateOcrResultCell(keypadCellIndex);
+  validateFullOcrResults();
   closeMiniKeypad({ restoreFocus: true });
 }
 
@@ -585,22 +591,55 @@ function updateOcrResultCell(index) {
   input.dataset.ocrValue = String(originalValue);
   input.dataset.manuallyEdited = String(Boolean(metadata?.manuallyEdited));
   input.setAttribute("aria-disabled", String(!metadata || fullOcrRevision !== alignmentRevision));
-  cell.classList.remove("lowConfidence", "manuallyEdited");
+  const validationIssues = metadata?.validationIssues || [];
+  cell.classList.remove("lowConfidence", "manuallyEdited", "needsReview");
 
-  if (metadata && Number.isFinite(metadata.confidence) && metadata.confidence < 70) {
+  if (validationIssues.includes("low-confidence")) {
     cell.classList.add("lowConfidence");
   }
+  if (validationIssues.length > 0) cell.classList.add("needsReview");
   if (metadata?.manuallyEdited) cell.classList.add("manuallyEdited");
 
   const confidenceLabel = metadata && Number.isFinite(metadata.confidence)
     ? metadata.confidence.toFixed(1)
     : "-";
-  cell.title = `${Math.floor(index / 9) + 1}行${index % 9 + 1}列 / confidence ${confidenceLabel}`;
+  const issueTitle = validationIssues.length > 0
+    ? ` / 要確認: ${validationIssues.map(validationIssueLabel).join(", ")}`
+    : "";
+  cell.title = `${Math.floor(index / 9) + 1}行${index % 9 + 1}列 / confidence ${confidenceLabel}${issueTitle}`;
   input.setAttribute("aria-label", `R${Math.floor(index / 9) + 1}C${index % 9 + 1} OCR結果 ${currentValue || "空欄"} を修正`);
 }
 
 function renderOcrResultBoard() {
   for (let index = 0; index < 81; index += 1) updateOcrResultCell(index);
+}
+
+function validationIssueLabel(issue) {
+  return {
+    "low-confidence": "低confidence",
+    "duplicate-row": "行重複",
+    "duplicate-column": "列重複",
+    "duplicate-block": "3×3重複"
+  }[issue] || issue;
+}
+
+function resetValidationSummary() {
+  validationSummary.textContent = "検証待ち";
+  validationSummary.classList.remove("clear", "warning");
+}
+
+function validateFullOcrResults() {
+  const issuesByCell = validateSudokuGrid(fullOcrResults);
+  fullOcrResults.forEach((metadata, index) => {
+    if (metadata) metadata.validationIssues = issuesByCell[index];
+  });
+  renderOcrResultBoard();
+
+  const issueCount = issuesByCell.filter((issues) => issues.length > 0).length;
+  validationSummary.textContent = issueCount === 0 ? "✓ 要確認なし" : `要確認 ${issueCount}件`;
+  validationSummary.classList.toggle("clear", issueCount === 0);
+  validationSummary.classList.toggle("warning", issueCount > 0);
+  refreshMiniKeypad();
 }
 
 function renderModalCell(index) {
@@ -720,6 +759,7 @@ function clearFullOcrResults(message, badgeText = "未実行") {
   fullOcrNotice.classList.toggle("stale", badgeText === "要再OCR");
   ocrConditionSummary.hidden = true;
   ocrConditionSummary.textContent = "";
+  resetValidationSummary();
 }
 
 function invalidateFullOcrResults(message = "画像調整後、再OCRしてください。") {
@@ -1093,7 +1133,8 @@ async function handleRunFullOcr() {
         confidence: result.confidence,
         elapsedMs: result.elapsedMs,
         status: result.status,
-        manuallyEdited: false
+        manuallyEdited: false,
+        validationIssues: []
       };
       updateOcrResultCell(index);
 
@@ -1110,7 +1151,7 @@ async function handleRunFullOcr() {
     }
 
     fullOcrRevision = revisionAtStart;
-    renderOcrResultBoard();
+    validateFullOcrResults();
     const totalElapsed = Math.round(performance.now() - batchStartedAt);
     fullOcrStateBadge.textContent = "完了";
     fullOcrStateBadge.classList.remove("active", "warning");

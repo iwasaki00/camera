@@ -820,7 +820,24 @@ button.benchmarkErrorItem {
 
 .ocrResultCell.lowConfidence {
   background: #fff0d9;
+}
+
+.ocrResultCell.needsReview {
+  background: #fff7e9;
   box-shadow: inset 0 0 0 2px #e2923f;
+}
+
+.ocrResultCell.needsReview::before {
+  content: "!";
+  position: absolute;
+  z-index: 2;
+  top: 1px;
+  right: 3px;
+  color: #a34e12;
+  font-size: clamp(0.58rem, 1.8vw, 0.76rem);
+  font-weight: 900;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .ocrResultCell.manuallyEdited::after {
@@ -879,6 +896,42 @@ button.resultDetailButton {
   color: var(--muted);
   font-size: 0.7rem;
   white-space: nowrap;
+}
+
+.miniKeypadIssues {
+  margin: 0 0 6px;
+  padding: 5px 6px;
+  border-radius: 7px;
+  color: #8b3f21;
+  background: #fff0e8;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.miniKeypadIssues[hidden] {
+  display: none;
+}
+
+.validationSummary {
+  width: fit-content;
+  margin: 0;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: var(--muted);
+  background: #edf1ef;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.validationSummary.clear {
+  color: var(--accent-dark);
+  background: #e7f5ee;
+}
+
+.validationSummary.warning {
+  color: #8b3f21;
+  background: #fff0e8;
 }
 
 .miniKeypadDigits {
