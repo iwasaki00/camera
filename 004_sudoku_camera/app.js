@@ -4,6 +4,7 @@ import { recognizeSingleDigit, setOcrProgressListener } from "./ocr.js";
 import { OCR_INPUT_SIZE, prepareBenchmarkOcrImages, prepareOcrImages } from "./ocrImage.js";
 import { createDefaultAlignment, renderAlignedSquare, updateAlignment } from "./alignment.js";
 import { isSupportedImageFile, loadImageBlobIntoCanvas } from "./imageInput.js";
+import { runOcrTuning, tuningConfigLabel } from "./tuning.js";
 import {
   BENCHMARK_METHODS,
   buildBenchmarkReport,
@@ -27,6 +28,7 @@ const croppedCanvas = document.getElementById("croppedCanvas");
 const statusMessage = document.getElementById("statusMessage");
 const testImageInput = document.getElementById("testImageInput");
 const loadSampleButton = document.getElementById("loadSampleButton");
+const loadSample02Button = document.getElementById("loadSample02Button");
 const testImageDropZone = document.getElementById("testImageDropZone");
 const testImageInfo = document.getElementById("testImageInfo");
 const inputSourceValue = document.getElementById("inputSourceValue");
@@ -101,6 +103,14 @@ const benchmarkInnerCanvas = document.getElementById("benchmarkInnerCanvas");
 const benchmarkScaledCanvas = document.getElementById("benchmarkScaledCanvas");
 const benchmarkInputCanvas = document.getElementById("benchmarkInputCanvas");
 const benchmarkImageDescription = document.getElementById("benchmarkImageDescription");
+const tuningStateBadge = document.getElementById("tuningStateBadge");
+const runTuningButton = document.getElementById("runTuningButton");
+const tuningProgressText = document.getElementById("tuningProgressText");
+const tuningProgressBar = document.getElementById("tuningProgressBar");
+const tuningResultsSection = document.getElementById("tuningResults");
+const tuningBest = document.getElementById("tuningBest");
+const tuningSummaryBody = document.getElementById("tuningSummaryBody");
+const tuningAnalysis = document.getElementById("tuningAnalysis");
 
 const capturedSourceCanvas = document.createElement("canvas");
 const batchCellCanvas = document.createElement("canvas");
@@ -126,6 +136,7 @@ let isFullOcrRunning = false;
 let isCaptureInProgress = false;
 let isBenchmarkRunning = false;
 let isImageLoading = false;
+let isTuningRunning = false;
 let benchmarkTruth = Array.from({ length: 81 }, () => 0);
 let benchmarkTruthInputs = [];
 let benchmarkResults = {};
