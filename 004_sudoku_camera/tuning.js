@@ -1,8 +1,19 @@
 import { drawCellCrop, splitBoardIntoCells } from "./gridOcr.js";
 import { recognizeSingleDigit, setOcrPageSegmentationMode } from "./ocr.js";
 import { evaluateBenchmarkMethod } from "./benchmark.js";
+import { analyzeCellInk } from "./ocrImage.js?v=0.5.2";
 
 const PSM_LABELS = Object.freeze({ "10": "SINGLE_CHAR", "8": "SINGLE_WORD", "6": "SINGLE_BLOCK" });
+
+export const FINAL_CANDIDATE_CONFIG = Object.freeze({
+  id: "FINAL",
+  preprocess: "otsu",
+  psm: "8",
+  size: 240,
+  crop: 15,
+  padding: 0.125,
+  blankDetection: true
+});
 
 function clampByte(value) {
   return Math.max(0, Math.min(255, Math.round(value)));
@@ -91,18 +102,6 @@ function prepareTuningImage(sourceCanvas, outputCanvas, config) {
   applyPixels(context, size, config.preprocess);
 }
 
-export function analyzeCellInk(sourceCanvas) {
-  const context = sourceCanvas.getContext("2d", { willReadFrequently: true });
-  const pixels = context.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height).data;
-  let darkPixels = 0;
-  const totalPixels = pixels.length / 4;
-  for (let offset = 0; offset < pixels.length; offset += 4) {
-    const gray = pixels[offset] * 0.299 + pixels[offset + 1] * 0.587 + pixels[offset + 2] * 0.114;
-    if (gray < 160) darkPixels += 1;
-  }
-  return { darkPixels, ratio: darkPixels / totalPixels };
-}
-
 function compareResults(left, right) {
   return right.metrics.digitAccuracy - left.metrics.digitAccuracy
     || left.metrics.digitUnrecognized - right.metrics.digitUnrecognized
@@ -172,6 +171,14 @@ async function runOne(boardCanvas, truth, config, onProgress) {
   };
 }
 
+export async function runFinalCandidate(boardCanvas, truth, onProgress) {
+  try {
+    return await runOne(boardCanvas, truth, FINAL_CANDIDATE_CONFIG, onProgress);
+  } finally {
+    await setOcrPageSegmentationMode("10");
+  }
+}
+
 function variants(base, field, values, prefix) {
   return values.map(({ value, label }) => ({ ...base, [field]: value, id: `${prefix}-${label}` }));
 }
@@ -198,6 +205,9 @@ export async function runOcrTuning(boardCanvas, truth, onProgress) {
     }
 
     let best = bestResult(results);
+    // Aの4方式は従来どおり全81セルをOCRする。以降は画像だけを使う
+    // 保守的な空欄判定で明白な空欄を省き、数字条件の比較を高速化する。
+    best = { ...best, config: { ...best.config, blankDetection: true } };
     const phaseDefinitions = [
       ["psm", [{ value: "10", label: "CHAR" }, { value: "8", label: "WORD" }, { value: "6", label: "BLOCK" }], "B"],
       ["size", [120, 180, 240, 320, 480].map((value) => ({ value, label: String(value) })), "C"],

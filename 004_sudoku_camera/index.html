@@ -140,7 +140,10 @@
           <span id="tuningStateBadge" class="stateBadge">未実行</span>
         </div>
         <p class="panelCopy">現在の画像と正解盤面で、前処理・PSM・入力サイズ・Crop・二値化・余白・空欄判定を順番に比較します。</p>
-        <button id="runTuningButton" class="secondary" type="button">OCR TUNING実行</button>
+        <div class="tuningActions">
+          <button id="runTuningButton" class="secondary" type="button">OCR TUNING実行</button>
+          <button id="runFinalCandidateButton" class="secondary" type="button">FINAL候補だけ検証</button>
+        </div>
         <div class="tuningProgress" role="status" aria-live="polite">
           <strong id="tuningProgressText">チューニングはまだ実行していません。</strong>
           <progress id="tuningProgressBar" max="2187" value="0">0</progress>
@@ -219,9 +222,9 @@
         <div class="cropControl">
           <label for="innerCropRange">
             外周除外率
-            <output id="innerCropValue" for="innerCropRange">20%</output>
+            <output id="innerCropValue" for="innerCropRange">15%</output>
           </label>
-          <input id="innerCropRange" type="range" min="10" max="30" step="5" value="20">
+          <input id="innerCropRange" type="range" min="10" max="30" step="5" value="15">
           <div class="rangeLabels" aria-hidden="true">
             <span>10%</span>
             <span>20%</span>
@@ -350,6 +353,6 @@
   </div>
 
   <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="./app.js?v=0.5.2"></script>
 </body>
 </html>

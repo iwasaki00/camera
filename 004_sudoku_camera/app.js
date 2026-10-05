@@ -1,10 +1,10 @@
 import { captureGuideArea, hasLiveCameraStream, startCamera, stopCamera } from "./camera.js";
 import { drawCellCrop, drawOriginalCell, splitBoardIntoCells } from "./gridOcr.js";
-import { recognizeSingleDigit, setOcrProgressListener } from "./ocr.js";
-import { OCR_INPUT_SIZE, prepareBenchmarkOcrImages, prepareOcrImages } from "./ocrImage.js";
+import { recognizeSingleDigit, setOcrPageSegmentationMode, setOcrProgressListener } from "./ocr.js";
+import { isClearlyBlankCell, OCR_INPUT_SIZE, prepareBenchmarkOcrImages, prepareFinalOcrImages, prepareOcrImages } from "./ocrImage.js?v=0.5.2";
 import { createDefaultAlignment, renderAlignedSquare, updateAlignment } from "./alignment.js";
 import { isSupportedImageFile, loadImageBlobIntoCanvas } from "./imageInput.js";
-import { runOcrTuning, tuningConfigLabel } from "./tuning.js";
+import { runFinalCandidate, runOcrTuning, tuningConfigLabel } from "./tuning.js?v=0.5.2";
 import {
   BENCHMARK_METHODS,
   buildBenchmarkReport,
@@ -105,6 +105,7 @@ const benchmarkInputCanvas = document.getElementById("benchmarkInputCanvas");
 const benchmarkImageDescription = document.getElementById("benchmarkImageDescription");
 const tuningStateBadge = document.getElementById("tuningStateBadge");
 const runTuningButton = document.getElementById("runTuningButton");
+const runFinalCandidateButton = document.getElementById("runFinalCandidateButton");
 const tuningProgressText = document.getElementById("tuningProgressText");
 const tuningProgressBar = document.getElementById("tuningProgressBar");
 const tuningResultsSection = document.getElementById("tuningResults");
@@ -362,6 +363,17 @@ function clearBenchmarkResults(message, badgeText = "未実行") {
   renderBenchmarkComparisonBoard();
 }
 
+function clearTuningResults() {
+  tuningStateBadge.textContent = "未実行";
+  tuningStateBadge.classList.remove("active", "success", "warning");
+  tuningProgressText.textContent = "チューニングはまだ実行していません。";
+  tuningProgressBar.value = 0;
+  tuningResultsSection.hidden = true;
+  tuningSummaryBody.replaceChildren();
+  tuningBest.textContent = "";
+  tuningAnalysis.textContent = "";
+}
+
 function invalidateBenchmarkResults(message = "画像条件を変更しました。Benchmarkを再実行してください。") {
   if (isBenchmarkRunning) return;
   const hadResults = Object.keys(benchmarkResults).length > 0;
@@ -548,9 +560,10 @@ function showStoredOcrResult(index) {
 }
 
 function prepareSelectedCellOcrImages() {
-  prepareOcrImages(modalInnerCanvas, ocrScaledCanvas, ocrInputCanvas, preprocessEnabled);
+  if (preprocessEnabled) prepareFinalOcrImages(modalInnerCanvas, ocrScaledCanvas, ocrInputCanvas);
+  else prepareOcrImages(modalInnerCanvas, ocrScaledCanvas, ocrInputCanvas, false);
   preprocessDescription.textContent = preprocessEnabled
-    ? `A：外周除外 → B：${OCR_INPUT_SIZE}px拡大 → C：グレースケール・コントラスト調整・二値化`
+    ? `A：外周除外 → B：白余白12.5%で${OCR_INPUT_SIZE}px配置 → C：グレースケール・コントラスト・Otsu二値化`
     : `A：外周除外 → B：${OCR_INPUT_SIZE}px拡大 → C：前処理なし（Bと同じ画像）`;
 }
 
@@ -667,6 +680,7 @@ function activatePreparedBoard({ sourceLabel, imageInfo, truth = null }) {
       : "正解盤面を設定してBenchmarkを実行してください。",
     "未実行"
   );
+  clearTuningResults();
 
   inputSourceValue.textContent = sourceLabel;
   testImageInfo.textContent = imageInfo;
@@ -728,11 +742,14 @@ function setFullOcrControlsDisabled(disabled) {
   retakeButton.disabled = disabled;
   for (const button of alignmentButtons) button.disabled = disabled;
   setTestInputControlsDisabled(disabled);
+  runTuningButton.disabled = disabled;
+  runFinalCandidateButton.disabled = disabled;
 }
 
 function setTestInputControlsDisabled(disabled) {
   testImageInput.disabled = disabled;
   loadSampleButton.disabled = disabled;
+  loadSample02Button.disabled = disabled;
   testImageInput.closest(".filePickerButton")?.classList.toggle("isDisabled", disabled);
   testImageDropZone.setAttribute("aria-disabled", String(disabled));
 }
@@ -786,6 +803,7 @@ async function handleRunBenchmark() {
   let totalCompleted = 0;
 
   try {
+    await setOcrPageSegmentationMode("10");
     for (const method of BENCHMARK_METHODS) {
       const methodCells = [];
       let methodElapsedMs = 0;
@@ -977,6 +995,7 @@ async function handleRunFullOcr() {
   });
 
   try {
+    await setOcrPageSegmentationMode("8");
     for (let index = 0; index < cells.length; index += 1) {
       currentIndex = index + 1;
       const cell = cells[index];
@@ -985,13 +1004,14 @@ async function handleRunFullOcr() {
       fullOcrProgressText.textContent = `OCR中… ${index} / 81`;
 
       drawCellCrop(croppedCanvas, cell, batchCellCanvas);
-      prepareOcrImages(
-        batchCellCanvas,
-        batchScaledCanvas,
-        batchInputCanvas,
-        preprocessAtStart
-      );
-      const result = await recognizeSingleDigit(batchInputCanvas);
+      let result;
+      if (isClearlyBlankCell(batchCellCanvas)) {
+        result = { digit: "", rawText: "", confidence: null, elapsedMs: 0, status: "empty", display: "空欄" };
+      } else {
+        if (preprocessAtStart) prepareFinalOcrImages(batchCellCanvas, batchScaledCanvas, batchInputCanvas);
+        else prepareOcrImages(batchCellCanvas, batchScaledCanvas, batchInputCanvas, false);
+        result = await recognizeSingleDigit(batchInputCanvas);
+      }
       fullOcrResults[index] = {
         value: result.digit ? Number(result.digit) : 0,
         rawText: result.rawText,
@@ -1022,7 +1042,7 @@ async function handleRunFullOcr() {
     fullOcrProgressText.textContent = `OCR完了　81 / 81（${totalElapsed}ms）`;
     fullOcrCurrentCell.textContent = "現在：完了";
     fullOcrNotice.textContent = "OCR結果を確認し、必要なセルを手修正してください。";
-    ocrConditionSummary.textContent = `OCR条件 — X: ${formatSignedPixels(ocrConditions.x)} / Y: ${formatSignedPixels(ocrConditions.y)} / Zoom: ${Math.round(ocrConditions.scale * 100)}% / Rotation: ${formatRotation(ocrConditions.rotation)} / Outer Crop: ${ocrConditions.outerCrop}% / Preprocess: ${ocrConditions.preprocess ? "ON" : "OFF"}`;
+    ocrConditionSummary.textContent = `OCR条件 — X: ${formatSignedPixels(ocrConditions.x)} / Y: ${formatSignedPixels(ocrConditions.y)} / Zoom: ${Math.round(ocrConditions.scale * 100)}% / Rotation: ${formatRotation(ocrConditions.rotation)} / Outer Crop: ${ocrConditions.outerCrop}% / Preprocess: ${ocrConditions.preprocess ? "Otsu + Padding 12.5%" : "OFF"} / PSM: SINGLE_WORD / Blank Detection: ON`;
     ocrConditionSummary.hidden = false;
     setStatus("81セルOCRが完了しました。低confidenceセルを確認し、必要なら手修正してください。");
   } catch (error) {
@@ -1062,7 +1082,10 @@ async function handleRunSingleOcr() {
   });
 
   try {
-    const result = await recognizeSingleDigit(ocrSnapshot);
+    await setOcrPageSegmentationMode("8");
+    const result = isClearlyBlankCell(modalInnerCanvas)
+      ? { digit: "", rawText: "", confidence: null, elapsedMs: 0, status: "empty", display: "空欄" }
+      : await recognizeSingleDigit(ocrSnapshot);
     if (selectedCellIndex === cellIndex) {
       ocrRawResult.textContent = JSON.stringify(result.rawText);
       ocrNormalizedResult.textContent = result.display;
@@ -1168,6 +1191,139 @@ function handleInnerCropChange() {
   invalidateBenchmarkResults("外周除外率を変更しました。Benchmarkを再実行してください。");
 }
 
+function renderTuningResults(tuningResult, sourceLabel) {
+  tuningSummaryBody.replaceChildren();
+  for (const result of tuningResult.results) {
+    const row = document.createElement("tr");
+    const values = [
+      result.id,
+      tuningConfigLabel(result.config),
+      `${result.metrics.digitCorrect}/${result.metrics.digitCells} ${formatAccuracy(result.metrics.digitAccuracy)}`,
+      `${result.metrics.blankCorrect}/${result.metrics.blankCells} ${formatAccuracy(result.metrics.blankAccuracy)}`,
+      `${result.metrics.totalCorrect}/81 ${formatAccuracy(result.metrics.totalAccuracy)}`,
+      `${(result.metrics.elapsedMs / 1000).toFixed(1)}s`
+    ];
+    for (const value of values) {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.appendChild(cell);
+    }
+    if (result === tuningResult.best) row.classList.add("bestRow");
+    tuningSummaryBody.appendChild(row);
+  }
+
+  const best = tuningResult.best;
+  const digitLines = Object.entries(best.analysis.perDigit)
+    .map(([digit, counts]) => `${digit}: ${counts.correct}/${counts.total}`)
+    .join(" / ");
+  const errorLines = best.metrics.errors
+    .filter((error) => error.expected > 0)
+    .map((error) => `R${Math.floor(error.index / 9) + 1}C${error.index % 9 + 1}: ${error.expected} → ${error.actual || "空欄"}`);
+  const failures = best.analysis.failures;
+
+  tuningBest.textContent = `FINAL CANDIDATE (${sourceLabel}) — ${tuningConfigLabel(best.config)} / Digit ${formatAccuracy(best.metrics.digitAccuracy)} / Blank ${formatAccuracy(best.metrics.blankAccuracy)} / Overall ${formatAccuracy(best.metrics.totalAccuracy)}`;
+  tuningAnalysis.textContent = [
+    `数字別: ${digitLines}`,
+    `数字→空欄: ${failures.empty}`,
+    `別数字: ${failures.wrong}`,
+    `複数文字: ${failures.multiple}`,
+    `低confidence誤り: ${failures.lowConfidence}`,
+    `高confidence誤り: ${failures.highConfidenceWrong}`,
+    "誤認識:",
+    ...(errorLines.length ? errorLines : ["なし"])
+  ].join("\n");
+  tuningResultsSection.hidden = false;
+}
+
+async function handleRunTuning() {
+  if (isTuningRunning || isFullOcrRunning || isBenchmarkRunning || cells.length !== 81) return;
+  if (!benchmarkTruth.some(Number)) {
+    tuningStateBadge.textContent = "正解未設定";
+    tuningStateBadge.classList.add("warning");
+    tuningProgressText.textContent = "正解盤面を設定してから実行してください。";
+    return;
+  }
+
+  isTuningRunning = true;
+  setFullOcrControlsDisabled(true);
+  for (const input of benchmarkTruthInputs) input.disabled = true;
+  setOcrProgressListener(null);
+  tuningStateBadge.textContent = "実行中";
+  tuningStateBadge.classList.remove("success", "warning");
+  tuningStateBadge.classList.add("active");
+  tuningProgressBar.value = 0;
+  tuningResultsSection.hidden = true;
+  let completed = 0;
+  const sourceLabel = inputSourceValue.textContent;
+
+  try {
+    const result = await runOcrTuning(croppedCanvas, [...benchmarkTruth], ({ config, cell }) => {
+      completed += 1;
+      tuningProgressBar.value = completed;
+      tuningProgressText.textContent = `${config.id} — ${cell}/81　全体 ${completed}/${tuningProgressBar.max}`;
+    });
+    renderTuningResults(result, sourceLabel);
+    tuningStateBadge.textContent = "完了";
+    tuningStateBadge.classList.remove("active");
+    tuningStateBadge.classList.add("success");
+    tuningProgressText.textContent = `比較完了 — ${result.results.length}条件 / ${completed}セルOCR`;
+    setStatus("OCR TUNINGが完了しました。数字正解率を最優先して結果を確認してください。");
+  } catch (error) {
+    console.error("[tuning] failed", error);
+    tuningStateBadge.textContent = "エラー";
+    tuningStateBadge.classList.remove("active", "success");
+    tuningStateBadge.classList.add("warning");
+    tuningProgressText.textContent = error instanceof Error ? error.message : "OCR TUNINGに失敗しました。";
+  } finally {
+    isTuningRunning = false;
+    setFullOcrControlsDisabled(false);
+    for (const input of benchmarkTruthInputs) input.disabled = false;
+  }
+}
+
+async function handleRunFinalCandidate() {
+  if (isTuningRunning || isFullOcrRunning || isBenchmarkRunning || cells.length !== 81) return;
+  if (!benchmarkTruth.some(Number)) {
+    tuningProgressText.textContent = "正解盤面を設定してから実行してください。";
+    return;
+  }
+
+  isTuningRunning = true;
+  setFullOcrControlsDisabled(true);
+  for (const input of benchmarkTruthInputs) input.disabled = true;
+  setOcrProgressListener(null);
+  tuningStateBadge.textContent = "FINAL検証中";
+  tuningStateBadge.classList.remove("success", "warning");
+  tuningStateBadge.classList.add("active");
+  tuningProgressBar.max = 81;
+  tuningProgressBar.value = 0;
+  tuningResultsSection.hidden = true;
+  const sourceLabel = inputSourceValue.textContent;
+
+  try {
+    const result = await runFinalCandidate(croppedCanvas, [...benchmarkTruth], ({ cell }) => {
+      tuningProgressBar.value = cell;
+      tuningProgressText.textContent = `FINAL候補 — ${cell}/81`;
+    });
+    renderTuningResults({ results: [result], best: result }, sourceLabel);
+    tuningStateBadge.textContent = "FINAL検証完了";
+    tuningStateBadge.classList.remove("active");
+    tuningStateBadge.classList.add("success");
+    tuningProgressText.textContent = "FINAL候補の81セル検証が完了しました。";
+  } catch (error) {
+    console.error("[tuning] final candidate failed", error);
+    tuningStateBadge.textContent = "エラー";
+    tuningStateBadge.classList.remove("active", "success");
+    tuningStateBadge.classList.add("warning");
+    tuningProgressText.textContent = error instanceof Error ? error.message : "FINAL候補の検証に失敗しました。";
+  } finally {
+    tuningProgressBar.max = 2187;
+    isTuningRunning = false;
+    setFullOcrControlsDisabled(false);
+    for (const input of benchmarkTruthInputs) input.disabled = false;
+  }
+}
+
 async function loadBoardImage(blob, { sourceLabel, displayName, truth = null }) {
   if (isImageLoading || isFullOcrRunning || isBenchmarkRunning) return;
   if (!isSupportedImageFile(blob)) {
@@ -1208,33 +1364,33 @@ async function handleTestImageFile(file) {
   }
 }
 
-async function handleLoadSample() {
+async function handleLoadSample(sampleName = "sudoku-sample-01") {
   if (isImageLoading || isFullOcrRunning || isBenchmarkRunning) return;
   isImageLoading = true;
   setTestInputControlsDisabled(true);
-  setStatus("サンプル01と正解JSONを読み込んでいます…");
+  setStatus(`${sampleName}と正解JSONを読み込んでいます…`);
 
   try {
-    const imageResponse = await fetch("./test-images/sudoku-sample-01.png");
+    const imageResponse = await fetch(`./test-images/${sampleName}.png`);
     if (!imageResponse.ok) throw new Error("サンプル画像を取得できませんでした。");
     const imageBlob = await imageResponse.blob();
 
-    const truthResponse = await fetch("./test-images/sudoku-sample-01.json");
+    const truthResponse = await fetch(`./test-images/${sampleName}.json`);
     if (!truthResponse.ok) throw new Error("サンプル正解JSONを取得できませんでした。");
     const truthJson = await truthResponse.json();
     const truth = Array.isArray(truthJson) ? truthJson : truthJson.grid;
 
     const metadata = await loadImageBlobIntoCanvas(imageBlob, croppedCanvas, 900);
     activatePreparedBoard({
-      sourceLabel: "SAMPLE — sudoku-sample-01",
-      imageInfo: `sudoku-sample-01.png / 元画像 ${metadata.width}×${metadata.height}px / 入力 900×900px`,
+      sourceLabel: `SAMPLE — ${sampleName}`,
+      imageInfo: `${sampleName}.png / 元画像 ${metadata.width}×${metadata.height}px / 入力 900×900px`,
       truth
     });
-    setStatus("サンプル01を読み込み、Benchmark正解盤面を自動設定しました。");
+    setStatus(`${sampleName}を読み込み、Benchmark正解盤面を自動設定しました。`);
     resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     console.error("[image-input] sample load failed", error);
-    const message = error instanceof Error ? error.message : "サンプル01の読み込みに失敗しました。";
+    const message = error instanceof Error ? error.message : `${sampleName}の読み込みに失敗しました。`;
     testImageInfo.textContent = message;
     setStatus(message);
   } finally {
@@ -1321,6 +1477,7 @@ buildBenchmarkUi();
 updateAlignmentDisplay();
 clearFullOcrResults("画像を撮影してから全セルOCRを実行してください。", "未実行");
 clearBenchmarkResults("正解盤面を設定してBenchmarkを実行してください。", "未実行");
+clearTuningResults();
 
 testImageInput.addEventListener("click", () => {
   testImageInput.value = "";
@@ -1330,7 +1487,8 @@ testImageInput.addEventListener("change", async () => {
   await handleTestImageFile(file);
   testImageInput.value = "";
 });
-loadSampleButton.addEventListener("click", handleLoadSample);
+loadSampleButton.addEventListener("click", () => handleLoadSample("sudoku-sample-01"));
+loadSample02Button.addEventListener("click", () => handleLoadSample("sudoku-sample-02"));
 testImageDropZone.addEventListener("dragover", (event) => {
   event.preventDefault();
   if (!isImageLoading && !isFullOcrRunning && !isBenchmarkRunning) {
@@ -1375,6 +1533,8 @@ runSingleOcrButton.addEventListener("click", handleRunSingleOcr);
 runFullOcrButton.addEventListener("click", handleRunFullOcr);
 copyOcrToTruthButton.addEventListener("click", handleCopyOcrToTruth);
 runBenchmarkButton.addEventListener("click", handleRunBenchmark);
+runTuningButton.addEventListener("click", handleRunTuning);
+runFinalCandidateButton.addEventListener("click", handleRunFinalCandidate);
 copyBenchmarkButton.addEventListener("click", handleCopyBenchmark);
 benchmarkComparisonBoard.addEventListener("click", (event) => {
   const target = event.target.closest(".benchmarkComparisonCell");

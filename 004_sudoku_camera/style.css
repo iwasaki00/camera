@@ -524,6 +524,8 @@ button.resetAlignment { grid-area: reset; font-size: 0.62rem; }
 }
 
 .tuningProgress { display: grid; gap: 7px; color: var(--muted); font-size: 0.8rem; }
+.tuningActions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tuningActions button { min-height: 48px; padding: 8px 10px; font-size: 0.82rem; }
 .tuningProgress progress { width: 100%; }
 .tuningTable td:nth-child(2) { min-width: 300px; white-space: normal; }
 .tuningAnalysis {
