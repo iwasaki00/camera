@@ -22,6 +22,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
   color: var(--text);
   background: radial-gradient(circle at top, rgba(20, 125, 88, 0.13), transparent 34%), var(--bg);
@@ -48,8 +49,8 @@ button {
 }
 
 .hero {
-  padding: 20px;
-  margin-bottom: 14px;
+  padding: 15px 17px;
+  margin-bottom: 8px;
 }
 
 .panel {
@@ -82,7 +83,7 @@ button {
 
 h1 {
   margin-top: 6px;
-  font-size: clamp(1.65rem, 7vw, 2.6rem);
+  font-size: clamp(1.4rem, 6vw, 2.2rem);
   line-height: 1.18;
 }
 
@@ -105,6 +106,57 @@ h3 { font-size: 1.05rem; }
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.stepProgress {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  margin: 0 4px 10px;
+  color: var(--muted);
+}
+
+.stepProgress::before {
+  content: "";
+  position: absolute;
+  left: 12.5%;
+  right: 12.5%;
+  top: 13px;
+  height: 2px;
+  background: var(--line);
+}
+
+.appStep {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.appStep b {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  color: var(--muted);
+  background: var(--bg);
+  font-size: 0.72rem;
+}
+
+.appStep.active {
+  color: var(--accent-dark);
+}
+
+.appStep.active b {
+  border-color: var(--accent);
+  color: #fff;
+  background: var(--accent);
 }
 
 .stateBadge {
@@ -301,14 +353,53 @@ button.secondary {
   background: #f7faf8;
 }
 
+.reviewOnly {
+  display: grid;
+  gap: 10px;
+}
+
+.fullOcrSection.readingMode .reviewOnly,
+.fullOcrSection.readingMode .solutionSection,
+.fullOcrSection.reviewMode .fullOcrProgress,
+.fullOcrSection.reviewMode .solutionSection,
+.fullOcrSection.answerMode > .compactOcrStatus,
+.fullOcrSection.answerMode > .fullOcrProgress,
+.fullOcrSection.answerMode .reviewOnly {
+  display: none;
+}
+
 .compactResultPanel {
   gap: 8px;
   padding: 10px;
 }
 
+.alignmentDisclosure {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f7faf8;
+}
+
+.alignmentDisclosure > summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 12px;
+  color: var(--accent-dark);
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 800;
+  touch-action: manipulation;
+}
+
+.alignmentDisclosure[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
 .compactAlignment {
   display: grid;
   gap: 6px;
+  padding: 10px;
 }
 
 .alignmentControls {
@@ -349,7 +440,7 @@ button.alignmentButton {
 .rotateRight { grid-area: rotateRight; }
 .zoomOut { grid-area: zoomOut; }
 .zoomIn { grid-area: zoomIn; }
-button.resetAlignment { grid-area: reset; font-size: 0.62rem; }
+button.resetAlignment { grid-area: reset; font-size: 0.56rem; }
 
 .padCenter {
   grid-area: center;
@@ -381,7 +472,7 @@ button.resetAlignment { grid-area: reset; font-size: 0.62rem; }
 
 .primaryActionRow {
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(0, 0.8fr);
+  grid-template-columns: 1fr;
   gap: 8px;
 }
 
@@ -390,7 +481,24 @@ button.resetAlignment { grid-area: reset; font-size: 0.62rem; }
   padding: 9px 12px;
 }
 
-.compactRetakeButton { font-size: 0.88rem; }
+.compactRetakeButton {
+  width: auto;
+  min-height: 44px !important;
+  justify-self: center;
+  padding: 7px 18px !important;
+  border-color: transparent !important;
+  color: var(--muted) !important;
+  background: transparent !important;
+  font-size: 0.84rem;
+}
+
+.compactResultPanel[data-result-mode="review"] #runFullOcrButton,
+.compactResultPanel[data-result-mode="answer"] #runFullOcrButton {
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
 
 .compactOcrStatus {
   display: flex;
@@ -431,6 +539,21 @@ button.resetAlignment { grid-area: reset; font-size: 0.62rem; }
 
 .debugDisclosure .cellDebugSection {
   padding: 12px;
+}
+
+.diagnosticSettings {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.diagnosticSettings h2 { font-size: 1rem; }
+
+.diagnosticLine {
+  color: var(--muted);
+  font-size: 0.76rem;
 }
 
 .testInputDisclosure {
@@ -799,7 +922,7 @@ button.benchmarkErrorItem {
 .ocrResultCell .resultValueButton {
   width: 100%;
   height: 100%;
-  padding: 1px 1px 13px;
+  padding: 1px;
   border: 0;
   border-radius: 0;
   outline-offset: -2px;
@@ -810,6 +933,10 @@ button.benchmarkErrorItem {
   text-align: center;
   appearance: none;
   -webkit-appearance: none;
+}
+
+body.diagnosticsOpen .ocrResultCell .resultValueButton {
+  padding-bottom: 13px;
 }
 
 .ocrResultCell.selectedForEdit {
@@ -853,6 +980,7 @@ button.benchmarkErrorItem {
 }
 
 button.resultDetailButton {
+  display: none;
   position: absolute;
   left: 2px;
   right: 2px;
@@ -866,6 +994,10 @@ button.resultDetailButton {
   box-shadow: none;
   font-size: clamp(0.38rem, 1.4vw, 0.58rem);
   line-height: 1;
+}
+
+body.diagnosticsOpen button.resultDetailButton {
+  display: block;
 }
 
 .miniKeypad {

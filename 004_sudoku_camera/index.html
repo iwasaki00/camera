@@ -4,20 +4,27 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>ナンプレ カメラ読み取り</title>
-  <link rel="stylesheet" href="./style.css?v=0.7.0">
+  <link rel="stylesheet" href="./style.css?v=0.8.0">
 </head>
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">SUDOKU CAMERA · v0.7.0</p>
-      <h1>ナンプレをガイドに合わせる</h1>
+      <p class="eyebrow">SUDOKU CAMERA · v0.8.0</p>
+      <h1>ナンプレを撮って答えを見る</h1>
     </header>
+
+    <nav class="stepProgress" aria-label="進行状況">
+      <span class="appStep active" data-app-step="1" aria-current="step"><b>1</b>撮影</span>
+      <span class="appStep" data-app-step="2"><b>2</b>読取</span>
+      <span class="appStep" data-app-step="3"><b>3</b>確認</span>
+      <span class="appStep" data-app-step="4"><b>4</b>答え</span>
+    </nav>
 
     <section id="cameraSection" class="panel" aria-labelledby="cameraHeading">
       <div class="sectionHeading">
         <div>
           <p class="stepLabel">STEP 1</p>
-          <h2 id="cameraHeading">カメラで盤面を合わせる</h2>
+          <h2 id="cameraHeading">問題を撮る</h2>
         </div>
         <span id="cameraState" class="stateBadge">未起動</span>
       </div>
@@ -30,7 +37,7 @@
         <div class="cameraPlaceholder" id="cameraPlaceholder">
           <span>カメラを開始してください</span>
         </div>
-        <span id="cameraTapHint" class="cameraTapHint" hidden>タップして撮影</span>
+        <span id="cameraTapHint" class="cameraTapHint" hidden>枠に問題を合わせてタップ</span>
       </div>
 
       <div class="buttonStack">
@@ -38,32 +45,6 @@
         <button id="captureButton" type="button" hidden disabled>読み取り</button>
       </div>
     </section>
-
-    <details class="debugDisclosure testInputDisclosure">
-      <summary>DEBUG / OCR詳細 — テスト画像入力</summary>
-      <section class="testInputSection" aria-labelledby="testInputHeading">
-        <div class="sectionHeading">
-          <div>
-            <p class="stepLabel">PC BROWSER TEST</p>
-            <h2 id="testInputHeading">画像ファイルから盤面を読み込む</h2>
-          </div>
-        </div>
-        <p class="panelCopy">PNG / JPEG / WebPを中央で正方形に切り出し、900×900へ正規化して既存OCR処理へ渡します。</p>
-        <p class="inputSourceLine">Input: <strong id="inputSourceValue">CAMERA</strong></p>
-        <div class="testInputActions">
-          <label class="filePickerButton secondary" for="testImageInput">
-            ファイル選択
-            <input id="testImageInput" class="visuallyHidden" type="file" accept="image/png,image/jpeg,image/webp">
-          </label>
-          <button id="loadSampleButton" class="secondary" type="button">サンプル01を読み込む</button>
-          <button id="loadSample02Button" class="secondary" type="button">サンプル02を読み込む</button>
-        </div>
-        <div id="testImageDropZone" class="testImageDropZone" tabindex="0">
-          ここへ画像をドラッグ＆ドロップ
-        </div>
-        <p id="testImageInfo" class="testImageInfo" aria-live="polite">画像はまだ選択されていません。</p>
-      </section>
-    </details>
 
     <section id="resultSection" class="panel compactResultPanel" aria-labelledby="resultHeading" hidden>
       <h2 id="resultHeading" class="visuallyHidden">撮影画像の調整とOCR</h2>
@@ -75,6 +56,8 @@
         </div>
       </div>
 
+      <details id="alignmentDisclosure" class="alignmentDisclosure">
+        <summary>位置を調整</summary>
       <div class="compactAlignment" aria-label="画像位置を微調整">
         <div class="alignmentControls" aria-label="画像調整操作">
           <button class="alignmentButton moveUp" type="button" data-align-action="up" aria-label="画像を上へ">↑</button>
@@ -86,7 +69,7 @@
           <button class="alignmentButton moveDown" type="button" data-align-action="down" aria-label="画像を下へ">↓</button>
           <button class="alignmentButton zoomOut" type="button" data-align-action="zoomOut" aria-label="ズームアウト">−</button>
           <button class="alignmentButton zoomIn" type="button" data-align-action="zoomIn" aria-label="ズームイン">＋</button>
-          <button id="resetAlignmentButton" class="alignmentButton resetAlignment" type="button" aria-label="画像調整をリセット">Reset</button>
+          <button id="resetAlignmentButton" class="alignmentButton resetAlignment" type="button" aria-label="画像調整をリセット">リセット</button>
         </div>
         <p class="alignmentValues" aria-live="polite">
           <span>X:<strong id="alignmentXValue">+0px</strong></span>
@@ -95,25 +78,19 @@
           <span>R:<strong id="alignmentRotationValue">0.0°</strong></span>
         </p>
       </div>
+      </details>
 
       <div class="primaryActionRow">
-        <button id="runFullOcrButton" class="primary fullOcrControl" type="button">全セルOCR</button>
-        <button id="retakeButton" class="secondary compactRetakeButton" type="button">再撮影</button>
+        <button id="runFullOcrButton" class="primary fullOcrControl" type="button">数字を読み取る</button>
+        <button id="retakeButton" class="secondary compactRetakeButton" type="button">撮り直す</button>
       </div>
 
-      <section class="fullOcrSection" aria-label="81セル一括OCR結果">
+      <section id="readingResultSection" class="fullOcrSection" aria-label="読み取り結果" hidden>
         <div class="compactOcrStatus">
-          <strong>OCR結果</strong>
+          <strong>読み取り結果</strong>
           <span id="fullOcrStateBadge" class="stateBadge">未実行</span>
         </div>
 
-        <details class="ocrSettings">
-          <summary>OCR設定</summary>
-          <div class="preprocessControl" role="group" aria-label="全セルOCR前処理">
-            <button id="fullPreprocessOnButton" class="viewButton active fullOcrControl" type="button" aria-pressed="true">前処理あり</button>
-            <button id="fullPreprocessOffButton" class="viewButton fullOcrControl" type="button" aria-pressed="false">前処理なし</button>
-          </div>
-        </details>
         <div class="fullOcrProgress" role="status" aria-live="polite">
           <div class="progressSummary">
             <strong id="fullOcrProgressText">OCRはまだ実行していません。</strong>
@@ -123,13 +100,14 @@
           <span id="fullOcrCurrentCell">現在：-</span>
         </div>
 
-        <p id="fullOcrNotice" class="ocrNotice">画像調整後、「全セルOCR」を実行してください。</p>
-        <p id="ocrConditionSummary" class="ocrConditionSummary" hidden></p>
+        <div class="reviewOnly">
+        <p id="fullOcrNotice" class="ocrNotice">数字を読み取ってください。</p>
         <p id="validationSummary" class="validationSummary" role="status" aria-live="polite">検証待ち</p>
         <div id="ocrResultBoard" class="ocrResultBoard" aria-label="9×9 OCR結果"></div>
-        <p class="panelCopy">セルをタップするとミニテンキーで空欄または1～9へ修正できます。「詳細」からセル画像とOCR情報を確認できます。</p>
-        <button id="solveButton" class="primary solveButton" type="button" disabled>解く</button>
-        <p id="solverMessage" class="solverMessage" role="status" aria-live="polite">OCR完了後に解けます。</p>
+        <p class="panelCopy resultHelp">数字が違う場合はマスをタップして修正できます。</p>
+        <button id="solveButton" class="primary solveButton" type="button" disabled>答えを見る</button>
+        <p id="solverMessage" class="solverMessage" role="status" aria-live="polite">読み取り後に答えを表示できます。</p>
+        </div>
 
         <section id="solutionSection" class="solutionSection" aria-labelledby="solutionHeading" tabindex="-1" hidden>
           <div class="solutionHeading">
@@ -137,19 +115,30 @@
               <p class="stepLabel">SOLUTION</p>
               <h2 id="solutionHeading">解答</h2>
             </div>
-            <span id="solveTime" class="stateBadge">Solve Time: -</span>
           </div>
           <div id="solutionBoard" class="solutionBoard" aria-label="ナンプレ解答盤面"></div>
           <div class="solutionLegend" aria-label="解答表示の凡例">
             <span><i class="givenLegend" aria-hidden="true"></i>問題数字</span>
-            <span><i class="solvedLegend" aria-hidden="true"></i>Solver数字</span>
+            <span><i class="solvedLegend" aria-hidden="true"></i>答えの数字</span>
           </div>
           <button id="backToPuzzleButton" class="secondary" type="button">問題に戻る</button>
         </section>
       </section>
 
-      <details class="debugDisclosure">
-        <summary>DEBUG / OCR詳細</summary>
+      <details id="resultDiagnosticsDisclosure" class="debugDisclosure">
+        <summary>詳細設定・診断</summary>
+      <section class="diagnosticSettings" aria-labelledby="diagnosticSettingsHeading">
+        <h2 id="diagnosticSettingsHeading">読み取り・解答情報</h2>
+        <details class="ocrSettings">
+          <summary>OCR設定</summary>
+          <div class="preprocessControl" role="group" aria-label="全セルOCR前処理">
+            <button id="fullPreprocessOnButton" class="viewButton active fullOcrControl" type="button" aria-pressed="true">前処理あり</button>
+            <button id="fullPreprocessOffButton" class="viewButton fullOcrControl" type="button" aria-pressed="false">前処理なし</button>
+          </div>
+        </details>
+        <p id="ocrConditionSummary" class="ocrConditionSummary" hidden></p>
+        <p class="diagnosticLine">Solver: <span id="solveTime">Solve Time: -</span></p>
+      </section>
       <section class="tuningSection" aria-labelledby="tuningHeading">
         <div class="sectionHeading">
           <div>
@@ -276,6 +265,32 @@
       </details>
     </section>
 
+    <details class="debugDisclosure testInputDisclosure">
+      <summary>詳細設定・診断（PC画像入力）</summary>
+      <section class="testInputSection" aria-labelledby="testInputHeading">
+        <div class="sectionHeading">
+          <div>
+            <p class="stepLabel">PC BROWSER TEST</p>
+            <h2 id="testInputHeading">画像ファイルから盤面を読み込む</h2>
+          </div>
+        </div>
+        <p class="panelCopy">PNG / JPEG / WebPを中央で正方形に切り出し、900×900へ正規化して既存OCR処理へ渡します。</p>
+        <p class="inputSourceLine">Input: <strong id="inputSourceValue">CAMERA</strong></p>
+        <div class="testInputActions">
+          <label class="filePickerButton secondary" for="testImageInput">
+            ファイル選択
+            <input id="testImageInput" class="visuallyHidden" type="file" accept="image/png,image/jpeg,image/webp">
+          </label>
+          <button id="loadSampleButton" class="secondary" type="button">サンプル01を読み込む</button>
+          <button id="loadSample02Button" class="secondary" type="button">サンプル02を読み込む</button>
+        </div>
+        <div id="testImageDropZone" class="testImageDropZone" tabindex="0">
+          ここへ画像をドラッグ＆ドロップ
+        </div>
+        <p id="testImageInfo" class="testImageInfo" aria-live="polite">画像はまだ選択されていません。</p>
+      </section>
+    </details>
+
     <p id="statusMessage" class="status" role="status" aria-live="polite">
       「カメラ開始」を押して、背面カメラの使用を許可してください。
     </p>
@@ -312,7 +327,7 @@
       </div>
       <p id="solveConfirmMessage" class="panelCopy"></p>
       <div class="solveConfirmActions">
-        <button id="confirmSolveButton" class="primary" type="button">このまま解く</button>
+        <button id="confirmSolveButton" class="primary" type="button">このまま答えを見る</button>
         <button id="reviewPuzzleButton" class="secondary" type="button">確認する</button>
       </div>
     </div>
@@ -409,6 +424,6 @@
   </div>
 
   <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script type="module" src="./app.js?v=0.7.0"></script>
+  <script type="module" src="./app.js?v=0.8.0"></script>
 </body>
 </html>

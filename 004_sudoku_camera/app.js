@@ -28,6 +28,7 @@ const captureButton = document.getElementById("captureButton");
 const retakeButton = document.getElementById("retakeButton");
 const croppedCanvas = document.getElementById("croppedCanvas");
 const statusMessage = document.getElementById("statusMessage");
+const appSteps = Array.from(document.querySelectorAll("[data-app-step]"));
 const testImageInput = document.getElementById("testImageInput");
 const loadSampleButton = document.getElementById("loadSampleButton");
 const loadSample02Button = document.getElementById("loadSample02Button");
@@ -68,6 +69,7 @@ const alignmentXValue = document.getElementById("alignmentXValue");
 const alignmentYValue = document.getElementById("alignmentYValue");
 const alignmentZoomValue = document.getElementById("alignmentZoomValue");
 const alignmentRotationValue = document.getElementById("alignmentRotationValue");
+const alignmentDisclosure = document.getElementById("alignmentDisclosure");
 const fullPreprocessOnButton = document.getElementById("fullPreprocessOnButton");
 const fullPreprocessOffButton = document.getElementById("fullPreprocessOffButton");
 const runFullOcrButton = document.getElementById("runFullOcrButton");
@@ -79,6 +81,7 @@ const fullOcrCurrentCell = document.getElementById("fullOcrCurrentCell");
 const fullOcrNotice = document.getElementById("fullOcrNotice");
 const ocrConditionSummary = document.getElementById("ocrConditionSummary");
 const validationSummary = document.getElementById("validationSummary");
+const readingResultSection = document.getElementById("readingResultSection");
 const ocrResultBoard = document.getElementById("ocrResultBoard");
 const solveButton = document.getElementById("solveButton");
 const solverMessage = document.getElementById("solverMessage");
@@ -90,6 +93,7 @@ const solveConfirmModal = document.getElementById("solveConfirmModal");
 const solveConfirmMessage = document.getElementById("solveConfirmMessage");
 const confirmSolveButton = document.getElementById("confirmSolveButton");
 const reviewPuzzleButton = document.getElementById("reviewPuzzleButton");
+const resultDiagnosticsDisclosure = document.getElementById("resultDiagnosticsDisclosure");
 const miniKeypad = document.getElementById("miniKeypad");
 const miniKeypadLabel = document.getElementById("miniKeypadLabel");
 const miniKeypadCurrent = document.getElementById("miniKeypadCurrent");
@@ -171,6 +175,27 @@ let benchmarkSelectedMethod = "current";
 function setStatus(message) {
   statusMessage.textContent = message;
   console.log("[app] status", message);
+}
+
+function setAppStep(step) {
+  for (const item of appSteps) {
+    const active = Number(item.dataset.appStep) === step;
+    item.classList.toggle("active", active);
+    if (active) item.setAttribute("aria-current", "step");
+    else item.removeAttribute("aria-current");
+  }
+}
+
+function setResultMode(mode) {
+  resultSection.dataset.resultMode = mode;
+  readingResultSection.hidden = mode === "captured";
+  readingResultSection.classList.remove("readingMode", "reviewMode", "answerMode");
+  if (mode !== "captured") readingResultSection.classList.add(`${mode}Mode`);
+}
+
+function closeResultDiagnostics() {
+  resultDiagnosticsDisclosure.open = false;
+  document.body.classList.remove("diagnosticsOpen");
 }
 
 function setCameraActive(active) {
@@ -362,7 +387,9 @@ function applyManualOcrValue(value) {
   }
   metadata.value = value;
   metadata.manuallyEdited = true;
-  clearSolverResult({ message: "問題を修正しました。現在の盤面でもう一度解けます。" });
+  clearSolverResult({ message: "問題を修正しました。現在の内容で答えを表示できます。" });
+  setAppStep(3);
+  setResultMode("review");
   validateFullOcrResults();
   closeMiniKeypad({ restoreFocus: true });
 }
@@ -614,13 +641,10 @@ function updateOcrResultCell(index) {
   if (validationIssues.length > 0) cell.classList.add("needsReview");
   if (metadata?.manuallyEdited) cell.classList.add("manuallyEdited");
 
-  const confidenceLabel = metadata && Number.isFinite(metadata.confidence)
-    ? metadata.confidence.toFixed(1)
-    : "-";
   const issueTitle = validationIssues.length > 0
     ? ` / 要確認: ${validationIssues.map(validationIssueLabel).join(", ")}`
     : "";
-  cell.title = `${Math.floor(index / 9) + 1}行${index % 9 + 1}列 / confidence ${confidenceLabel}${issueTitle}`;
+  cell.title = `R${Math.floor(index / 9) + 1}C${index % 9 + 1}${issueTitle}`;
   input.setAttribute("aria-label", `R${Math.floor(index / 9) + 1}C${index % 9 + 1} OCR結果 ${currentValue || "空欄"} を修正`);
 }
 
@@ -630,10 +654,10 @@ function renderOcrResultBoard() {
 
 function validationIssueLabel(issue) {
   return {
-    "low-confidence": "低confidence",
-    "duplicate-row": "行重複",
-    "duplicate-column": "列重複",
-    "duplicate-block": "3×3重複"
+    "low-confidence": "読み取りが不確か",
+    "duplicate-row": "同じ行に同じ数字があります",
+    "duplicate-column": "同じ列に同じ数字があります",
+    "duplicate-block": "同じ3×3内に同じ数字があります"
   }[issue] || issue;
 }
 
@@ -650,7 +674,7 @@ function validateFullOcrResults() {
   renderOcrResultBoard();
 
   const issueCount = issuesByCell.filter((issues) => issues.length > 0).length;
-  validationSummary.textContent = issueCount === 0 ? "✓ 要確認なし" : `要確認 ${issueCount}件`;
+  validationSummary.textContent = issueCount === 0 ? "✓ 読み取りOK" : `⚠ ${issueCount}か所確認してください`;
   validationSummary.classList.toggle("clear", issueCount === 0);
   validationSummary.classList.toggle("warning", issueCount > 0);
   refreshMiniKeypad();
@@ -682,7 +706,7 @@ function renderSolutionBoard() {
     cell.textContent = String(value);
     cell.setAttribute(
       "aria-label",
-      `R${Math.floor(index / 9) + 1}C${index % 9 + 1} ${value} ${isGiven ? "問題数字" : "Solver数字"}`
+      `R${Math.floor(index / 9) + 1}C${index % 9 + 1} ${value} ${isGiven ? "問題数字" : "答えの数字"}`
     );
     fragment.appendChild(cell);
   });
@@ -697,19 +721,23 @@ function executeSolver() {
     result = solvePuzzle(fullOcrResults);
   } catch (error) {
     console.error("[solver] failed", error);
-    solverMessage.textContent = "Solver実行中にエラーが発生しました。問題数字を確認してください。";
+    solverMessage.textContent = "答えを計算できませんでした。問題数字を確認してください。";
     solverMessage.classList.add("error");
     solveButton.disabled = false;
+    setAppStep(3);
+    setResultMode("review");
     return;
   }
   originalPuzzle = result.originalPuzzle;
 
   if (result.status !== "solved") {
     solverMessage.textContent = result.status === "invalid-solution"
-      ? `Solver結果を検証できませんでした。${result.reason || "問題数字を確認してください。"}`
+      ? `答えを確認できませんでした。${result.reason || "問題数字を確認してください。"}`
       : "この盤面では解答を見つけられませんでした。問題数字を確認してください。";
     solverMessage.classList.add("error");
     solveButton.disabled = false;
+    setAppStep(3);
+    setResultMode("review");
     return;
   }
 
@@ -720,13 +748,15 @@ function executeSolver() {
   solverMessage.textContent = "解答を表示しました。";
   solverMessage.classList.add("success");
   solveButton.disabled = false;
+  setAppStep(4);
+  setResultMode("answer");
   requestAnimationFrame(() => solutionSection.scrollIntoView({ behavior: "smooth", block: "start" }));
 }
 
 function handleSolveRequest() {
   closeMiniKeypad();
   if (fullOcrRevision !== alignmentRevision || fullOcrResults.some((result) => !result)) {
-    solverMessage.textContent = "先に全セルOCRを実行してください。";
+    solverMessage.textContent = "先に数字を読み取ってください。";
     solverMessage.classList.add("error");
     return;
   }
@@ -736,13 +766,15 @@ function handleSolveRequest() {
   if (gate === "blocked") {
     solverMessage.textContent = "盤面に矛盾があります。オレンジ色のセルを確認してください。";
     solverMessage.classList.add("error");
+    setAppStep(3);
+    setResultMode("review");
     ocrResultBoard.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
 
   if (gate === "confirm") {
     const count = issuesByCell.filter((issues) => issues.includes("low-confidence")).length;
-    solveConfirmMessage.textContent = `要確認セルが${count}件あります。このまま解きますか？`;
+    solveConfirmMessage.textContent = `読み取りが不確かなマスが${count}か所あります。このまま答えを表示しますか？`;
     solveConfirmModal.hidden = false;
     confirmSolveButton.focus({ preventScroll: true });
     return;
@@ -753,11 +785,15 @@ function handleSolveRequest() {
 
 function handleReviewPuzzle() {
   closeSolveConfirm();
+  setAppStep(3);
+  setResultMode("review");
   ocrResultBoard.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function handleBackToPuzzle() {
   solutionSection.hidden = true;
+  setAppStep(3);
+  setResultMode("review");
   ocrResultBoard.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
@@ -864,26 +900,28 @@ function clearOcrHistory() {
 
 function clearFullOcrResults(message, badgeText = "未実行") {
   closeMiniKeypad();
-  clearSolverResult({ disableSolve: true, message: "OCR完了後に解けます。" });
+  clearSolverResult({ disableSolve: true, message: "読み取り後に答えを表示できます。" });
+  setResultMode("captured");
   fullOcrRevision = null;
   fullOcrResults = Array.from({ length: 81 }, () => null);
   renderOcrResultBoard();
   fullOcrStateBadge.textContent = badgeText;
   fullOcrStateBadge.classList.remove("success", "active", "warning");
-  if (badgeText === "要再OCR") fullOcrStateBadge.classList.add("warning");
+  if (badgeText === "再読取") fullOcrStateBadge.classList.add("warning");
   fullOcrProgressBar.value = 0;
   fullOcrPercent.textContent = "0%";
   fullOcrCurrentCell.textContent = "現在：-";
   fullOcrProgressText.textContent = message;
   fullOcrNotice.textContent = message;
-  fullOcrNotice.classList.toggle("stale", badgeText === "要再OCR");
+  fullOcrNotice.classList.toggle("stale", badgeText === "再読取");
   ocrConditionSummary.hidden = true;
   ocrConditionSummary.textContent = "";
   resetValidationSummary();
 }
 
-function invalidateFullOcrResults(message = "画像調整後、再OCRしてください。") {
-  clearFullOcrResults(message, "要再OCR");
+function invalidateFullOcrResults(message = "位置調整後、もう一度数字を読み取ってください。") {
+  clearFullOcrResults(message, "再読取");
+  setAppStep(2);
 }
 
 function copyCapturedImageToSource() {
@@ -897,12 +935,15 @@ function copyCapturedImageToSource() {
 function activatePreparedBoard({ sourceLabel, imageInfo, truth = null }) {
   closeCellModal();
   closeBenchmarkModal();
+  closeResultDiagnostics();
   copyCapturedImageToSource();
   alignment = createDefaultAlignment();
   alignmentRevision += 1;
   clearOcrHistory();
   regenerateFromAlignment();
-  clearFullOcrResults("画像を確認・調整してから全セルOCRを実行してください。", "未実行");
+  clearFullOcrResults("画像を確認してから数字を読み取ってください。", "未実行");
+  alignmentDisclosure.open = false;
+  setAppStep(2);
 
   if (truth) setBenchmarkTruth(truth);
   else clearBenchmarkTruth();
@@ -956,9 +997,9 @@ function applyAlignmentAction(action) {
   alignmentRevision += 1;
   regenerateFromAlignment();
   clearOcrHistory();
-  invalidateFullOcrResults("画像調整後、再OCRしてください。");
+  invalidateFullOcrResults("位置調整後、もう一度数字を読み取ってください。");
   invalidateBenchmarkResults("画像調整後、Benchmarkを再実行してください。");
-  setStatus("画像位置を調整しました。81セルを再生成したため、全セルOCRを再実行してください。");
+  setStatus("位置を調整しました。もう一度数字を読み取ってください。");
 }
 
 function setFullOcrControlsDisabled(disabled) {
@@ -1198,7 +1239,9 @@ async function handleRunFullOcr() {
 
   closeMiniKeypad();
   closeCellModal();
-  clearSolverResult({ disableSolve: true, message: "OCR完了後に解けます。" });
+  clearSolverResult({ disableSolve: true, message: "読み取り後に答えを表示できます。" });
+  setAppStep(2);
+  setResultMode("reading");
   regenerateFromAlignment();
   const revisionAtStart = alignmentRevision;
   const preprocessAtStart = preprocessEnabled;
@@ -1213,19 +1256,18 @@ async function handleRunFullOcr() {
   fullOcrResults = Array.from({ length: 81 }, () => null);
   renderOcrResultBoard();
   setFullOcrControlsDisabled(true);
-  fullOcrStateBadge.textContent = "OCR中";
+  fullOcrStateBadge.textContent = "読取中";
   fullOcrStateBadge.classList.remove("success", "warning");
   fullOcrStateBadge.classList.add("active");
   fullOcrNotice.classList.remove("stale");
-  fullOcrNotice.textContent = "81セルを順番にOCRしています。画面を閉じずにお待ちください。";
+  fullOcrNotice.textContent = "数字を読み取っています。画面を閉じずにお待ちください。";
   fullOcrProgressBar.value = 0;
   fullOcrPercent.textContent = "0%";
   const batchStartedAt = performance.now();
   let currentIndex = 0;
 
-  setOcrProgressListener((message) => {
-    const workerPercent = Number.isFinite(message.progress) ? ` ${Math.round(message.progress * 100)}%` : "";
-    fullOcrProgressText.textContent = `${currentIndex} / 81　${message.status || "OCR処理中"}${workerPercent}`;
+  setOcrProgressListener(() => {
+    fullOcrProgressText.textContent = `数字を読み取っています… ${currentIndex} / 81`;
   });
 
   try {
@@ -1235,7 +1277,7 @@ async function handleRunFullOcr() {
       const cell = cells[index];
       const label = getCellLabel(cell);
       fullOcrCurrentCell.textContent = `現在：${label}`;
-      fullOcrProgressText.textContent = `OCR中… ${index} / 81`;
+      fullOcrProgressText.textContent = `数字を読み取っています… ${index} / 81`;
 
       drawCellCrop(croppedCanvas, cell, batchCellCanvas);
       let result;
@@ -1263,39 +1305,43 @@ async function handleRunFullOcr() {
       const percent = Math.round((completed / 81) * 100);
       fullOcrProgressBar.value = completed;
       fullOcrPercent.textContent = `${percent}%`;
-      fullOcrProgressText.textContent = `OCR中… ${completed} / 81`;
+      fullOcrProgressText.textContent = `数字を読み取っています… ${completed} / 81`;
     }
 
     if (alignmentRevision !== revisionAtStart) {
-      invalidateFullOcrResults("画像状態が変わりました。再OCRしてください。");
+      invalidateFullOcrResults("画像が変わりました。もう一度数字を読み取ってください。");
       return;
     }
 
     fullOcrRevision = revisionAtStart;
     validateFullOcrResults();
     solveButton.disabled = false;
-    solverMessage.textContent = "OCR結果を確認して「解く」を押してください。";
+    solverMessage.textContent = "読み取り結果を確認して「答えを見る」を押してください。";
     solverMessage.classList.remove("error", "success");
+    setAppStep(3);
+    setResultMode("review");
     const totalElapsed = Math.round(performance.now() - batchStartedAt);
     fullOcrStateBadge.textContent = "完了";
     fullOcrStateBadge.classList.remove("active", "warning");
     fullOcrStateBadge.classList.add("success");
-    fullOcrProgressText.textContent = `OCR完了　81 / 81（${totalElapsed}ms）`;
+    fullOcrProgressText.textContent = `読み取り完了　81 / 81（${totalElapsed}ms）`;
     fullOcrCurrentCell.textContent = "現在：完了";
-    fullOcrNotice.textContent = "OCR結果を確認し、必要なセルを手修正してください。";
+    fullOcrNotice.textContent = "数字が違う場合はマスをタップして修正できます。";
     ocrConditionSummary.textContent = `OCR条件 — X: ${formatSignedPixels(ocrConditions.x)} / Y: ${formatSignedPixels(ocrConditions.y)} / Zoom: ${Math.round(ocrConditions.scale * 100)}% / Rotation: ${formatRotation(ocrConditions.rotation)} / Outer Crop: ${ocrConditions.outerCrop}% / Preprocess: ${ocrConditions.preprocess ? "Otsu + Padding 12.5%" : "OFF"} / PSM: SINGLE_WORD / Blank Detection: ON`;
     ocrConditionSummary.hidden = false;
-    setStatus("81セルOCRが完了しました。低confidenceセルを確認し、必要なら手修正してください。");
+    setStatus("数字の読み取りが完了しました。結果を確認してください。");
   } catch (error) {
     console.error("[ocr] full grid OCR failed", error);
     fullOcrRevision = null;
     fullOcrStateBadge.textContent = "エラー";
     fullOcrStateBadge.classList.remove("active", "success");
     fullOcrStateBadge.classList.add("warning");
-    const message = error instanceof Error ? error.message : "全セルOCRに失敗しました。";
+    const message = "数字を読み取れませんでした。画像を確認してもう一度お試しください。";
     fullOcrProgressText.textContent = message;
-    fullOcrNotice.textContent = "途中結果は参考表示です。問題を確認して再OCRしてください。";
+    fullOcrNotice.textContent = message;
     setStatus(message);
+    setAppStep(2);
+    setResultMode("reading");
     solveButton.disabled = true;
   } finally {
     setOcrProgressListener(null);
@@ -1591,7 +1637,7 @@ async function loadBoardImage(blob, { sourceLabel, displayName, truth = null }) 
       imageInfo: `${displayName} / 元画像 ${metadata.width}×${metadata.height}px / 入力 900×900px`,
       truth
     });
-    setStatus("画像を読み込みました。位置を確認し、「全セルOCR」またはBenchmarkを実行してください。");
+    setStatus("画像を読み込みました。位置を確認して数字を読み取ってください。");
     resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
   } finally {
     isImageLoading = false;
@@ -1618,7 +1664,7 @@ async function handleLoadSample(sampleName = "sudoku-sample-01") {
   if (isImageLoading || isFullOcrRunning || isBenchmarkRunning) return;
   isImageLoading = true;
   setTestInputControlsDisabled(true);
-  setStatus(`${sampleName}と正解JSONを読み込んでいます…`);
+  setStatus("サンプル画像を読み込んでいます…");
 
   try {
     const imageResponse = await fetch(`./test-images/${sampleName}.png`);
@@ -1636,7 +1682,7 @@ async function handleLoadSample(sampleName = "sudoku-sample-01") {
       imageInfo: `${sampleName}.png / 元画像 ${metadata.width}×${metadata.height}px / 入力 900×900px`,
       truth
     });
-    setStatus(`${sampleName}を読み込み、Benchmark正解盤面を自動設定しました。`);
+    setStatus("サンプル画像を読み込みました。数字を読み取れます。");
     resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     console.error("[image-input] sample load failed", error);
@@ -1658,7 +1704,7 @@ async function handleStartCamera() {
   try {
     await startCamera(cameraPreview);
     setCameraActive(true);
-    setStatus("盤面をガイドに合わせて「読み取り」を押してください。");
+    setStatus("枠に問題を合わせてカメラ映像をタップしてください。");
   } catch (error) {
     console.error("[app] start camera failed", error);
     setCameraActive(false);
@@ -1690,7 +1736,7 @@ function handleCapture() {
       imageInfo: "カメラ撮影 / 入力 900×900px"
     });
     captureCompleted = true;
-    setStatus("画像を微調整し、「全セルOCR」を実行してください。");
+    setStatus("撮影しました。必要なら位置を調整して、数字を読み取ってください。");
     resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     console.error("[app] capture failed", error);
@@ -1705,9 +1751,13 @@ function handleCapture() {
 }
 
 function handleRetake() {
-  clearSolverResult({ disableSolve: true, message: "OCR完了後に解けます。" });
+  clearSolverResult({ disableSolve: true, message: "読み取り後に答えを表示できます。" });
   closeMiniKeypad();
   closeCellModal();
+  closeResultDiagnostics();
+  alignmentDisclosure.open = false;
+  setAppStep(1);
+  setResultMode("captured");
   resultSection.hidden = true;
   cameraSection.hidden = false;
   isCaptureInProgress = false;
@@ -1717,7 +1767,7 @@ function handleRetake() {
   captureButton.disabled = !streamIsLive;
   setStatus(
     streamIsLive
-      ? "カメラは起動したままです。盤面を合わせ直して「読み取り」を押してください。"
+      ? "枠に問題を合わせてカメラ映像をタップしてください。"
       : "カメラが停止しています。「カメラ開始」を押してください。"
   );
   cameraStage.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1727,7 +1777,8 @@ buildCellViews();
 buildOcrResultBoard();
 buildBenchmarkUi();
 updateAlignmentDisplay();
-clearFullOcrResults("画像を撮影してから全セルOCRを実行してください。", "未実行");
+clearFullOcrResults("画像を撮影してから数字を読み取ってください。", "未実行");
+setAppStep(1);
 clearBenchmarkResults("正解盤面を設定してBenchmarkを実行してください。", "未実行");
 clearTuningResults();
 
@@ -1808,6 +1859,9 @@ benchmarkErrorLists.addEventListener("click", (event) => {
 closeBenchmarkModalButton.addEventListener("click", closeBenchmarkModal);
 benchmarkModal.addEventListener("click", (event) => {
   if (event.target === benchmarkModal) closeBenchmarkModal();
+});
+resultDiagnosticsDisclosure.addEventListener("toggle", () => {
+  document.body.classList.toggle("diagnosticsOpen", resultDiagnosticsDisclosure.open);
 });
 resetAlignmentButton.addEventListener("click", () => applyAlignmentAction("reset"));
 for (const button of alignmentButtons) {
