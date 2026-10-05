@@ -1117,12 +1117,26 @@ button.solveButton {
 }
 
 .solutionBoard {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(9, minmax(0, 1fr));
   overflow: hidden;
   border: 3px solid var(--text);
   border-radius: 8px;
   background: #fff;
+}
+
+.solutionBoard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background:
+    linear-gradient(to right, transparent calc(33.333% - 1.5px), var(--text) calc(33.333% - 1.5px), var(--text) calc(33.333% + 1.5px), transparent calc(33.333% + 1.5px)),
+    linear-gradient(to right, transparent calc(66.666% - 1.5px), var(--text) calc(66.666% - 1.5px), var(--text) calc(66.666% + 1.5px), transparent calc(66.666% + 1.5px)),
+    linear-gradient(to bottom, transparent calc(33.333% - 1.5px), var(--text) calc(33.333% - 1.5px), var(--text) calc(33.333% + 1.5px), transparent calc(33.333% + 1.5px)),
+    linear-gradient(to bottom, transparent calc(66.666% - 1.5px), var(--text) calc(66.666% - 1.5px), var(--text) calc(66.666% + 1.5px), transparent calc(66.666% + 1.5px));
+  pointer-events: none;
 }
 
 .solutionCell {
@@ -1135,10 +1149,10 @@ button.solveButton {
   font-size: clamp(0.9rem, 4.2vw, 1.5rem);
 }
 
-.solutionCell:nth-child(3n) { border-right: 3px solid var(--text); }
+.solutionCell:nth-child(3n) { border-right: 1px solid rgba(24, 33, 29, 0.3); }
 .solutionCell:nth-child(9n) { border-right: 0; }
 .solutionCell:nth-child(n+19):nth-child(-n+27),
-.solutionCell:nth-child(n+46):nth-child(-n+54) { border-bottom: 3px solid var(--text); }
+.solutionCell:nth-child(n+46):nth-child(-n+54) { border-bottom: 1px solid rgba(24, 33, 29, 0.3); }
 .solutionCell:nth-child(n+73) { border-bottom: 0; }
 
 .solutionCell.given {
