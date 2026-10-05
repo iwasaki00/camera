@@ -934,6 +934,125 @@ button.resultDetailButton {
   background: #fff0e8;
 }
 
+button.solveButton {
+  width: 100%;
+  min-height: 48px;
+  font-size: 1rem;
+}
+
+.solverMessage {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.solverMessage.error {
+  color: #8b3f21;
+}
+
+.solverMessage.success {
+  color: var(--accent-dark);
+  font-weight: 800;
+}
+
+.solutionSection {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  scroll-margin-top: 12px;
+}
+
+.solutionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.solutionHeading h2,
+.solutionHeading p {
+  margin: 0;
+}
+
+.solutionBoard {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  overflow: hidden;
+  border: 3px solid var(--text);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.solutionCell {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  aspect-ratio: 1;
+  border-right: 1px solid rgba(24, 33, 29, 0.3);
+  border-bottom: 1px solid rgba(24, 33, 29, 0.3);
+  font-size: clamp(0.9rem, 4.2vw, 1.5rem);
+}
+
+.solutionCell:nth-child(3n) { border-right: 3px solid var(--text); }
+.solutionCell:nth-child(9n) { border-right: 0; }
+.solutionCell:nth-child(n+19):nth-child(-n+27),
+.solutionCell:nth-child(n+46):nth-child(-n+54) { border-bottom: 3px solid var(--text); }
+.solutionCell:nth-child(n+73) { border-bottom: 0; }
+
+.solutionCell.given {
+  color: var(--text);
+  background: #f7faf8;
+  font-weight: 900;
+}
+
+.solutionCell.solved {
+  color: #2368ad;
+  font-weight: 500;
+}
+
+.solutionLegend {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.solutionLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.solutionLegend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.givenLegend {
+  border: 2px solid var(--text);
+  background: #f7faf8;
+}
+
+.solvedLegend {
+  border: 1px solid #2368ad;
+  background: #e8f2fc;
+}
+
+.solveConfirmCard {
+  width: min(100%, 360px);
+}
+
+.solveConfirmActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .miniKeypadDigits {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

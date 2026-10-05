@@ -6,6 +6,7 @@ import { createDefaultAlignment, renderAlignedSquare, updateAlignment } from "./
 import { isSupportedImageFile, loadImageBlobIntoCanvas } from "./imageInput.js";
 import { runFinalCandidate, runOcrTuning, tuningConfigLabel } from "./tuning.js?v=0.5.2";
 import { validateSudokuGrid } from "./validation.mjs";
+import { getSolveGate, solvePuzzle } from "./solverIntegration.mjs";
 import {
   BENCHMARK_METHODS,
   buildBenchmarkReport,
@@ -79,6 +80,16 @@ const fullOcrNotice = document.getElementById("fullOcrNotice");
 const ocrConditionSummary = document.getElementById("ocrConditionSummary");
 const validationSummary = document.getElementById("validationSummary");
 const ocrResultBoard = document.getElementById("ocrResultBoard");
+const solveButton = document.getElementById("solveButton");
+const solverMessage = document.getElementById("solverMessage");
+const solutionSection = document.getElementById("solutionSection");
+const solutionBoard = document.getElementById("solutionBoard");
+const solveTime = document.getElementById("solveTime");
+const backToPuzzleButton = document.getElementById("backToPuzzleButton");
+const solveConfirmModal = document.getElementById("solveConfirmModal");
+const solveConfirmMessage = document.getElementById("solveConfirmMessage");
+const confirmSolveButton = document.getElementById("confirmSolveButton");
+const reviewPuzzleButton = document.getElementById("reviewPuzzleButton");
 const miniKeypad = document.getElementById("miniKeypad");
 const miniKeypadLabel = document.getElementById("miniKeypadLabel");
 const miniKeypadCurrent = document.getElementById("miniKeypadCurrent");
@@ -143,6 +154,8 @@ let ocrResultInputs = [];
 let ocrResultCells = [];
 let keypadCellIndex = null;
 let keypadAnchor = null;
+let originalPuzzle = null;
+let solvedGrid = null;
 let isFullOcrRunning = false;
 let isCaptureInProgress = false;
 let isBenchmarkRunning = false;
@@ -349,6 +362,7 @@ function applyManualOcrValue(value) {
   }
   metadata.value = value;
   metadata.manuallyEdited = true;
+  clearSolverResult({ message: "問題を修正しました。現在の盤面でもう一度解けます。" });
   validateFullOcrResults();
   closeMiniKeypad({ restoreFocus: true });
 }
@@ -640,6 +654,111 @@ function validateFullOcrResults() {
   validationSummary.classList.toggle("clear", issueCount === 0);
   validationSummary.classList.toggle("warning", issueCount > 0);
   refreshMiniKeypad();
+  return issuesByCell;
+}
+
+function closeSolveConfirm() {
+  solveConfirmModal.hidden = true;
+}
+
+function clearSolverResult({ disableSolve = false, message = "" } = {}) {
+  originalPuzzle = null;
+  solvedGrid = null;
+  solutionBoard.replaceChildren();
+  solutionSection.hidden = true;
+  solveTime.textContent = "Solve Time: -";
+  closeSolveConfirm();
+  if (disableSolve) solveButton.disabled = true;
+  if (message) solverMessage.textContent = message;
+  solverMessage.classList.remove("error", "success");
+}
+
+function renderSolutionBoard() {
+  const fragment = document.createDocumentFragment();
+  solvedGrid.forEach((value, index) => {
+    const cell = document.createElement("div");
+    const isGiven = originalPuzzle[index] !== 0;
+    cell.className = `solutionCell ${isGiven ? "given" : "solved"}`;
+    cell.textContent = String(value);
+    cell.setAttribute(
+      "aria-label",
+      `R${Math.floor(index / 9) + 1}C${index % 9 + 1} ${value} ${isGiven ? "問題数字" : "Solver数字"}`
+    );
+    fragment.appendChild(cell);
+  });
+  solutionBoard.replaceChildren(fragment);
+}
+
+function executeSolver() {
+  closeSolveConfirm();
+  clearSolverResult();
+  let result;
+  try {
+    result = solvePuzzle(fullOcrResults);
+  } catch (error) {
+    console.error("[solver] failed", error);
+    solverMessage.textContent = "Solver実行中にエラーが発生しました。問題数字を確認してください。";
+    solverMessage.classList.add("error");
+    solveButton.disabled = false;
+    return;
+  }
+  originalPuzzle = result.originalPuzzle;
+
+  if (result.status !== "solved") {
+    solverMessage.textContent = result.status === "invalid-solution"
+      ? `Solver結果を検証できませんでした。${result.reason || "問題数字を確認してください。"}`
+      : "この盤面では解答を見つけられませんでした。問題数字を確認してください。";
+    solverMessage.classList.add("error");
+    solveButton.disabled = false;
+    return;
+  }
+
+  solvedGrid = result.solution;
+  renderSolutionBoard();
+  solveTime.textContent = `Solve Time: ${result.elapsedMs} ms`;
+  solutionSection.hidden = false;
+  solverMessage.textContent = "解答を表示しました。";
+  solverMessage.classList.add("success");
+  solveButton.disabled = false;
+  requestAnimationFrame(() => solutionSection.scrollIntoView({ behavior: "smooth", block: "start" }));
+}
+
+function handleSolveRequest() {
+  closeMiniKeypad();
+  if (fullOcrRevision !== alignmentRevision || fullOcrResults.some((result) => !result)) {
+    solverMessage.textContent = "先に全セルOCRを実行してください。";
+    solverMessage.classList.add("error");
+    return;
+  }
+
+  const issuesByCell = validateFullOcrResults();
+  const gate = getSolveGate(issuesByCell);
+  if (gate === "blocked") {
+    solverMessage.textContent = "盤面に矛盾があります。オレンジ色のセルを確認してください。";
+    solverMessage.classList.add("error");
+    ocrResultBoard.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+
+  if (gate === "confirm") {
+    const count = issuesByCell.filter((issues) => issues.includes("low-confidence")).length;
+    solveConfirmMessage.textContent = `要確認セルが${count}件あります。このまま解きますか？`;
+    solveConfirmModal.hidden = false;
+    confirmSolveButton.focus({ preventScroll: true });
+    return;
+  }
+
+  executeSolver();
+}
+
+function handleReviewPuzzle() {
+  closeSolveConfirm();
+  ocrResultBoard.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function handleBackToPuzzle() {
+  solutionSection.hidden = true;
+  ocrResultBoard.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function renderModalCell(index) {
@@ -745,6 +864,7 @@ function clearOcrHistory() {
 
 function clearFullOcrResults(message, badgeText = "未実行") {
   closeMiniKeypad();
+  clearSolverResult({ disableSolve: true, message: "OCR完了後に解けます。" });
   fullOcrRevision = null;
   fullOcrResults = Array.from({ length: 81 }, () => null);
   renderOcrResultBoard();
@@ -1078,6 +1198,7 @@ async function handleRunFullOcr() {
 
   closeMiniKeypad();
   closeCellModal();
+  clearSolverResult({ disableSolve: true, message: "OCR完了後に解けます。" });
   regenerateFromAlignment();
   const revisionAtStart = alignmentRevision;
   const preprocessAtStart = preprocessEnabled;
@@ -1152,6 +1273,9 @@ async function handleRunFullOcr() {
 
     fullOcrRevision = revisionAtStart;
     validateFullOcrResults();
+    solveButton.disabled = false;
+    solverMessage.textContent = "OCR結果を確認して「解く」を押してください。";
+    solverMessage.classList.remove("error", "success");
     const totalElapsed = Math.round(performance.now() - batchStartedAt);
     fullOcrStateBadge.textContent = "完了";
     fullOcrStateBadge.classList.remove("active", "warning");
@@ -1172,6 +1296,7 @@ async function handleRunFullOcr() {
     fullOcrProgressText.textContent = message;
     fullOcrNotice.textContent = "途中結果は参考表示です。問題を確認して再OCRしてください。";
     setStatus(message);
+    solveButton.disabled = true;
   } finally {
     setOcrProgressListener(null);
     setFullOcrControlsDisabled(false);
@@ -1580,6 +1705,7 @@ function handleCapture() {
 }
 
 function handleRetake() {
+  clearSolverResult({ disableSolve: true, message: "OCR完了後に解けます。" });
   closeMiniKeypad();
   closeCellModal();
   resultSection.hidden = true;
@@ -1657,6 +1783,13 @@ fullPreprocessOnButton.addEventListener("click", () => setPreprocessing(true));
 fullPreprocessOffButton.addEventListener("click", () => setPreprocessing(false));
 runSingleOcrButton.addEventListener("click", handleRunSingleOcr);
 runFullOcrButton.addEventListener("click", handleRunFullOcr);
+solveButton.addEventListener("click", handleSolveRequest);
+confirmSolveButton.addEventListener("click", executeSolver);
+reviewPuzzleButton.addEventListener("click", handleReviewPuzzle);
+backToPuzzleButton.addEventListener("click", handleBackToPuzzle);
+solveConfirmModal.addEventListener("click", (event) => {
+  if (event.target === solveConfirmModal) handleReviewPuzzle();
+});
 copyOcrToTruthButton.addEventListener("click", handleCopyOcrToTruth);
 runBenchmarkButton.addEventListener("click", handleRunBenchmark);
 runTuningButton.addEventListener("click", handleRunTuning);
@@ -1700,6 +1833,7 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "Escape") {
     closeMiniKeypad({ restoreFocus: true });
+    closeSolveConfirm();
     closeCellModal();
     closeBenchmarkModal();
   }

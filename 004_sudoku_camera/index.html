@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>ナンプレ カメラ読み取り</title>
-  <link rel="stylesheet" href="./style.css?v=0.6.0">
+  <link rel="stylesheet" href="./style.css?v=0.7.0">
 </head>
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">SUDOKU CAMERA · v0.6.0</p>
+      <p class="eyebrow">SUDOKU CAMERA · v0.7.0</p>
       <h1>ナンプレをガイドに合わせる</h1>
     </header>
 
@@ -128,6 +128,24 @@
         <p id="validationSummary" class="validationSummary" role="status" aria-live="polite">検証待ち</p>
         <div id="ocrResultBoard" class="ocrResultBoard" aria-label="9×9 OCR結果"></div>
         <p class="panelCopy">セルをタップするとミニテンキーで空欄または1～9へ修正できます。「詳細」からセル画像とOCR情報を確認できます。</p>
+        <button id="solveButton" class="primary solveButton" type="button" disabled>解く</button>
+        <p id="solverMessage" class="solverMessage" role="status" aria-live="polite">OCR完了後に解けます。</p>
+
+        <section id="solutionSection" class="solutionSection" aria-labelledby="solutionHeading" tabindex="-1" hidden>
+          <div class="solutionHeading">
+            <div>
+              <p class="stepLabel">SOLUTION</p>
+              <h2 id="solutionHeading">解答</h2>
+            </div>
+            <span id="solveTime" class="stateBadge">Solve Time: -</span>
+          </div>
+          <div id="solutionBoard" class="solutionBoard" aria-label="ナンプレ解答盤面"></div>
+          <div class="solutionLegend" aria-label="解答表示の凡例">
+            <span><i class="givenLegend" aria-hidden="true"></i>問題数字</span>
+            <span><i class="solvedLegend" aria-hidden="true"></i>Solver数字</span>
+          </div>
+          <button id="backToPuzzleButton" class="secondary" type="button">問題に戻る</button>
+        </section>
       </section>
 
       <details class="debugDisclosure">
@@ -286,6 +304,20 @@
     </div>
   </div>
 
+  <div id="solveConfirmModal" class="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="solveConfirmHeading" hidden>
+    <div class="modalCard solveConfirmCard">
+      <div>
+        <p class="stepLabel">CONFIRM</p>
+        <h2 id="solveConfirmHeading">要確認セルがあります</h2>
+      </div>
+      <p id="solveConfirmMessage" class="panelCopy"></p>
+      <div class="solveConfirmActions">
+        <button id="confirmSolveButton" class="primary" type="button">このまま解く</button>
+        <button id="reviewPuzzleButton" class="secondary" type="button">確認する</button>
+      </div>
+    </div>
+  </div>
+
   <div id="cellModal" class="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="modalCellLabel" hidden>
     <div class="modalCard">
       <div class="modalHeader">
@@ -377,6 +409,6 @@
   </div>
 
   <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script type="module" src="./app.js?v=0.6.0"></script>
+  <script type="module" src="./app.js?v=0.7.0"></script>
 </body>
 </html>
