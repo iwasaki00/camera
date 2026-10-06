@@ -7,6 +7,7 @@ import { isSupportedImageFile, loadImageBlobIntoCanvas } from "./imageInput.js";
 import { runFinalCandidate, runOcrTuning, tuningConfigLabel } from "./tuning.js?v=0.5.2";
 import { validateSudokuGrid } from "./validation.mjs";
 import { getSolveGate, solvePuzzle } from "./solverIntegration.mjs";
+import { generateExplanation } from "./sudokuExplanation.mjs";
 import {
   BENCHMARK_METHODS,
   buildBenchmarkReport,
@@ -84,11 +85,30 @@ const validationSummary = document.getElementById("validationSummary");
 const readingResultSection = document.getElementById("readingResultSection");
 const ocrResultBoard = document.getElementById("ocrResultBoard");
 const solveButton = document.getElementById("solveButton");
+const explainButton = document.getElementById("explainButton");
 const solverMessage = document.getElementById("solverMessage");
 const solutionSection = document.getElementById("solutionSection");
 const solutionBoard = document.getElementById("solutionBoard");
 const solveTime = document.getElementById("solveTime");
 const backToPuzzleButton = document.getElementById("backToPuzzleButton");
+const explanationSection = document.getElementById("explanationSection");
+const explanationStatusBadge = document.getElementById("explanationStatusBadge");
+const explanationStepCounter = document.getElementById("explanationStepCounter");
+const explanationTechnique = document.getElementById("explanationTechnique");
+const explanationBoard = document.getElementById("explanationBoard");
+const explanationReason = document.getElementById("explanationReason");
+const explanationWhyButton = document.getElementById("explanationWhyButton");
+const explanationWhyPanel = document.getElementById("explanationWhyPanel");
+const explanationWhyHint = document.getElementById("explanationWhyHint");
+const explanationDetailReason = document.getElementById("explanationDetailReason");
+const explanationOutcome = document.getElementById("explanationOutcome");
+const explanationOutcomeTitle = document.getElementById("explanationOutcomeTitle");
+const explanationOutcomeMessage = document.getElementById("explanationOutcomeMessage");
+const explanationTechniqueCounts = document.getElementById("explanationTechniqueCounts");
+const explanationPreviousButton = document.getElementById("explanationPreviousButton");
+const explanationNextButton = document.getElementById("explanationNextButton");
+const explanationAnswerButton = document.getElementById("explanationAnswerButton");
+const backFromExplanationButton = document.getElementById("backFromExplanationButton");
 const solveConfirmModal = document.getElementById("solveConfirmModal");
 const solveConfirmMessage = document.getElementById("solveConfirmMessage");
 const confirmSolveButton = document.getElementById("confirmSolveButton");
@@ -160,6 +180,10 @@ let keypadCellIndex = null;
 let keypadAnchor = null;
 let originalPuzzle = null;
 let solvedGrid = null;
+let explanationResult = null;
+let explanationStepIndex = 0;
+let explanationWhyVisible = false;
+let pendingConfirmedAction = null;
 let isFullOcrRunning = false;
 let isCaptureInProgress = false;
 let isBenchmarkRunning = false;
@@ -189,7 +213,7 @@ function setAppStep(step) {
 function setResultMode(mode) {
   resultSection.dataset.resultMode = mode;
   readingResultSection.hidden = mode === "captured";
-  readingResultSection.classList.remove("readingMode", "reviewMode", "answerMode");
+  readingResultSection.classList.remove("readingMode", "reviewMode", "answerMode", "explanationMode");
   if (mode !== "captured") readingResultSection.classList.add(`${mode}Mode`);
 }
 
@@ -387,7 +411,8 @@ function applyManualOcrValue(value) {
   }
   metadata.value = value;
   metadata.manuallyEdited = true;
-  clearSolverResult({ message: "問題を修正しました。現在の内容で答えを表示できます。" });
+  clearSolverResult({ message: "問題を修正しました。現在の内容で答えや解き方を表示できます。" });
+  clearExplanationResult();
   setAppStep(3);
   setResultMode("review");
   validateFullOcrResults();
@@ -681,8 +706,186 @@ function validateFullOcrResults() {
   return issuesByCell;
 }
 
+const EXPLANATION_COUNT_LABELS = {
+  NAKED_SINGLE: "候補が1つ",
+  HIDDEN_SINGLE_BLOCK: "3×3で1か所",
+  HIDDEN_SINGLE_ROW: "行で1か所",
+  HIDDEN_SINGLE_COLUMN: "列で1か所"
+};
+
+function clearExplanationResult({ disableExplain = false } = {}) {
+  explanationResult = null;
+  explanationStepIndex = 0;
+  explanationWhyVisible = false;
+  explanationBoard.replaceChildren();
+  explanationSection.hidden = true;
+  explanationWhyPanel.hidden = true;
+  explanationWhyButton.setAttribute("aria-expanded", "false");
+  explanationOutcome.hidden = true;
+  explanationAnswerButton.hidden = true;
+  if (disableExplain) explainButton.disabled = true;
+}
+
+function createCandidateDisplay(candidates, focusValue) {
+  const container = document.createElement("span");
+  container.className = "explanationCandidates";
+  for (let digit = 1; digit <= 9; digit += 1) {
+    const mark = document.createElement("span");
+    mark.textContent = String(digit);
+    if (candidates.includes(digit)) mark.classList.add("visible");
+    if (digit === focusValue && candidates.includes(digit)) mark.classList.add("focusCandidate");
+    container.appendChild(mark);
+  }
+  return container;
+}
+
+function renderExplanationBoard(step, grid) {
+  const fragment = document.createDocumentFragment();
+  const targetIndex = step?.targetCells[0] ?? -1;
+  const unitCells = new Set(step?.unit?.cells || []);
+  const relatedCells = new Set(step?.relatedCells || []);
+
+  for (let index = 0; index < 81; index += 1) {
+    const cell = document.createElement("div");
+    const value = grid[index];
+    const isGiven = explanationResult.originalGrid[index] !== 0;
+    const isTarget = index === targetIndex;
+    const wasEmpty = step ? step.gridBefore[index] === 0 : false;
+    cell.className = "explanationCell";
+    if (isGiven) cell.classList.add("given");
+    else if (value) cell.classList.add("explained");
+    if (unitCells.has(index)) cell.classList.add("unitHighlight");
+    if (relatedCells.has(index)) cell.classList.add("relatedCell");
+    if (isTarget) cell.classList.add("currentTarget");
+
+    const showNakedCandidates = explanationWhyVisible
+      && step?.technique === "NAKED_SINGLE"
+      && isTarget;
+    const showHiddenCandidates = explanationWhyVisible
+      && step?.technique?.startsWith("HIDDEN_SINGLE")
+      && unitCells.has(index)
+      && wasEmpty;
+
+    if (showNakedCandidates) {
+      cell.appendChild(createCandidateDisplay(step.candidateSnapshot[index], step.placedValue));
+    } else if (showHiddenCandidates) {
+      const candidates = step.candidateSnapshot[index];
+      if (candidates.includes(step.placedValue)) {
+        cell.appendChild(createCandidateDisplay([step.placedValue], step.placedValue));
+      } else {
+        const excluded = document.createElement("span");
+        excluded.className = "explanationExcluded";
+        excluded.textContent = "×";
+        cell.appendChild(excluded);
+      }
+    } else if (value) {
+      cell.textContent = String(value);
+    }
+
+    const row = Math.floor(index / 9) + 1;
+    const col = index % 9 + 1;
+    cell.setAttribute("aria-label", `R${row}C${col} ${value || "空欄"}${isTarget ? " 今回のマス" : ""}`);
+    fragment.appendChild(cell);
+  }
+  explanationBoard.replaceChildren(fragment);
+}
+
+function renderExplanationCounts() {
+  explanationTechniqueCounts.replaceChildren();
+  for (const [technique, label] of Object.entries(EXPLANATION_COUNT_LABELS)) {
+    const count = explanationResult.techniqueCounts[technique] || 0;
+    if (count === 0) continue;
+    const item = document.createElement("li");
+    item.textContent = `${label}：${count}回`;
+    explanationTechniqueCounts.appendChild(item);
+  }
+}
+
+function showExplanationStep(stepIndex) {
+  if (!explanationResult) return;
+  explanationStepIndex = Math.max(0, Math.min(stepIndex, explanationResult.steps.length));
+  explanationWhyVisible = false;
+  explanationWhyPanel.hidden = true;
+  explanationWhyButton.setAttribute("aria-expanded", "false");
+
+  const step = explanationStepIndex === 0 ? null : explanationResult.steps[explanationStepIndex - 1];
+  const grid = step ? step.gridAfter : explanationResult.originalGrid;
+  explanationStepCounter.textContent = `STEP ${explanationStepIndex} / ${explanationResult.steps.length}`;
+  explanationTechnique.textContent = step?.techniqueLabel || "問題";
+  explanationReason.textContent = step?.shortReason || "読み取った問題から始めます。";
+  explanationDetailReason.textContent = step?.detailReason || "";
+  explanationWhyButton.disabled = !step;
+  explanationWhyButton.textContent = "なぜ？";
+  explanationPreviousButton.disabled = explanationStepIndex === 0;
+
+  const isLast = explanationStepIndex === explanationResult.steps.length;
+  explanationNextButton.disabled = isLast;
+  explanationNextButton.textContent = isLast
+    ? explanationResult.status === "solved" ? "完成" : "ここまで"
+    : "次へ ▶";
+
+  explanationOutcome.hidden = !isLast;
+  explanationAnswerButton.hidden = !(isLast && explanationResult.status === "stuck");
+  explanationOutcome.classList.toggle("stuck", isLast && explanationResult.status === "stuck");
+  if (isLast && explanationResult.status === "solved") {
+    explanationStatusBadge.textContent = "完成";
+    explanationStatusBadge.className = "stateBadge success";
+    explanationOutcomeTitle.textContent = "完成！";
+    explanationOutcomeMessage.textContent = `${explanationResult.steps.length}手で解けました。`;
+    renderExplanationCounts();
+  } else if (isLast && explanationResult.status === "stuck") {
+    explanationStatusBadge.textContent = "ここまで";
+    explanationStatusBadge.className = "stateBadge warning";
+    explanationOutcomeTitle.textContent = "ここまで論理的に解けました";
+    explanationOutcomeMessage.textContent = "現在対応している解き方では、次の一手を説明できません。";
+    renderExplanationCounts();
+  } else {
+    explanationStatusBadge.textContent = explanationStepIndex === 0 ? "問題" : "解説中";
+    explanationStatusBadge.className = "stateBadge active";
+    explanationTechniqueCounts.replaceChildren();
+  }
+
+  renderExplanationBoard(step, grid);
+}
+
+function toggleExplanationWhy() {
+  if (!explanationResult || explanationStepIndex === 0) return;
+  explanationWhyVisible = !explanationWhyVisible;
+  const step = explanationResult.steps[explanationStepIndex - 1];
+  explanationWhyPanel.hidden = !explanationWhyVisible;
+  explanationWhyButton.setAttribute("aria-expanded", String(explanationWhyVisible));
+  explanationWhyButton.textContent = explanationWhyVisible ? "候補を閉じる" : "なぜ？";
+  explanationWhyHint.textContent = step.technique === "NAKED_SINGLE"
+    ? "このマスに残った候補を表示しています。"
+    : `${step.placedValue}を置けるマスと、置けないマスを×で示しています。`;
+  renderExplanationBoard(step, step.gridAfter);
+}
+
+function executeExplanation() {
+  closeSolveConfirm();
+  clearExplanationResult();
+  const currentPuzzle = fullOcrResults.map((cell) => Number(cell?.value) || 0);
+  explanationResult = generateExplanation(currentPuzzle);
+
+  if (explanationResult.status === "invalid") {
+    solverMessage.textContent = "この盤面には矛盾があります。問題数字を確認してください。";
+    solverMessage.classList.add("error");
+    setAppStep(3);
+    setResultMode("review");
+    return;
+  }
+
+  explanationSection.hidden = false;
+  solutionSection.hidden = true;
+  setAppStep(4);
+  setResultMode("explanation");
+  showExplanationStep(0);
+  requestAnimationFrame(() => explanationSection.scrollIntoView({ behavior: "smooth", block: "start" }));
+}
+
 function closeSolveConfirm() {
   solveConfirmModal.hidden = true;
+  pendingConfirmedAction = null;
 }
 
 function clearSolverResult({ disableSolve = false, message = "" } = {}) {
@@ -692,7 +895,10 @@ function clearSolverResult({ disableSolve = false, message = "" } = {}) {
   solutionSection.hidden = true;
   solveTime.textContent = "Solve Time: -";
   closeSolveConfirm();
-  if (disableSolve) solveButton.disabled = true;
+  if (disableSolve) {
+    solveButton.disabled = true;
+    explainButton.disabled = true;
+  }
   if (message) solverMessage.textContent = message;
   solverMessage.classList.remove("error", "success");
 }
@@ -753,7 +959,12 @@ function executeSolver() {
   requestAnimationFrame(() => solutionSection.scrollIntoView({ behavior: "smooth", block: "start" }));
 }
 
-function handleSolveRequest() {
+function runPuzzleAction(action) {
+  if (action === "explain") executeExplanation();
+  else executeSolver();
+}
+
+function handlePuzzleActionRequest(action) {
   closeMiniKeypad();
   if (fullOcrRevision !== alignmentRevision || fullOcrResults.some((result) => !result)) {
     solverMessage.textContent = "先に数字を読み取ってください。";
@@ -774,13 +985,29 @@ function handleSolveRequest() {
 
   if (gate === "confirm") {
     const count = issuesByCell.filter((issues) => issues.includes("low-confidence")).length;
-    solveConfirmMessage.textContent = `読み取りが不確かなマスが${count}か所あります。このまま答えを表示しますか？`;
+    pendingConfirmedAction = action;
+    solveConfirmMessage.textContent = `読み取りが不確かなマスが${count}か所あります。このまま${action === "explain" ? "解き方を表示" : "答えを表示"}しますか？`;
+    confirmSolveButton.textContent = action === "explain" ? "このまま解き方を見る" : "このまま答えを見る";
     solveConfirmModal.hidden = false;
     confirmSolveButton.focus({ preventScroll: true });
     return;
   }
 
-  executeSolver();
+  runPuzzleAction(action);
+}
+
+function handleSolveRequest() {
+  handlePuzzleActionRequest("solve");
+}
+
+function handleExplanationRequest() {
+  handlePuzzleActionRequest("explain");
+}
+
+function handleConfirmedPuzzleAction() {
+  const action = pendingConfirmedAction || "solve";
+  closeSolveConfirm();
+  runPuzzleAction(action);
 }
 
 function handleReviewPuzzle() {
@@ -795,6 +1022,21 @@ function handleBackToPuzzle() {
   setAppStep(3);
   setResultMode("review");
   ocrResultBoard.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function handleBackFromExplanation() {
+  explanationSection.hidden = true;
+  setAppStep(3);
+  setResultMode("review");
+  ocrResultBoard.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function handleExplanationPrevious() {
+  showExplanationStep(explanationStepIndex - 1);
+}
+
+function handleExplanationNext() {
+  showExplanationStep(explanationStepIndex + 1);
 }
 
 function renderModalCell(index) {
@@ -900,7 +1142,8 @@ function clearOcrHistory() {
 
 function clearFullOcrResults(message, badgeText = "未実行") {
   closeMiniKeypad();
-  clearSolverResult({ disableSolve: true, message: "読み取り後に答えを表示できます。" });
+  clearSolverResult({ disableSolve: true, message: "読み取り後に答えや解き方を表示できます。" });
+  clearExplanationResult({ disableExplain: true });
   setResultMode("captured");
   fullOcrRevision = null;
   fullOcrResults = Array.from({ length: 81 }, () => null);
@@ -1239,7 +1482,8 @@ async function handleRunFullOcr() {
 
   closeMiniKeypad();
   closeCellModal();
-  clearSolverResult({ disableSolve: true, message: "読み取り後に答えを表示できます。" });
+  clearSolverResult({ disableSolve: true, message: "読み取り後に答えや解き方を表示できます。" });
+  clearExplanationResult({ disableExplain: true });
   setAppStep(2);
   setResultMode("reading");
   regenerateFromAlignment();
@@ -1316,7 +1560,8 @@ async function handleRunFullOcr() {
     fullOcrRevision = revisionAtStart;
     validateFullOcrResults();
     solveButton.disabled = false;
-    solverMessage.textContent = "読み取り結果を確認して「答えを見る」を押してください。";
+    explainButton.disabled = false;
+    solverMessage.textContent = "読み取り結果を確認して、答えまたは解き方を選んでください。";
     solverMessage.classList.remove("error", "success");
     setAppStep(3);
     setResultMode("review");
@@ -1343,6 +1588,7 @@ async function handleRunFullOcr() {
     setAppStep(2);
     setResultMode("reading");
     solveButton.disabled = true;
+    explainButton.disabled = true;
   } finally {
     setOcrProgressListener(null);
     setFullOcrControlsDisabled(false);
@@ -1751,7 +1997,8 @@ function handleCapture() {
 }
 
 function handleRetake() {
-  clearSolverResult({ disableSolve: true, message: "読み取り後に答えを表示できます。" });
+  clearSolverResult({ disableSolve: true, message: "読み取り後に答えや解き方を表示できます。" });
+  clearExplanationResult({ disableExplain: true });
   closeMiniKeypad();
   closeCellModal();
   closeResultDiagnostics();
@@ -1835,9 +2082,15 @@ fullPreprocessOffButton.addEventListener("click", () => setPreprocessing(false))
 runSingleOcrButton.addEventListener("click", handleRunSingleOcr);
 runFullOcrButton.addEventListener("click", handleRunFullOcr);
 solveButton.addEventListener("click", handleSolveRequest);
-confirmSolveButton.addEventListener("click", executeSolver);
+explainButton.addEventListener("click", handleExplanationRequest);
+confirmSolveButton.addEventListener("click", handleConfirmedPuzzleAction);
 reviewPuzzleButton.addEventListener("click", handleReviewPuzzle);
 backToPuzzleButton.addEventListener("click", handleBackToPuzzle);
+explanationWhyButton.addEventListener("click", toggleExplanationWhy);
+explanationPreviousButton.addEventListener("click", handleExplanationPrevious);
+explanationNextButton.addEventListener("click", handleExplanationNext);
+explanationAnswerButton.addEventListener("click", handleSolveRequest);
+backFromExplanationButton.addEventListener("click", handleBackFromExplanation);
 solveConfirmModal.addEventListener("click", (event) => {
   if (event.target === solveConfirmModal) handleReviewPuzzle();
 });

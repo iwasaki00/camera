@@ -4,20 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>ナンプレ カメラ読み取り</title>
-  <link rel="stylesheet" href="./style.css?v=0.8.0-gridfix2">
+  <link rel="stylesheet" href="./style.css?v=0.9.0">
 </head>
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">SUDOKU CAMERA · v0.8.0</p>
-      <h1>ナンプレを撮って答えを見る</h1>
+      <p class="eyebrow">SUDOKU CAMERA · v0.9.0</p>
+      <h1>ナンプレを撮って解く</h1>
     </header>
 
     <nav class="stepProgress" aria-label="進行状況">
       <span class="appStep active" data-app-step="1" aria-current="step"><b>1</b>撮影</span>
       <span class="appStep" data-app-step="2"><b>2</b>読取</span>
       <span class="appStep" data-app-step="3"><b>3</b>確認</span>
-      <span class="appStep" data-app-step="4"><b>4</b>答え</span>
+      <span class="appStep" data-app-step="4"><b>4</b>解く</span>
     </nav>
 
     <section id="cameraSection" class="panel" aria-labelledby="cameraHeading">
@@ -105,8 +105,11 @@
         <p id="validationSummary" class="validationSummary" role="status" aria-live="polite">検証待ち</p>
         <div id="ocrResultBoard" class="ocrResultBoard" aria-label="9×9 OCR結果"></div>
         <p class="panelCopy resultHelp">数字が違う場合はマスをタップして修正できます。</p>
-        <button id="solveButton" class="primary solveButton" type="button" disabled>答えを見る</button>
-        <p id="solverMessage" class="solverMessage" role="status" aria-live="polite">読み取り後に答えを表示できます。</p>
+        <div class="puzzleActionChoices">
+          <button id="solveButton" class="primary solveButton" type="button" disabled>答えを見る</button>
+          <button id="explainButton" class="secondary explainButton" type="button" disabled>解き方を見る</button>
+        </div>
+        <p id="solverMessage" class="solverMessage" role="status" aria-live="polite">読み取り後に答えや解き方を表示できます。</p>
         </div>
 
         <section id="solutionSection" class="solutionSection" aria-labelledby="solutionHeading" tabindex="-1" hidden>
@@ -122,6 +125,46 @@
             <span><i class="solvedLegend" aria-hidden="true"></i>答えの数字</span>
           </div>
           <button id="backToPuzzleButton" class="secondary" type="button">問題に戻る</button>
+        </section>
+
+        <section id="explanationSection" class="explanationSection" aria-labelledby="explanationHeading" tabindex="-1" hidden>
+          <div class="explanationHeading">
+            <div>
+              <p class="stepLabel">HOW TO SOLVE</p>
+              <h2 id="explanationHeading">解き方</h2>
+            </div>
+            <span id="explanationStatusBadge" class="stateBadge">準備中</span>
+          </div>
+
+          <div class="explanationMeta">
+            <strong id="explanationStepCounter">STEP 0 / 0</strong>
+            <span id="explanationTechnique" class="techniqueBadge">問題</span>
+          </div>
+
+          <div id="explanationBoard" class="explanationBoard" aria-label="解き方の盤面"></div>
+          <p id="explanationReason" class="explanationReason">読み取った問題から始めます。</p>
+
+          <button id="explanationWhyButton" class="secondary explanationWhyButton" type="button" aria-expanded="false" disabled>なぜ？</button>
+          <div id="explanationWhyPanel" class="explanationWhyPanel" hidden>
+            <p id="explanationWhyHint">盤面上の候補と×印を確認してください。</p>
+            <details class="explanationDetails">
+              <summary>詳しく</summary>
+              <p id="explanationDetailReason"></p>
+            </details>
+          </div>
+
+          <div id="explanationOutcome" class="explanationOutcome" hidden>
+            <strong id="explanationOutcomeTitle"></strong>
+            <p id="explanationOutcomeMessage"></p>
+            <ul id="explanationTechniqueCounts" class="explanationTechniqueCounts"></ul>
+          </div>
+
+          <div class="explanationNavigation">
+            <button id="explanationPreviousButton" class="secondary" type="button">◀ 前へ</button>
+            <button id="explanationNextButton" class="primary" type="button">次へ ▶</button>
+          </div>
+          <button id="explanationAnswerButton" class="primary" type="button" hidden>答えを見る</button>
+          <button id="backFromExplanationButton" class="secondary" type="button">問題に戻る</button>
         </section>
       </section>
 
@@ -327,7 +370,7 @@
       </div>
       <p id="solveConfirmMessage" class="panelCopy"></p>
       <div class="solveConfirmActions">
-        <button id="confirmSolveButton" class="primary" type="button">このまま答えを見る</button>
+        <button id="confirmSolveButton" class="primary" type="button">このまま進む</button>
         <button id="reviewPuzzleButton" class="secondary" type="button">確認する</button>
       </div>
     </div>
@@ -424,6 +467,6 @@
   </div>
 
   <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script type="module" src="./app.js?v=0.8.0"></script>
+  <script type="module" src="./app.js?v=0.9.0"></script>
 </body>
 </html>
