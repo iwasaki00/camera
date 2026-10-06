@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
+  calculateCandidateReasons,
   calculateCandidates,
   EXPLANATION_TECHNIQUES,
   findNextLogicalStep,
@@ -28,6 +29,35 @@ test("候補計算は同じ行・列・3×3の数字を除外する", () => {
   assert.deepEqual(calculateCandidates(grid)[9], [4, 6, 7, 8, 9]);
 });
 
+test("候補ごとにROW・COLUMN・BLOCKとsourceCellsを保持する", () => {
+  const grid = Array(81).fill(0);
+  const target = 40;
+  grid[36] = 1;
+  grid[4] = 2;
+  grid[30] = 3;
+  grid[39] = 5;
+  grid[76] = 8;
+  const reasons = calculateCandidateReasons(grid, target);
+
+  assert.deepEqual(reasons[1], { available: false, reasons: [{ type: "ROW", sourceCells: [36] }] });
+  assert.deepEqual(reasons[2], { available: false, reasons: [{ type: "COLUMN", sourceCells: [4] }] });
+  assert.deepEqual(reasons[3], { available: false, reasons: [{ type: "BLOCK", sourceCells: [30] }] });
+  assert.deepEqual(reasons[7], { available: true, reasons: [] });
+  assert.deepEqual(reasons[8], { available: false, reasons: [{ type: "COLUMN", sourceCells: [76] }] });
+});
+
+test("同じ候補の複数除外理由をreasons配列へ保持する", () => {
+  const grid = Array(81).fill(0);
+  const target = 40;
+  grid[39] = 5;
+  const reason = calculateCandidateReasons(grid, target)[5];
+  assert.equal(reason.available, false);
+  assert.deepEqual(reason.reasons, [
+    { type: "ROW", sourceCells: [39] },
+    { type: "BLOCK", sourceCells: [39] }
+  ]);
+});
+
 test("Naked SingleをPLACEとして検出する", () => {
   const grid = SOLVED.slice();
   grid[0] = 0;
@@ -40,6 +70,10 @@ test("Naked SingleをPLACEとして検出する", () => {
   assert.deepEqual(step.candidatesBefore, [1]);
   assert.equal(step.relatedCells.length, 8);
   assert.equal(new Set(step.relatedCells.map((index) => grid[index])).size, 8);
+  assert.deepEqual(step.candidateReasons[1], { available: true, reasons: [] });
+  assert.equal(step.candidateReasons[2].available, false);
+  assert.ok(step.candidateReasons[2].reasons.some((reason) => reason.type === "ROW" && reason.sourceCells.includes(1)));
+  assert.ok(step.candidateReasons[2].reasons.some((reason) => reason.type === "COLUMN" && reason.sourceCells.includes(27)));
 });
 
 test("Hidden Single Blockを決定的に検出する", () => {
@@ -49,6 +83,14 @@ test("Hidden Single Blockを決定的に検出する", () => {
   assert.equal(step.placedValue, 1);
 });
 
+test("Hidden Single Blockは範囲内を置ける／置けないへ分類する", () => {
+  const step = generateExplanation(HIDDEN_BLOCK).steps[0];
+  const available = step.placementReasons.filter((item) => item.available);
+  assert.deepEqual(available.map((item) => item.cellIndex), step.targetCells);
+  assert.ok(step.placementReasons.filter((item) => !item.available).every((item) => item.reasons.length > 0));
+  assert.ok(step.placementReasons.filter((item) => !item.available).every((item) => item.reasons.some((reason) => reason.sourceCells.length > 0)));
+});
+
 test("Hidden Single Rowを決定的に検出する", () => {
   const step = findNextLogicalStep(HIDDEN_ROW);
   assert.equal(step.technique, EXPLANATION_TECHNIQUES.HIDDEN_SINGLE_ROW);
@@ -56,11 +98,21 @@ test("Hidden Single Rowを決定的に検出する", () => {
   assert.equal(step.placedValue, 4);
 });
 
+test("Hidden Single Rowは唯一置けるセルをTargetにする", () => {
+  const step = generateExplanation(HIDDEN_ROW).steps[0];
+  assert.deepEqual(step.placementReasons.filter((item) => item.available).map((item) => item.cellIndex), step.targetCells);
+});
+
 test("Hidden Single Columnを決定的に検出する", () => {
   const step = findNextLogicalStep(HIDDEN_COLUMN);
   assert.equal(step.technique, EXPLANATION_TECHNIQUES.HIDDEN_SINGLE_COLUMN);
   assert.equal(step.targetIndex, 1);
   assert.equal(step.placedValue, 2);
+});
+
+test("Hidden Single Columnは唯一置けるセルをTargetにする", () => {
+  const step = generateExplanation(HIDDEN_COLUMN).steps[0];
+  assert.deepEqual(step.placementReasons.filter((item) => item.available).map((item) => item.cellIndex), step.targetCells);
 });
 
 test("同じ盤面は同じStep列を返す", () => {
@@ -102,7 +154,7 @@ test("StepデータとtechniqueCountsを保持する", () => {
   grid[0] = 0;
   const result = generateExplanation(grid);
   const step = result.steps[0];
-  for (const field of ["stepNumber", "type", "technique", "targetCells", "relatedCells", "unit", "placedValue", "candidatesBefore", "candidatesAfter", "eliminatedCandidates", "shortReason", "detailReason", "gridBefore", "gridAfter", "candidateSnapshot"]) {
+  for (const field of ["stepNumber", "type", "technique", "targetCells", "relatedCells", "unit", "placedValue", "candidatesBefore", "candidatesAfter", "eliminatedCandidates", "candidateReasons", "placementReasons", "shortReason", "detailReason", "gridBefore", "gridAfter", "candidateSnapshot"]) {
     assert.ok(Object.hasOwn(step, field), field);
   }
   assert.equal(result.techniqueCounts.NAKED_SINGLE, 1);

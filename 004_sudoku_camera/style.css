@@ -1267,8 +1267,22 @@ button.solveButton {
   background: #e8f4ee;
 }
 
+.explanationCell.reasonScopeHighlight {
+  background: #eaf4f8;
+}
+
 .explanationCell.relatedCell {
   box-shadow: inset 0 0 0 2px rgba(20, 125, 88, 0.24);
+}
+
+.explanationCell.reasonSourceCell {
+  z-index: 2;
+  color: #831843;
+  background: #ffe4e6;
+  box-shadow: inset 0 0 0 3px #9f1239;
+  font-weight: 900;
+  text-decoration: underline double #9f1239;
+  text-underline-offset: 2px;
 }
 
 .explanationCell.currentTarget {
@@ -1279,36 +1293,36 @@ button.solveButton {
   font-weight: 900;
 }
 
-.explanationCandidates {
-  width: 100%;
-  height: 100%;
+.explanationPlacementMark {
+  width: 82%;
+  height: 82%;
+  min-width: 0;
+  min-height: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-  padding: 2px;
-  color: #517064;
-  font-size: clamp(0.38rem, 1.65vw, 0.6rem);
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-size: clamp(1rem, 5vw, 1.45rem);
+  font-weight: 900;
   line-height: 1;
 }
 
-.explanationCandidates span {
-  display: grid;
-  place-items: center;
-  opacity: 0;
+.explanationPlacementMark.excluded {
+  color: #9a5238;
+  opacity: 0.72;
 }
 
-.explanationCandidates span.visible { opacity: 1; }
-.explanationCandidates span.focusCandidate {
+.explanationPlacementMark.available {
   color: #174d82;
-  font-size: 1.35em;
-  font-weight: 900;
+  border: 2px solid #2368ad;
+  background: #e8f2ff;
 }
 
-.explanationExcluded {
-  color: #b35b38;
-  font-size: clamp(1rem, 5vw, 1.45rem);
-  font-weight: 800;
-  opacity: 0.7;
+.explanationPlacementMark[aria-pressed="true"] {
+  outline: 3px solid #c2410c;
+  outline-offset: -1px;
 }
 
 .explanationReason {
@@ -1339,16 +1353,105 @@ button.explanationWhyButton {
   line-height: 1.55;
 }
 
-.explanationDetails summary {
-  min-height: 40px;
-  display: flex;
-  align-items: center;
-  color: var(--accent-dark);
-  cursor: pointer;
+.explanationWhyPanel > p:first-child {
+  color: var(--text);
+  font-size: 0.88rem;
   font-weight: 800;
+  text-align: center;
 }
 
-.explanationDetails p { padding-bottom: 4px; }
+.explanationCandidatePanel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.candidateReasonButton {
+  min-width: 0;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px;
+  border: 1px solid #c9d8d0;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.candidateReasonButton strong {
+  font-size: 1.05rem;
+}
+
+.candidateReasonButton.excluded {
+  color: #8a5b4a;
+  opacity: 0.78;
+}
+
+.candidateReasonButton.excluded strong {
+  text-decoration: line-through;
+}
+
+.candidateReasonButton.available {
+  color: #174d82;
+  border: 2px solid #2368ad;
+  background: #e8f2ff;
+  font-weight: 900;
+}
+
+.candidateReasonButton[aria-pressed="true"] {
+  outline: 3px solid #c2410c;
+  outline-offset: 1px;
+  opacity: 1;
+}
+
+.explanationCandidateReason {
+  min-height: 3.2em;
+  display: grid;
+  place-items: center;
+  padding: 8px 10px;
+  border-radius: 9px;
+  color: var(--text);
+  background: #fff;
+  font-weight: 700;
+  text-align: center;
+}
+
+.explanationReasonFlow {
+  display: grid;
+  gap: 2px;
+  padding-top: 2px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.explanationReasonFlow p {
+  margin: 0;
+}
+
+.explanationReasonFlow .flowArrow {
+  color: var(--accent-dark);
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.explanationReasonFlow .flowResult {
+  color: #174d82;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.explanationReasonFlow .flowConclusion {
+  padding: 7px;
+  border-radius: 8px;
+  color: #174d82;
+  background: #e8f2ff;
+  font-size: 0.94rem;
+  font-weight: 900;
+}
 
 .explanationOutcome {
   display: grid;

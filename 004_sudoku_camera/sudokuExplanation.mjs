@@ -83,6 +83,34 @@ export function calculateCandidates(input) {
   });
 }
 
+function matchingSourceCells(grid, indexes, digit, targetIndex) {
+  return indexes.filter((index) => index !== targetIndex && grid[index] === digit);
+}
+
+export function calculateCandidateReasons(input, targetIndex) {
+  const grid = normalizeGrid(input);
+  if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= 81) {
+    throw new Error("候補理由の対象セルが不正です。");
+  }
+
+  const row = Math.floor(targetIndex / 9);
+  const col = targetIndex % 9;
+  const block = Math.floor(row / 3) * 3 + Math.floor(col / 3);
+  const units = [
+    ["ROW", ROWS[row]],
+    ["COLUMN", COLUMNS[col]],
+    ["BLOCK", BLOCKS[block]]
+  ];
+
+  return Object.fromEntries(DIGITS.map((digit) => {
+    const reasons = units.flatMap(([type, indexes]) => {
+      const sourceCells = matchingSourceCells(grid, indexes, digit, targetIndex);
+      return sourceCells.length > 0 ? [{ type, sourceCells }] : [];
+    });
+    return [digit, { available: reasons.length === 0, reasons }];
+  }));
+}
+
 function getPeerIndexes(index) {
   const row = Math.floor(index / 9);
   const col = index % 9;
@@ -162,8 +190,8 @@ function reasonFor(step) {
   const value = step.placedValue;
   if (step.technique === EXPLANATION_TECHNIQUES.NAKED_SINGLE) {
     return {
-      shortReason: `入る数字は${value}だけです`,
-      detailReason: `同じ行・列・3×3にある数字を除くと、このマスに入る候補は${value}だけです。`
+      shortReason: `このマスに入る候補は${value}だけです`,
+      detailReason: `1〜9から、同じ行・列・3×3ですでに使われている数字を除くと、${value}だけが残ります。`
     };
   }
   if (step.technique === EXPLANATION_TECHNIQUES.HIDDEN_SINGLE_ROW) {
@@ -184,6 +212,23 @@ function reasonFor(step) {
   };
 }
 
+function buildPlacementReasons(grid, found) {
+  if (!found.unit) return [];
+  return found.unit.cells
+    .filter((cellIndex) => grid[cellIndex] === 0)
+    .map((cellIndex) => {
+      const candidateReason = calculateCandidateReasons(grid, cellIndex)[found.placedValue];
+      return {
+        cellIndex,
+        available: candidateReason.available,
+        reasons: candidateReason.reasons.map((reason) => ({
+          type: reason.type,
+          sourceCells: reason.sourceCells.slice()
+        }))
+      };
+    });
+}
+
 function buildStep(stepNumber, grid, candidates, found) {
   const gridBefore = grid.slice();
   const targetCandidates = candidates[found.targetIndex].slice();
@@ -194,6 +239,8 @@ function buildStep(stepNumber, grid, candidates, found) {
     ? found.unit.cells.filter((index) => index !== found.targetIndex && grid[index] !== 0)
     : getNakedSingleRelatedCells(grid, found.targetIndex, found.placedValue);
   const reasons = reasonFor(found);
+  const candidateReasons = calculateCandidateReasons(grid, found.targetIndex);
+  const placementReasons = buildPlacementReasons(grid, found);
 
   return {
     stepNumber,
@@ -207,6 +254,8 @@ function buildStep(stepNumber, grid, candidates, found) {
     candidatesBefore: targetCandidates,
     candidatesAfter: [],
     eliminatedCandidates: targetCandidates.filter((digit) => digit !== found.placedValue),
+    candidateReasons,
+    placementReasons,
     candidateSnapshot: candidates.map((values) => values.slice()),
     candidateSnapshotAfter,
     gridBefore,

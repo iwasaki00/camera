@@ -100,7 +100,9 @@ const explanationReason = document.getElementById("explanationReason");
 const explanationWhyButton = document.getElementById("explanationWhyButton");
 const explanationWhyPanel = document.getElementById("explanationWhyPanel");
 const explanationWhyHint = document.getElementById("explanationWhyHint");
-const explanationDetailReason = document.getElementById("explanationDetailReason");
+const explanationCandidatePanel = document.getElementById("explanationCandidatePanel");
+const explanationCandidateReason = document.getElementById("explanationCandidateReason");
+const explanationReasonFlow = document.getElementById("explanationReasonFlow");
 const explanationOutcome = document.getElementById("explanationOutcome");
 const explanationOutcomeTitle = document.getElementById("explanationOutcomeTitle");
 const explanationOutcomeMessage = document.getElementById("explanationOutcomeMessage");
@@ -183,6 +185,8 @@ let solvedGrid = null;
 let explanationResult = null;
 let explanationStepIndex = 0;
 let explanationWhyVisible = false;
+let explanationSelectedCandidate = null;
+let explanationSelectedPlacementCell = null;
 let pendingConfirmedAction = null;
 let isFullOcrRunning = false;
 let isCaptureInProgress = false;
@@ -717,6 +721,8 @@ function clearExplanationResult({ disableExplain = false } = {}) {
   explanationResult = null;
   explanationStepIndex = 0;
   explanationWhyVisible = false;
+  explanationSelectedCandidate = null;
+  explanationSelectedPlacementCell = null;
   explanationBoard.replaceChildren();
   explanationSection.hidden = true;
   explanationWhyPanel.hidden = true;
@@ -726,17 +732,105 @@ function clearExplanationResult({ disableExplain = false } = {}) {
   if (disableExplain) explainButton.disabled = true;
 }
 
-function createCandidateDisplay(candidates, focusValue) {
-  const container = document.createElement("span");
-  container.className = "explanationCandidates";
-  for (let digit = 1; digit <= 9; digit += 1) {
-    const mark = document.createElement("span");
-    mark.textContent = String(digit);
-    if (candidates.includes(digit)) mark.classList.add("visible");
-    if (digit === focusValue && candidates.includes(digit)) mark.classList.add("focusCandidate");
-    container.appendChild(mark);
+const REASON_TYPE_LABELS = {
+  ROW: "同じ行",
+  COLUMN: "同じ列",
+  BLOCK: "同じ3×3"
+};
+
+function indexesForReasonTypes(targetIndex, reasons) {
+  const indexes = new Set();
+  const row = Math.floor(targetIndex / 9);
+  const col = targetIndex % 9;
+  const blockRow = Math.floor(row / 3) * 3;
+  const blockCol = Math.floor(col / 3) * 3;
+  for (const reason of reasons) {
+    if (reason.type === "ROW") {
+      for (let cellCol = 0; cellCol < 9; cellCol += 1) indexes.add(row * 9 + cellCol);
+    } else if (reason.type === "COLUMN") {
+      for (let cellRow = 0; cellRow < 9; cellRow += 1) indexes.add(cellRow * 9 + col);
+    } else if (reason.type === "BLOCK") {
+      for (let cellRow = blockRow; cellRow < blockRow + 3; cellRow += 1) {
+        for (let cellCol = blockCol; cellCol < blockCol + 3; cellCol += 1) indexes.add(cellRow * 9 + cellCol);
+      }
+    }
   }
-  return container;
+  return indexes;
+}
+
+function getSelectedReason(step) {
+  if (!step || !explanationWhyVisible) return null;
+  if (step.technique === "NAKED_SINGLE" && explanationSelectedCandidate !== null) {
+    return step.candidateReasons[explanationSelectedCandidate] || null;
+  }
+  if (step.technique.startsWith("HIDDEN_SINGLE") && explanationSelectedPlacementCell !== null) {
+    return step.placementReasons.find((item) => item.cellIndex === explanationSelectedPlacementCell) || null;
+  }
+  return null;
+}
+
+function reasonSentence(value, reason, { hidden = false } = {}) {
+  if (!reason) return hidden ? "盤面の×または○をタップすると、理由を確認できます。" : "候補をタップすると、除外された理由を確認できます。";
+  if (reason.available) {
+    return hidden
+      ? `${value}を置ける場所として残ります。`
+      : `${value}はこのマスに入れる候補として残ります。ほかの数字がすべて除外されたので、このマスは${value}に決まります。`;
+  }
+  const labels = [...new Set(reason.reasons.map((item) => REASON_TYPE_LABELS[item.type]))];
+  return `${value}は${hidden ? "ここには置けません" : "入りません"}。${labels.join("と")}に${value}があります。`;
+}
+
+function appendFlowLine(text, className = "") {
+  const line = document.createElement("p");
+  line.textContent = text;
+  if (className) line.className = className;
+  explanationReasonFlow.appendChild(line);
+}
+
+function renderReasoningPanel(step) {
+  const isNaked = step.technique === "NAKED_SINGLE";
+  explanationCandidatePanel.hidden = !isNaked;
+  explanationCandidatePanel.replaceChildren();
+  explanationReasonFlow.replaceChildren();
+
+  if (isNaked) {
+    explanationWhyHint.textContent = "このマスに入る数字を1〜9から絞り込みます。";
+    for (let digit = 1; digit <= 9; digit += 1) {
+      const reason = step.candidateReasons[digit];
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `candidateReasonButton ${reason.available ? "available" : "excluded"}`;
+      button.dataset.candidate = String(digit);
+      button.setAttribute("aria-pressed", String(explanationSelectedCandidate === digit));
+      button.setAttribute("aria-label", `${digit} ${reason.available ? "候補として残る" : "候補から除外"}`);
+      const number = document.createElement("strong");
+      number.textContent = String(digit);
+      const mark = document.createElement("span");
+      mark.textContent = reason.available ? "○" : "×";
+      button.append(number, mark);
+      explanationCandidatePanel.appendChild(button);
+    }
+    explanationCandidateReason.textContent = reasonSentence(
+      explanationSelectedCandidate,
+      explanationSelectedCandidate === null ? null : step.candidateReasons[explanationSelectedCandidate]
+    );
+    appendFlowLine("行・列・3×3ですでに使われている数字を除きます");
+    appendFlowLine("↓", "flowArrow");
+    appendFlowLine(`残ったのは ${step.placedValue}`, "flowResult");
+    appendFlowLine("↓", "flowArrow");
+    appendFlowLine(`だから、このマスは${step.placedValue}です`, "flowConclusion");
+    return;
+  }
+
+  const unitLabel = step.unit.type === "row" ? "この行" : step.unit.type === "column" ? "この列" : "この3×3";
+  explanationWhyHint.textContent = `${unitLabel}のどこに${step.placedValue}を置けるか確認します。`;
+  const selectedReason = getSelectedReason(step);
+  explanationCandidateReason.textContent = reasonSentence(step.placedValue, selectedReason, { hidden: true });
+  appendFlowLine(`${step.placedValue}を置けない場所を除きます`);
+  appendFlowLine("↓", "flowArrow");
+  appendFlowLine("○の場所だけ残ります", "flowResult");
+  appendFlowLine("↓", "flowArrow");
+  appendFlowLine(`だから、このマスは${step.placedValue}です`, "flowConclusion");
 }
 
 function renderExplanationBoard(step, grid) {
@@ -744,6 +838,14 @@ function renderExplanationBoard(step, grid) {
   const targetIndex = step?.targetCells[0] ?? -1;
   const unitCells = new Set(step?.unit?.cells || []);
   const relatedCells = new Set(step?.relatedCells || []);
+  const selectedReason = getSelectedReason(step);
+  const sourceCells = new Set(selectedReason?.reasons.flatMap((reason) => reason.sourceCells) || []);
+  const reasonOriginIndex = step?.technique === "NAKED_SINGLE"
+    ? targetIndex
+    : explanationSelectedPlacementCell ?? targetIndex;
+  const reasonScopeCells = step && selectedReason
+    ? indexesForReasonTypes(reasonOriginIndex, selectedReason.reasons)
+    : new Set();
 
   for (let index = 0; index < 81; index += 1) {
     const cell = document.createElement("div");
@@ -755,29 +857,26 @@ function renderExplanationBoard(step, grid) {
     if (isGiven) cell.classList.add("given");
     else if (value) cell.classList.add("explained");
     if (unitCells.has(index)) cell.classList.add("unitHighlight");
+    if (reasonScopeCells.has(index)) cell.classList.add("reasonScopeHighlight");
     if (relatedCells.has(index)) cell.classList.add("relatedCell");
+    if (sourceCells.has(index)) cell.classList.add("reasonSourceCell");
     if (isTarget) cell.classList.add("currentTarget");
 
-    const showNakedCandidates = explanationWhyVisible
-      && step?.technique === "NAKED_SINGLE"
-      && isTarget;
     const showHiddenCandidates = explanationWhyVisible
       && step?.technique?.startsWith("HIDDEN_SINGLE")
       && unitCells.has(index)
       && wasEmpty;
 
-    if (showNakedCandidates) {
-      cell.appendChild(createCandidateDisplay(step.candidateSnapshot[index], step.placedValue));
-    } else if (showHiddenCandidates) {
-      const candidates = step.candidateSnapshot[index];
-      if (candidates.includes(step.placedValue)) {
-        cell.appendChild(createCandidateDisplay([step.placedValue], step.placedValue));
-      } else {
-        const excluded = document.createElement("span");
-        excluded.className = "explanationExcluded";
-        excluded.textContent = "×";
-        cell.appendChild(excluded);
-      }
+    if (showHiddenCandidates) {
+      const placement = step.placementReasons.find((item) => item.cellIndex === index);
+      const mark = document.createElement("button");
+      mark.type = "button";
+      mark.className = `explanationPlacementMark ${placement?.available ? "available" : "excluded"}`;
+      mark.dataset.placementCell = String(index);
+      mark.setAttribute("aria-pressed", String(explanationSelectedPlacementCell === index));
+      mark.setAttribute("aria-label", `${step.placedValue}を${placement?.available ? "置ける" : "置けない"}マス`);
+      mark.textContent = placement?.available ? "○" : "×";
+      cell.appendChild(mark);
     } else if (value) {
       cell.textContent = String(value);
     }
@@ -805,6 +904,8 @@ function showExplanationStep(stepIndex) {
   if (!explanationResult) return;
   explanationStepIndex = Math.max(0, Math.min(stepIndex, explanationResult.steps.length));
   explanationWhyVisible = false;
+  explanationSelectedCandidate = null;
+  explanationSelectedPlacementCell = null;
   explanationWhyPanel.hidden = true;
   explanationWhyButton.setAttribute("aria-expanded", "false");
 
@@ -813,7 +914,9 @@ function showExplanationStep(stepIndex) {
   explanationStepCounter.textContent = `STEP ${explanationStepIndex} / ${explanationResult.steps.length}`;
   explanationTechnique.textContent = step?.techniqueLabel || "問題";
   explanationReason.textContent = step?.shortReason || "読み取った問題から始めます。";
-  explanationDetailReason.textContent = step?.detailReason || "";
+  explanationCandidatePanel.replaceChildren();
+  explanationCandidateReason.textContent = "";
+  explanationReasonFlow.replaceChildren();
   explanationWhyButton.disabled = !step;
   explanationWhyButton.textContent = "なぜ？";
   explanationPreviousButton.disabled = explanationStepIndex === 0;
@@ -851,13 +954,33 @@ function showExplanationStep(stepIndex) {
 function toggleExplanationWhy() {
   if (!explanationResult || explanationStepIndex === 0) return;
   explanationWhyVisible = !explanationWhyVisible;
+  explanationSelectedCandidate = null;
+  explanationSelectedPlacementCell = null;
   const step = explanationResult.steps[explanationStepIndex - 1];
   explanationWhyPanel.hidden = !explanationWhyVisible;
   explanationWhyButton.setAttribute("aria-expanded", String(explanationWhyVisible));
   explanationWhyButton.textContent = explanationWhyVisible ? "候補を閉じる" : "なぜ？";
-  explanationWhyHint.textContent = step.technique === "NAKED_SINGLE"
-    ? "このマスに残った候補を表示しています。"
-    : `${step.placedValue}を置けるマスと、置けないマスを×で示しています。`;
+  if (explanationWhyVisible) renderReasoningPanel(step);
+  renderExplanationBoard(step, step.gridAfter);
+}
+
+function handleExplanationCandidateClick(event) {
+  const button = event.target.closest("[data-candidate]");
+  if (!button || !explanationWhyVisible || explanationStepIndex === 0) return;
+  const step = explanationResult.steps[explanationStepIndex - 1];
+  explanationSelectedCandidate = Number(button.dataset.candidate);
+  explanationSelectedPlacementCell = null;
+  renderReasoningPanel(step);
+  renderExplanationBoard(step, step.gridAfter);
+}
+
+function handleExplanationPlacementClick(event) {
+  const button = event.target.closest("[data-placement-cell]");
+  if (!button || !explanationWhyVisible || explanationStepIndex === 0) return;
+  const step = explanationResult.steps[explanationStepIndex - 1];
+  explanationSelectedPlacementCell = Number(button.dataset.placementCell);
+  explanationSelectedCandidate = null;
+  renderReasoningPanel(step);
   renderExplanationBoard(step, step.gridAfter);
 }
 
@@ -2087,6 +2210,8 @@ confirmSolveButton.addEventListener("click", handleConfirmedPuzzleAction);
 reviewPuzzleButton.addEventListener("click", handleReviewPuzzle);
 backToPuzzleButton.addEventListener("click", handleBackToPuzzle);
 explanationWhyButton.addEventListener("click", toggleExplanationWhy);
+explanationCandidatePanel.addEventListener("click", handleExplanationCandidateClick);
+explanationBoard.addEventListener("click", handleExplanationPlacementClick);
 explanationPreviousButton.addEventListener("click", handleExplanationPrevious);
 explanationNextButton.addEventListener("click", handleExplanationNext);
 explanationAnswerButton.addEventListener("click", handleSolveRequest);
