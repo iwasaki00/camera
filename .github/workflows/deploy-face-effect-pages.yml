@@ -21,6 +21,7 @@ on:
       - "010_motion_quiz_camera/**"
       - "011_posture_analysis_tool/**"
       - "012_karada_gakki/**"
+      - "013_something_behind_you/**"
       - ".github/workflows/deploy-face-effect-pages.yml"
   workflow_dispatch:
 
@@ -85,6 +86,7 @@ jobs:
           mkdir -p site/010_motion_quiz_camera
           mkdir -p site/011_posture_analysis_tool
           mkdir -p site/012_karada_gakki
+          mkdir -p site/013_something_behind_you
           cp index.html site/index.html
           cp index.xml site/index.xml
           cp -r assets/. site/assets/
@@ -100,6 +102,7 @@ jobs:
           cp -r 010_motion_quiz_camera/. site/010_motion_quiz_camera/
           cp -r 011_posture_analysis_tool/. site/011_posture_analysis_tool/
           cp -r 012_karada_gakki/. site/012_karada_gakki/
+          cp -r 013_something_behind_you/. site/013_something_behind_you/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
