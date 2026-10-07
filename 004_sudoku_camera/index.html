@@ -3,13 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>ナンプレ カメラ読み取り</title>
-  <link rel="stylesheet" href="./style.css?v=0.9.1">
+  <meta name="description" content="iPhoneでナンプレを撮影し、数字の読み取り・修正・解答・解き方の確認まで行えるWebアプリです。">
+  <meta name="theme-color" content="#f5f8f6">
+  <title>ナンプレ カメラ読み取り — v1.0.0 Initial Stable Release</title>
+  <link rel="stylesheet" href="./style.css?v=1.0.0">
 </head>
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">SUDOKU CAMERA · v0.9.1</p>
+      <p id="appVersionLabel" class="eyebrow">SUDOKU CAMERA · v1.0.0 — Initial Stable Release</p>
       <h1>ナンプレを撮って解く</h1>
     </header>
 
@@ -47,7 +49,7 @@
     </section>
 
     <section id="resultSection" class="panel compactResultPanel" aria-labelledby="resultHeading" hidden>
-      <h2 id="resultHeading" class="visuallyHidden">撮影画像の調整とOCR</h2>
+      <h2 id="resultHeading" class="visuallyHidden">撮影画像の調整と数字読み取り</h2>
 
       <div class="resultStage">
         <canvas id="croppedCanvas" aria-label="ガイド内から切り出した画像"></canvas>
@@ -93,7 +95,7 @@
 
         <div class="fullOcrProgress" role="status" aria-live="polite">
           <div class="progressSummary">
-            <strong id="fullOcrProgressText">OCRはまだ実行していません。</strong>
+            <strong id="fullOcrProgressText">数字はまだ読み取っていません。</strong>
             <span id="fullOcrPercent">0%</span>
           </div>
           <progress id="fullOcrProgressBar" max="81" value="0">0 / 81</progress>
@@ -103,7 +105,7 @@
         <div class="reviewOnly">
         <p id="fullOcrNotice" class="ocrNotice">数字を読み取ってください。</p>
         <p id="validationSummary" class="validationSummary" role="status" aria-live="polite">検証待ち</p>
-        <div id="ocrResultBoard" class="ocrResultBoard" aria-label="9×9 OCR結果"></div>
+        <div id="ocrResultBoard" class="ocrResultBoard" aria-label="9×9 読み取り結果"></div>
         <p class="panelCopy resultHelp">数字が違う場合はマスをタップして修正できます。</p>
         <div class="puzzleActionChoices">
           <button id="solveButton" class="primary solveButton" type="button" disabled>答えを見る</button>
@@ -466,6 +468,6 @@
   </div>
 
   <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script type="module" src="./app.js?v=0.9.1"></script>
+  <script type="module" src="./app.js?v=1.0.0"></script>
 </body>
 </html>

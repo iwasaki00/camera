@@ -1,7 +1,7 @@
 import { drawCellCrop, splitBoardIntoCells } from "./gridOcr.js";
 import { recognizeSingleDigit, setOcrPageSegmentationMode } from "./ocr.js";
 import { evaluateBenchmarkMethod } from "./benchmark.js";
-import { analyzeCellInk } from "./ocrImage.js?v=0.5.2";
+import { analyzeCellInk } from "./ocrImage.js?v=1.0.0";
 
 const PSM_LABELS = Object.freeze({ "10": "SINGLE_CHAR", "8": "SINGLE_WORD", "6": "SINGLE_BLOCK" });
 

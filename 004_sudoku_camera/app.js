@@ -1,10 +1,10 @@
 import { captureGuideArea, hasLiveCameraStream, startCamera, stopCamera } from "./camera.js";
 import { drawCellCrop, drawOriginalCell, splitBoardIntoCells } from "./gridOcr.js";
 import { recognizeSingleDigit, setOcrPageSegmentationMode, setOcrProgressListener } from "./ocr.js";
-import { isClearlyBlankCell, OCR_INPUT_SIZE, prepareBenchmarkOcrImages, prepareFinalOcrImages, prepareOcrImages } from "./ocrImage.js?v=0.5.2";
+import { isClearlyBlankCell, OCR_INPUT_SIZE, prepareBenchmarkOcrImages, prepareFinalOcrImages, prepareOcrImages } from "./ocrImage.js?v=1.0.0";
 import { createDefaultAlignment, renderAlignedSquare, updateAlignment } from "./alignment.js";
 import { isSupportedImageFile, loadImageBlobIntoCanvas } from "./imageInput.js";
-import { runFinalCandidate, runOcrTuning, tuningConfigLabel } from "./tuning.js?v=0.5.2";
+import { runFinalCandidate, runOcrTuning, tuningConfigLabel } from "./tuning.js?v=1.0.0";
 import { validateSudokuGrid } from "./validation.mjs";
 import { getSolveGate, solvePuzzle } from "./solverIntegration.mjs";
 import { generateExplanation } from "./sudokuExplanation.mjs";
@@ -15,6 +15,13 @@ import {
   formatAccuracy,
   selectBestBenchmarkMethod
 } from "./benchmark.js";
+
+const APP_VERSION = "v1.0.0";
+const APP_RELEASE_NAME = "Initial Stable Release";
+
+const appVersionLabel = document.getElementById("appVersionLabel");
+appVersionLabel.textContent = `SUDOKU CAMERA · ${APP_VERSION} — ${APP_RELEASE_NAME}`;
+appVersionLabel.title = `${APP_VERSION} — ${APP_RELEASE_NAME}`;
 
 const cameraSection = document.getElementById("cameraSection");
 const resultSection = document.getElementById("resultSection");
@@ -202,7 +209,6 @@ let benchmarkSelectedMethod = "current";
 
 function setStatus(message) {
   statusMessage.textContent = message;
-  console.log("[app] status", message);
 }
 
 function setAppStep(step) {
@@ -327,7 +333,7 @@ function buildOcrResultBoard() {
     input.type = "button";
     input.className = "resultValueButton";
     input.dataset.cellIndex = String(index);
-    input.setAttribute("aria-label", `${label} OCR結果を修正`);
+    input.setAttribute("aria-label", `${label} 読み取り結果を修正`);
 
     const detailButton = document.createElement("button");
     detailButton.type = "button";
@@ -674,7 +680,7 @@ function updateOcrResultCell(index) {
     ? ` / 要確認: ${validationIssues.map(validationIssueLabel).join(", ")}`
     : "";
   cell.title = `R${Math.floor(index / 9) + 1}C${index % 9 + 1}${issueTitle}`;
-  input.setAttribute("aria-label", `R${Math.floor(index / 9) + 1}C${index % 9 + 1} OCR結果 ${currentValue || "空欄"} を修正`);
+  input.setAttribute("aria-label", `R${Math.floor(index / 9) + 1}C${index % 9 + 1} 読み取り結果 ${currentValue || "空欄"} を修正`);
 }
 
 function renderOcrResultBoard() {
@@ -1575,7 +1581,7 @@ function buildBenchmarkCopyText() {
     ...benchmarkConditionsSnapshot,
     ocrSize: OCR_INPUT_SIZE,
     psm: "SINGLE_CHAR"
-  });
+  }, APP_VERSION);
 }
 
 async function handleCopyBenchmark() {
@@ -1783,16 +1789,6 @@ function renderCellImages() {
     renderModalCell(selectedCellIndex);
   }
 
-  console.log("[cells] generated", {
-    count: cells.length,
-    boardWidth: croppedCanvas.width,
-    boardHeight: croppedCanvas.height,
-    cellWidth: croppedCanvas.width / 9,
-    cellHeight: croppedCanvas.height / 9,
-    cropRate,
-    firstCell: cells[0],
-    lastCell: cells[cells.length - 1]
-  });
 }
 
 function setCellView(mode) {

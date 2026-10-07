@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#030405">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="iPhoneを見回すと視界の端に何かが現れる、疑似ARホラーWebゲーム">
+  <title>振り返ればヤツガイル｜SOMETHING BEHIND YOU</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main id="game" class="game-shell">
+    <video id="camera" class="camera" autoplay muted playsinline aria-label="背面カメラ映像"></video>
+    <div class="camera-fallback" aria-hidden="true"></div>
+    <div class="camera-noise" aria-hidden="true"></div>
+    <div class="camera-vignette" aria-hidden="true"></div>
+
+    <div id="entity" class="entity" data-side="RIGHT" aria-hidden="true">
+      <img src="./assets/entity-silhouette.svg" alt="">
+    </div>
+
+    <div id="debugGuides" class="debug-guides" aria-hidden="true">
+      <div class="debug-zone debug-zone--left"><span>LEFT PERIPHERAL</span></div>
+      <div class="debug-zone debug-zone--center"><span>CENTER</span></div>
+      <div class="debug-zone debug-zone--right"><span>RIGHT PERIPHERAL</span></div>
+    </div>
+
+    <header id="playHud" class="play-hud" aria-hidden="true">
+      <div class="live-mark"><i></i><span>SEARCHING</span></div>
+      <p id="playHint">ゆっくり周囲を見回してください</p>
+    </header>
+
+    <section id="startScreen" class="start-screen" aria-labelledby="gameTitle">
+      <div class="start-content">
+        <div class="warning-mark" aria-hidden="true"><span></span></div>
+        <p class="eyebrow">PSEUDO AR HORROR EXPERIENCE</p>
+        <h1 id="gameTitle">振り返れば<br><em>ヤツガイル</em></h1>
+        <p class="english-title">SOMETHING BEHIND YOU</p>
+        <p class="lead">カメラを向けた先に、<br>何もいないとは限らない。</p>
+        <button id="startButton" class="start-button" type="button">
+          <span>START</span><i aria-hidden="true"></i>
+        </button>
+        <p id="startStatus" class="start-status" role="status">カメラと方向センサーの使用を許可してください</p>
+        <p class="privacy-note">映像は保存・送信されません</p>
+      </div>
+      <p class="version">Version 0.1.0 <span>—</span> SOMETHING BEHIND YOU</p>
+    </section>
+
+    <div id="message" class="message" role="alert" aria-live="assertive" hidden>
+      <strong id="messageTitle">起動できませんでした</strong>
+      <p id="messageBody"></p>
+      <button id="retryButton" type="button">もう一度試す</button>
+    </div>
+
+    <aside id="debugPanel" class="debug-panel" aria-label="デバッグ情報" aria-hidden="true">
+      <header><b>DEBUG MODE</b><span>v0.1.0</span></header>
+      <dl>
+        <div><dt>VERSION</dt><dd>0.1.0</dd></div>
+        <div><dt>CAMERA YAW</dt><dd id="debugCurrentYaw">—</dd></div>
+        <div><dt>INITIAL YAW</dt><dd id="debugInitialYaw">—</dd></div>
+        <div><dt>RELATIVE YAW</dt><dd id="debugRelativeYaw">—</dd></div>
+        <div><dt>ENTITY YAW</dt><dd id="debugEntityYaw">—</dd></div>
+        <div><dt>ANGLE DIFF</dt><dd id="debugAngleDiff">—</dd></div>
+        <div><dt>TURN SPEED</dt><dd id="debugTurnSpeed">—</dd></div>
+        <div><dt>STATE</dt><dd id="debugState">HIDDEN</dd></div>
+        <div><dt>SIDE</dt><dd id="debugSide">—</dd></div>
+        <div><dt>CAMERA</dt><dd id="debugCamera">idle</dd></div>
+        <div><dt>ORIENTATION</dt><dd id="debugOrientation">idle</dd></div>
+        <div><dt>MOTION</dt><dd id="debugMotion">idle</dd></div>
+      </dl>
+      <div class="proximity"><span id="debugProximity"></span></div>
+    </aside>
+
+    <div class="landscape-notice" aria-hidden="true">
+      <span>↻</span><p>iPhoneを縦向きにしてください</p>
+    </div>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

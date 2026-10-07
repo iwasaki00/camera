@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 860" role="img" aria-label="不気味な人影">
+  <defs>
+    <filter id="soft" x="-25%" y="-15%" width="150%" height="135%">
+      <feGaussianBlur stdDeviation="2.4"/>
+    </filter>
+    <radialGradient id="face" cx="50%" cy="40%" r="62%">
+      <stop offset="0" stop-color="#202122"/>
+      <stop offset="1" stop-color="#020303"/>
+    </radialGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101112"/>
+      <stop offset=".55" stop-color="#020303"/>
+      <stop offset="1"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#soft)">
+    <path fill="#020303" d="M171 83c-45 19-69 71-60 122 4 24 16 45 30 60-16 34-25 77-23 121l-58 117 37 23 44-62-16 327 90 44 45-249 37 246 90-51-28-324 34 69 42-28-64-134c-6-38-17-72-35-96 16-27 23-62 16-96-11-55-58-91-105-91-18 0-37 4-56 12z"/>
+    <ellipse cx="222" cy="176" rx="96" ry="121" fill="url(#face)"/>
+    <path d="M146 164c38-12 113-12 151 0-15-52-43-78-75-78-33 0-61 26-76 78z" fill="#050606"/>
+    <path d="M138 305c25-36 53-53 84-53 36 0 70 18 98 59l44 303-277 1 31-236c4-31 10-56 20-74z" fill="url(#body)"/>
+  </g>
+  <g fill="#d9d7c9" opacity=".38">
+    <ellipse cx="188" cy="182" rx="7" ry="3"/>
+    <ellipse cx="255" cy="182" rx="7" ry="3"/>
+  </g>
+  <path d="M202 231c13 6 27 6 40-1" fill="none" stroke="#6d6962" stroke-width="3" opacity=".22"/>
+</svg>

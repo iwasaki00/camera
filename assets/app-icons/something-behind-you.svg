@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="room" cx="52%" cy="43%" r="72%">
+      <stop offset="0" stop-color="#48514e"/>
+      <stop offset=".46" stop-color="#1b2221"/>
+      <stop offset="1" stop-color="#030505"/>
+    </radialGradient>
+    <linearGradient id="red" x1="0" x2="1">
+      <stop stop-color="#5f0d0b"/>
+      <stop offset="1" stop-color="#b02d25"/>
+    </linearGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="3"/></filter>
+  </defs>
+  <rect width="512" height="512" rx="72" fill="url(#room)"/>
+  <path d="M77 376V119l108 48v191z" fill="#101514"/>
+  <path d="M185 167h248v191H185z" fill="#303936" opacity=".48"/>
+  <path d="M185 358l248 64V111l-248 56z" fill="#060909" opacity=".42"/>
+  <path d="M445 81h22v351h-22z" fill="url(#red)" opacity=".86"/>
+  <g transform="translate(375 116)" filter="url(#blur)">
+    <ellipse cx="61" cy="82" rx="43" ry="58" fill="#020303"/>
+    <path d="M28 138c16-24 52-30 73-5 17 21 23 91 30 192H-10c8-99 19-163 38-187z" fill="#020303"/>
+  </g>
+  <g fill="#c7c4b6" opacity=".45">
+    <ellipse cx="426" cy="193" rx="4" ry="2"/>
+    <ellipse cx="449" cy="193" rx="4" ry="2"/>
+  </g>
+  <path d="M47 420h418" stroke="#717976" stroke-width="2" opacity=".18"/>
+  <circle cx="256" cy="256" r="218" fill="none" stroke="#000" stroke-width="42" opacity=".43"/>
+  <path d="M72 58h72M58 72v72M440 368v72M368 454h72" fill="none" stroke="#aaa9a2" stroke-width="3" opacity=".4"/>
+</svg>

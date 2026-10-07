@@ -1,4 +1,12 @@
 const APP_DETAILS = {
+  "something-behind-you": {
+    number: "013",
+    type: "PSEUDO AR HORROR",
+    title: "振り返ればヤツガイル",
+    description: "iPhoneをゆっくり見回すと、視界の端に人影が現れる疑似ARホラー体験。気づいて素早く振り向くと、何かが一瞬で画面外へ逃げていきます。",
+    tech: "Camera API · Device Orientation · Vanilla JavaScript",
+    icon: "./assets/app-icons/something-behind-you.svg"
+  },
   "karada-gakki": {
     number: "012",
     type: "BODY MUSIC",
