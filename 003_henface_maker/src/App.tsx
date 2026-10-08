@@ -1,25 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import { createFeatureRenderer, EFFECT_VERSION, RENDER_SETTINGS } from "./featureRenderer";
+import type { EffectState, Landmark, PartConfig, PartId } from "./featureRenderer";
 
-const BUILD_UPDATED_AT = "2026-05-23 21:33:00 +09:00";
+const BUILD_UPDATED_AT = "2026-10-08 +09:00";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
 const FACE_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
-type PartId = "brows" | "eyes" | "ears" | "cheeks" | "nose" | "mouth" | "head" | "jaw";
 type AccidentType = "light" | "major" | "alien" | "horror" | "gag" | "handsome";
 
-type PartConfig = {
-  size: number;
-  distance: number;
-  scaleX: number;
-  scaleY: number;
-  opacity: number;
-};
-
-type EffectState = Record<PartId, PartConfig>;
-type Point = { x: number; y: number };
-type Rect = { x: number; y: number; width: number; height: number };
 
 type PartDefinition = {
   id: PartId;
@@ -74,29 +64,6 @@ const DIAGNOSIS_CLASSES = [
   "ちょっと寄りすぎたイケメン"
 ];
 
-const PART_INDEXES: Record<PartId, number[][]> = {
-  brows: [
-    [46, 53, 52, 65, 55, 70, 63, 105, 66, 107],
-    [276, 283, 282, 295, 285, 300, 293, 334, 296, 336]
-  ],
-  eyes: [
-    [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246],
-    [362, 398, 384, 385, 386, 387, 388, 466, 263, 249, 390, 373, 374, 380, 381, 382]
-  ],
-  ears: [
-    [127, 234, 93, 132, 58],
-    [356, 454, 323, 361, 288]
-  ],
-  cheeks: [
-    [116, 117, 118, 50, 101, 205],
-    [345, 346, 347, 280, 330, 425]
-  ],
-  nose: [[6, 1, 2, 98, 327, 168, 197]],
-  mouth: [[61, 291, 13, 14, 78, 308, 0, 17]],
-  head: [[10, 67, 109, 338, 297, 103, 332]],
-  jaw: [[152, 148, 176, 149, 150, 377, 400, 378]]
-};
-
 const PRESETS: Record<"surprise" | "alien" | "uncle", Partial<EffectState>> = {
   surprise: {
     eyes: { ...DEFAULT_PART, size: 1.45, distance: 0.08, opacity: 1.15 },
@@ -149,68 +116,6 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function mirrorPoint(point: { x: number; y: number }, width: number, height: number): Point {
-  return {
-    x: width - point.x * width,
-    y: point.y * height
-  };
-}
-
-function boundsFromIndexes(
-  landmarks: { x: number; y: number }[],
-  indexes: number[],
-  width: number,
-  height: number,
-  padding = 16
-): Rect {
-  const points = indexes.map((index) => mirrorPoint(landmarks[index], width, height));
-  const xs = points.map((point) => point.x);
-  const ys = points.map((point) => point.y);
-  const minX = Math.max(0, Math.min(...xs) - padding);
-  const minY = Math.max(0, Math.min(...ys) - padding);
-  const maxX = Math.min(width, Math.max(...xs) + padding);
-  const maxY = Math.min(height, Math.max(...ys) + padding);
-  return {
-    x: minX,
-    y: minY,
-    width: Math.max(8, maxX - minX),
-    height: Math.max(8, maxY - minY)
-  };
-}
-
-function expandRectTowardPoint(rect: Rect, point: Point, amount: number, width: number, height: number): Rect {
-  const next = { ...rect };
-  const centerX = rect.x + rect.width / 2;
-  const centerY = rect.y + rect.height / 2;
-
-  if (point.x < centerX) {
-    const newX = Math.max(0, rect.x - amount);
-    next.width += next.x - newX;
-    next.x = newX;
-  } else {
-    next.width = Math.min(width, rect.x + rect.width + amount) - rect.x;
-  }
-
-  if (point.y < centerY) {
-    const newY = Math.max(0, rect.y - amount * 0.3);
-    next.height += next.y - newY;
-    next.y = newY;
-  } else {
-    next.height = Math.min(height, rect.y + rect.height + amount * 0.3) - rect.y;
-  }
-
-  return next;
-}
-
-function getFaceCenter(landmarks: { x: number; y: number }[], width: number, height: number): Point {
-  const nose = mirrorPoint(landmarks[1], width, height);
-  const brow = mirrorPoint(landmarks[168], width, height);
-  return {
-    x: (nose.x + brow.x) / 2,
-    y: (nose.y + brow.y) / 2
-  };
-}
-
 function drawMirroredVideo(
   ctx: CanvasRenderingContext2D,
   source: CanvasImageSource,
@@ -222,138 +127,6 @@ function drawMirroredVideo(
   ctx.scale(-1, 1);
   ctx.drawImage(source, 0, 0, width, height);
   ctx.restore();
-}
-
-function applyPartFilter(ctx: CanvasRenderingContext2D, opacity: number): void {
-  const contrast = 1 + (opacity - 1) * 0.85;
-  const brightness = 1 + (opacity - 1) * 0.12;
-  ctx.filter = `contrast(${Math.max(0.25, contrast)}) brightness(${Math.max(0.65, brightness)})`;
-}
-
-function amplifyAroundOne(value: number, strength: number, min: number, max: number): number {
-  return clamp(1 + (value - 1) * strength, min, max);
-}
-
-function drawBlurredBase(ctx: CanvasRenderingContext2D, source: HTMLCanvasElement, rect: Rect, blurRadius: number): void {
-  const padding = blurRadius * 3;
-  const x = clamp(rect.x - padding, 0, source.width);
-  const y = clamp(rect.y - padding, 0, source.height);
-  const maxX = clamp(rect.x + rect.width + padding, 0, source.width);
-  const maxY = clamp(rect.y + rect.height + padding, 0, source.height);
-  const width = maxX - x;
-  const height = maxY - y;
-
-  if (width <= 0 || height <= 0) {
-    return;
-  }
-
-  ctx.save();
-  ctx.filter = `blur(${blurRadius}px)`;
-  ctx.drawImage(source, x, y, width, height, x, y, width, height);
-  ctx.restore();
-}
-
-function drawTransformedPart(
-  ctx: CanvasRenderingContext2D,
-  source: HTMLCanvasElement,
-  rect: Rect,
-  config: PartConfig,
-  faceCenter: Point,
-  pairDirection = 0,
-  useSoftClip = false
-): void {
-  const amplifiedSize = amplifyAroundOne(config.size, 1.6, 0.2, 3.2);
-  const amplifiedScaleX = amplifyAroundOne(config.scaleX, 1.75, 0.2, 3.2);
-  const amplifiedScaleY = amplifyAroundOne(config.scaleY, 1.75, 0.2, 3.2);
-  const amplifiedOpacity = clamp(1 + (config.opacity - 1) * 1.25, 0.1, 1.6);
-  const partCenter = {
-    x: rect.x + rect.width / 2,
-    y: rect.y + rect.height / 2
-  };
-  const vectorX = partCenter.x - faceCenter.x;
-  const vectorY = partCenter.y - faceCenter.y;
-  const norm = Math.hypot(vectorX, vectorY) || 1;
-  const shiftBase = config.distance * Math.max(rect.width, rect.height) * 1.85;
-  const shiftX = pairDirection === 0 ? 0 : (vectorX / norm) * shiftBase;
-  const shiftY = pairDirection === 0 ? 0 : (vectorY / norm) * shiftBase * 0.28;
-  const scaledWidth = rect.width * amplifiedSize * amplifiedScaleX;
-  const scaledHeight = rect.height * amplifiedSize * amplifiedScaleY;
-  const clearPadding = Math.max(rect.width, rect.height) * 0.12 + 8;
-  const clearX = Math.min(rect.x, partCenter.x + shiftX - scaledWidth / 2) - clearPadding;
-  const clearY = Math.min(rect.y, partCenter.y + shiftY - scaledHeight / 2) - clearPadding;
-  const clearMaxX = Math.max(rect.x + rect.width, partCenter.x + shiftX + scaledWidth / 2) + clearPadding;
-  const clearMaxY = Math.max(rect.y + rect.height, partCenter.y + shiftY + scaledHeight / 2) + clearPadding;
-
-  const restoreX = clamp(clearX, 0, source.width);
-  const restoreY = clamp(clearY, 0, source.height);
-  const restoreMaxX = clamp(clearMaxX, 0, source.width);
-  const restoreMaxY = clamp(clearMaxY, 0, source.height);
-  const restoreWidth = restoreMaxX - restoreX;
-  const restoreHeight = restoreMaxY - restoreY;
-
-  if (restoreWidth > 0 && restoreHeight > 0) {
-    ctx.drawImage(source, restoreX, restoreY, restoreWidth, restoreHeight, restoreX, restoreY, restoreWidth, restoreHeight);
-  }
-
-  const isShrunkOrMoved = amplifiedSize * amplifiedScaleX < 0.94 || amplifiedSize * amplifiedScaleY < 0.94 || Math.abs(shiftX) > 1 || Math.abs(shiftY) > 1;
-  if (isShrunkOrMoved) {
-    drawBlurredBase(ctx, source, rect, Math.max(6, Math.min(16, Math.max(rect.width, rect.height) * 0.08)));
-  }
-
-  ctx.save();
-  ctx.globalAlpha = amplifiedOpacity;
-  applyPartFilter(ctx, amplifiedOpacity);
-  ctx.translate(partCenter.x + shiftX, partCenter.y + shiftY);
-  if (useSoftClip) {
-    ctx.beginPath();
-    ctx.ellipse(0, 0, scaledWidth * 0.58, scaledHeight * 0.58, 0, 0, Math.PI * 2);
-    ctx.clip();
-  }
-  ctx.scale(amplifiedSize * amplifiedScaleX, amplifiedSize * amplifiedScaleY);
-  ctx.drawImage(
-    source,
-    rect.x,
-    rect.y,
-    rect.width,
-    rect.height,
-    -rect.width / 2,
-    -rect.height / 2,
-    rect.width,
-    rect.height
-  );
-  ctx.restore();
-}
-
-function drawPartSet(
-  ctx: CanvasRenderingContext2D,
-  source: HTMLCanvasElement,
-  landmarks: { x: number; y: number }[],
-  width: number,
-  height: number,
-  partId: PartId,
-  config: PartConfig
-): void {
-  const definitions = PART_INDEXES[partId];
-  const faceCenter = getFaceCenter(landmarks, width, height);
-  const padding =
-    partId === "head"
-      ? 40
-      : partId === "jaw"
-        ? 30
-        : partId === "eyes"
-          ? 32
-          : partId === "brows"
-            ? 28
-            : partId === "mouth" || partId === "nose"
-              ? 24
-              : 20;
-
-  definitions.forEach((indexes, index) => {
-    const baseRect = boundsFromIndexes(landmarks, indexes, width, height, padding);
-    const rect = partId === "eyes" ? expandRectTowardPoint(baseRect, faceCenter, 28, width, height) : baseRect;
-    const pairDirection = definitions.length === 2 ? (index === 0 ? -1 : 1) : 0;
-    drawTransformedPart(ctx, source, rect, config, faceCenter, pairDirection, ACTIVE_PART_IDS.includes(partId));
-  });
 }
 
 function setPart(state: EffectState, partId: PartId, patch: Partial<PartConfig>): EffectState {
@@ -447,11 +220,14 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
   const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const rendererRef = useRef<ReturnType<typeof createFeatureRenderer> | null>(null);
+  const lastLandmarksRef = useRef<Landmark[] | undefined>(undefined);
   const streamRef = useRef<MediaStream | null>(null);
   const faceLandmarkerRef = useRef<FaceLandmarker | null>(null);
   const animationFrameRef = useRef<number>(0);
   const timeoutRef = useRef<number | null>(null);
   const lastVideoTimeRef = useRef(-1);
+  const lastRenderedStateRef = useRef<EffectState | null>(null);
   const effectStateRef = useRef<EffectState>(createDefaultState());
 
   const [cameraActive, setCameraActive] = useState(false);
@@ -501,6 +277,9 @@ export default function App() {
     cancelAnimationFrame(animationFrameRef.current);
     animationFrameRef.current = 0;
     lastVideoTimeRef.current = -1;
+    lastLandmarksRef.current = undefined;
+    lastRenderedStateRef.current = null;
+    rendererRef.current?.clearCache();
 
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -537,29 +316,34 @@ export default function App() {
       return;
     }
 
-    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      sourceCanvas.width = video.videoWidth;
-      sourceCanvas.height = video.videoHeight;
-      frame.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
+    const frameScale = Math.min(1, RENDER_SETTINGS.maxFrameDimension / Math.max(video.videoWidth, video.videoHeight));
+    const width = Math.max(1, Math.round(video.videoWidth * frameScale));
+    const height = Math.max(1, Math.round(video.videoHeight * frameScale));
+    const resized = canvas.width !== width || canvas.height !== height;
+    if (resized) {
+      canvas.width = sourceCanvas.width = width;
+      canvas.height = sourceCanvas.height = height;
+      frame.style.aspectRatio = width + " / " + height;
+      rendererRef.current?.clearCache();
     }
-
-    sourceCtx.clearRect(0, 0, sourceCanvas.width, sourceCanvas.height);
-    drawMirroredVideo(sourceCtx, video, sourceCanvas.width, sourceCanvas.height);
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(sourceCanvas, 0, 0);
-
-    if (video.currentTime === lastVideoTimeRef.current) {
+    if (!resized && video.currentTime === lastVideoTimeRef.current && lastRenderedStateRef.current === effectStateRef.current) {
       animationFrameRef.current = requestAnimationFrame(renderLoop);
       return;
     }
-
-    lastVideoTimeRef.current = video.currentTime;
-    const result = landmarker.detectForVideo(video, performance.now());
-    const landmarks = result.faceLandmarks?.[0];
-
+    // Capture once. Every patch reads this immutable mirrored camera frame.
+    // On repeated requestAnimationFrame callbacks keep both frame and landmarks;
+    // still redraw so slider changes apply without a flash of the unprocessed video.
+    if (resized || video.currentTime !== lastVideoTimeRef.current) {
+      sourceCtx.clearRect(0, 0, width, height);
+      drawMirroredVideo(sourceCtx, video, width, height);
+      lastVideoTimeRef.current = video.currentTime;
+      const result = landmarker.detectForVideo(video, performance.now());
+      lastLandmarksRef.current = result.faceLandmarks?.[0];
+    }
+    if (!rendererRef.current) rendererRef.current = createFeatureRenderer();
+    const landmarks = lastLandmarksRef.current;
+    rendererRef.current.renderFeatureEffects(sourceCanvas, ctx, landmarks, effectStateRef.current);
+    lastRenderedStateRef.current = effectStateRef.current;
     if (!landmarks) {
       setStatus("待機中");
       setMessage("顔を画面の中央に寄せると、パーツ変形を反映します。");
@@ -567,11 +351,6 @@ export default function App() {
       animationFrameRef.current = requestAnimationFrame(renderLoop);
       return;
     }
-
-    const currentEffectState = effectStateRef.current;
-    ACTIVE_PART_IDS.forEach((partId) => {
-      drawPartSet(ctx, sourceCanvas, landmarks, canvas.width, canvas.height, partId, currentEffectState[partId]);
-    });
 
     setStatus("顔を検出中");
     setMessage("下のパネルからパーツごとの大きさ、距離、縦横、濃さを調整できます。");
@@ -722,7 +501,7 @@ export default function App() {
       <section className="hero-card">
         <p className="eyebrow">HENFACE MAKER</p>
         <h1>変顔メーカー</h1>
-        <p className="updated-at">更新日時: {BUILD_UPDATED_AT}</p>
+        <p className="updated-at">バージョン: {EFFECT_VERSION} / 更新日: {BUILD_UPDATED_AT}</p>
         <p className="lead">
           iPhone Safari を前提にした、顔パーツ変形アプリです。前面カメラで 1 人の顔を検出し、
           眉、目、耳、頬、鼻、口、頭、顎をリアルタイムに拡大縮小、移動、縦横変形できます。
