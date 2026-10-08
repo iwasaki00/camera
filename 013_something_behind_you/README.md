@@ -1,6 +1,6 @@
 # 振り返ればヤツガイル
 
-**Version 0.2.0 — PERIPHERAL HORROR**
+**Version 0.2.1 — DEBUG BUTTON**
 
 iPhoneの背面カメラと方向センサーによる疑似ARホラーです。相対Yawと仮想方位を使い、現実空間の認識は行いません。映像の保存・送信はありません。
 
@@ -60,7 +60,9 @@ PEEK中、角度差15°以内・回転速度46°/s以上・接近速度14°/s以
 
 ## DEBUGと実機調整
 
-`013_something_behind_you/?debug=1` を開きます。通常URLではDEBUGとTEST操作を表示しません。
+通常URL `013_something_behind_you/` を開き、画面右上の **DEBUG** ボタンをタップしてON/OFFします。初期状態はOFFで、再読み込み後もOFFに戻ります。URLパラメータは不要で、旧 `?debug=1` を付けても初期状態はOFFです。
+
+ON時はボタンが「DEBUG ON」となり、情報・ガイド・4つのTEST操作を表示します。OFFにすると即座に隠れます。START前・ゲーム中・遭遇演出中でも切替可能で、カメラ・センサー・遭遇状態・実行中アニメーションはリセットしません。START前のTEST操作は無効です。Version 0.2.0の遭遇確率・待機時間・角度判定・演出・逃走・再配置は変更していません。
 
 既存のVersion・方位・角度差・速度・状態・左右・権限・Peripheralガイドに、Director state、current/previous encounter、次回待機、event elapsed time、PEEK level、PASS/FLY_BY direction、CLOSE_CALL activeを追加しました。
 

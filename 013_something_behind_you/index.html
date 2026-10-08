@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="iPhoneを見回すと視界の端に何かが現れる、疑似ARホラーWebゲーム">
-  <title>振り返ればヤツガイル｜PERIPHERAL HORROR</title>
+  <title>振り返ればヤツガイル｜DEBUG BUTTON</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
@@ -22,7 +22,7 @@
     </div>
     <div id="encounterVisual" class="encounter-visual" aria-hidden="true"><img src="./assets/entity-silhouette.svg" alt=""></div>
 
-    <div id="debugGuides" class="debug-guides" aria-hidden="true">
+    <div id="debugGuides" class="debug-guides" aria-hidden="true" hidden>
       <div class="debug-zone debug-zone--left"><span>LEFT PERIPHERAL</span></div>
       <div class="debug-zone debug-zone--center"><span>CENTER</span></div>
       <div class="debug-zone debug-zone--right"><span>RIGHT PERIPHERAL</span></div>
@@ -38,7 +38,7 @@
         <div class="warning-mark" aria-hidden="true"><span></span></div>
         <p class="eyebrow">PSEUDO AR HORROR EXPERIENCE</p>
         <h1 id="gameTitle">振り返れば<br><em>ヤツガイル</em></h1>
-        <p class="english-title">PERIPHERAL HORROR</p>
+        <p class="english-title">DEBUG BUTTON</p>
         <p class="lead">カメラを向けた先に、<br>何もいないとは限らない。</p>
         <button id="startButton" class="start-button" type="button">
           <span>START</span><i aria-hidden="true"></i>
@@ -46,7 +46,7 @@
         <p id="startStatus" class="start-status" role="status">カメラと方向センサーの使用を許可してください</p>
         <p class="privacy-note">映像は保存・送信されません</p>
       </div>
-      <p class="version">Version 0.2.0 <span>—</span> PERIPHERAL HORROR</p>
+      <p class="version">Version 0.2.1 <span>—</span> DEBUG BUTTON</p>
     </section>
 
     <div id="message" class="message" role="alert" aria-live="assertive" hidden>
@@ -55,10 +55,11 @@
       <button id="retryButton" type="button">もう一度試す</button>
     </div>
 
-    <aside id="debugPanel" class="debug-panel" aria-label="デバッグ情報" aria-hidden="true">
-      <header><b>DEBUG MODE</b><span>v0.2.0</span></header>
+    <button id="debugToggle" class="debug-toggle" type="button" aria-pressed="false" aria-controls="debugPanel debugGuides debugTests">DEBUG</button>
+    <aside id="debugPanel" class="debug-panel" aria-label="デバッグ情報" aria-hidden="true" hidden>
+      <header><b>DEBUG MODE</b><span>v0.2.1</span></header>
       <dl>
-        <div><dt>VERSION</dt><dd>0.2.0</dd></div>
+        <div><dt>VERSION</dt><dd>0.2.1</dd></div>
         <div><dt>CAMERA YAW</dt><dd id="debugCurrentYaw">—</dd></div>
         <div><dt>INITIAL YAW</dt><dd id="debugInitialYaw">—</dd></div>
         <div><dt>RELATIVE YAW</dt><dd id="debugRelativeYaw">—</dd></div>
@@ -74,7 +75,7 @@
       <div class="proximity"><span id="debugProximity"></span></div>
       <pre id="debugEncounter"></pre>
     </aside>
-    <nav class="debug-tests" aria-label="遭遇演出テスト">
+    <nav id="debugTests" class="debug-tests" aria-label="遭遇演出テスト" hidden>
       <button type="button" data-test-encounter="PEEK" disabled>TEST PEEK</button>
       <button type="button" data-test-encounter="PASS" disabled>TEST PASS</button>
       <button type="button" data-test-encounter="FLY_BY" disabled>TEST FLY_BY</button>

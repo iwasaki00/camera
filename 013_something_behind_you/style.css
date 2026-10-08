@@ -443,7 +443,7 @@ h1 em {
 body.debug-enabled .debug-panel {
   position: absolute;
   z-index: 40;
-  top: calc(var(--safe-top) + 46px);
+  top: calc(var(--safe-top) + 60px);
   left: calc(var(--safe-left) + 10px);
   display: block;
   width: min(245px, calc(100vw - 20px));
@@ -573,8 +573,33 @@ body.debug-enabled .debug-tests {
   border: 1px solid #438675;
 }
 .debug-tests button:disabled { opacity: .4; }
+.debug-toggle {
+  position: absolute;
+  z-index: 60;
+  top: calc(var(--safe-top) + 4px);
+  right: calc(var(--safe-right) + 10px);
+  min-width: 78px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid rgba(190, 190, 180, .25);
+  border-radius: 4px;
+  background: rgba(7, 10, 10, .6);
+  color: #aaa99f;
+  font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .04em;
+  cursor: pointer;
+}
+.debug-toggle[aria-pressed="true"] { color: #bde9dc; border-color: #438675; }
+.debug-toggle:focus-visible { outline: 2px solid #bde9dc; outline-offset: 2px; }
+.play-hud { padding-right: 88px; }
+.debug-panel[hidden], .debug-tests[hidden], .debug-guides[hidden] { display: none !important; }
 #debugEncounter { margin: 7px 0 0; font: inherit; white-space: pre-wrap; }
-body.debug-enabled .debug-panel { max-height: 48dvh; overflow-y: auto; }
+body.debug-enabled .debug-panel {
+  max-height: 48dvh;
+  overflow-y: auto;
+  pointer-events: auto;
+  touch-action: pan-y;
+}
 
 @media (orientation: landscape) and (max-height: 540px) {
   .landscape-notice {

@@ -11,7 +11,7 @@ import {
 
 import { EncounterDirector, ENCOUNTER_CONFIG } from "./encounters.js";
 
-const VERSION = "0.2.0 — PERIPHERAL HORROR";
+const VERSION = "0.2.1 — DEBUG BUTTON";
 const director = new EncounterDirector();
 const encounterView = {
   element: document.querySelector("#encounterVisual"),
@@ -51,8 +51,7 @@ const STATES = Object.freeze({
   RELOCATE: "RELOCATE"
 });
 
-const debugEnabled = new URLSearchParams(window.location.search).get("debug") === "1";
-document.body.classList.toggle("debug-enabled", debugEnabled);
+let debugEnabled = false;
 document.documentElement.style.setProperty("--escape-duration", `${CONFIG.escapeDuration}ms`);
 document.documentElement.style.setProperty("--entity-size", `${CONFIG.entitySizeVw}vw`);
 document.documentElement.style.setProperty("--peripheral-zone", `${CONFIG.peripheralZonePercent}%`);
@@ -71,6 +70,9 @@ const elements = {
   messageBody: document.querySelector("#messageBody"),
   retryButton: document.querySelector("#retryButton"),
   debugPanel: document.querySelector("#debugPanel"),
+  debugToggle: document.querySelector("#debugToggle"),
+  debugGuides: document.querySelector("#debugGuides"),
+  debugTests: document.querySelector("#debugTests"),
   debugCurrentYaw: document.querySelector("#debugCurrentYaw"),
   debugInitialYaw: document.querySelector("#debugInitialYaw"),
   debugRelativeYaw: document.querySelector("#debugRelativeYaw"),
@@ -659,9 +661,21 @@ window.addEventListener("pagehide", () => {
   stopCamera();
 });
 
-if (debugEnabled) {
-  elements.debugPanel.setAttribute("aria-hidden", "false");
-  console.info(`Version ${VERSION}`, CONFIG);
+function setDebugEnabled(enabled) {
+  debugEnabled = enabled;
+  document.body.classList.toggle("debug-enabled", enabled);
+  elements.debugPanel.hidden = !enabled;
+  elements.debugTests.hidden = !enabled;
+  elements.debugGuides.hidden = !enabled;
+  elements.debugPanel.setAttribute("aria-hidden", String(!enabled));
+  elements.debugToggle.setAttribute("aria-pressed", String(enabled));
+  elements.debugToggle.textContent = enabled ? "DEBUG ON" : "DEBUG";
+  if (enabled) {
+    runtime.debugUpdatedAt = -Infinity;
+    updateDebug(performance.now());
+  }
 }
 
+elements.debugToggle.addEventListener("click", () => setDebugEnabled(!debugEnabled));
+setDebugEnabled(false);
 window.requestAnimationFrame(frame);
