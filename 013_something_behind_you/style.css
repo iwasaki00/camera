@@ -538,6 +538,44 @@ body.debug-enabled .debug-guides {
   display: none;
 }
 
+.encounter-visual {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 50%;
+  width: 46vw;
+  height: 60dvh;
+  margin: -30dvh 0 0 -23vw;
+  visibility: hidden;
+  pointer-events: none;
+}
+.encounter-visual.is-active { visibility: visible; }
+.encounter-visual img { width: 100%; height: 100%; object-fit: cover; }
+.effect-pass { width: 24vw; height: 70dvh; clip-path: inset(0 25% 0 10%); }
+.effect-fly_by { clip-path: polygon(35% 0, 90% 30%, 70% 100%, 0 75%); }
+.effect-close_call { clip-path: inset(0 0 63% 5%); }
+.debug-tests { display: none; }
+body.debug-enabled .debug-tests {
+  position: absolute;
+  z-index: 41;
+  bottom: calc(var(--safe-bottom) + 24px);
+  left: calc(var(--safe-left) + 12px);
+  right: calc(var(--safe-right) + 12px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.debug-tests button {
+  min-height: 44px;
+  font: 11px ui-monospace, monospace;
+  color: #bde9dc;
+  background: rgba(2, 10, 9, .9);
+  border: 1px solid #438675;
+}
+.debug-tests button:disabled { opacity: .4; }
+#debugEncounter { margin: 7px 0 0; font: inherit; white-space: pre-wrap; }
+body.debug-enabled .debug-panel { max-height: 48dvh; overflow-y: auto; }
+
 @media (orientation: landscape) and (max-height: 540px) {
   .landscape-notice {
     position: absolute;
@@ -571,4 +609,5 @@ body.debug-enabled .debug-guides {
 @media (prefers-reduced-motion: reduce) {
   .camera-noise,
   .live-mark i { animation: none; }
+  .entity.is-escaping { filter: none; }
 }

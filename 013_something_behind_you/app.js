@@ -9,7 +9,21 @@ import {
   chooseRelocatedYaw
 } from "./logic.js";
 
-const VERSION = "0.1.0 — SOMETHING BEHIND YOU";
+import { EncounterDirector, ENCOUNTER_CONFIG } from "./encounters.js";
+
+const VERSION = "0.2.0 — PERIPHERAL HORROR";
+const director = new EncounterDirector();
+const encounterView = {
+  element: document.querySelector("#encounterVisual"),
+  debug: document.querySelector("#debugEncounter"),
+  buttons: [...document.querySelectorAll("[data-test-encounter]")],
+  animation: null,
+  endAt: null,
+  peekLevel: 0,
+  passDirection: "—",
+  flyByDirection: "—",
+  escapeStartedAt: null
+};
 
 // 実機で体感を調整する値は、このオブジェクトだけに集約する。
 const CONFIG = Object.freeze({
@@ -20,8 +34,6 @@ const CONFIG = Object.freeze({
   fastTurnThreshold: 46,
   minimumApproachSpeed: 14,
   escapeDuration: 180,
-  minStalkDelay: 2200,
-  maxStalkDelay: 5200,
   relocateMinimumAngle: 78,
   entitySizeVw: 54,
   orientationTimeout: 3500,
@@ -123,11 +135,6 @@ function hideMessage() {
   elements.message.hidden = true;
 }
 
-function randomStalkDelay() {
-  return CONFIG.minStalkDelay
-    + Math.random() * (CONFIG.maxStalkDelay - CONFIG.minStalkDelay);
-}
-
 function readableAngle(value, suffix = "°") {
   return Number.isFinite(value) ? `${value.toFixed(1)}${suffix}` : "—";
 }
@@ -174,10 +181,13 @@ function handleOrientation(event) {
     runtime.initialYaw = runtime.currentYaw;
     runtime.relativeYaw = 0;
     runtime.entityYaw = chooseRelocatedYaw(0, CONFIG.relocateMinimumAngle);
-    runtime.stalkAvailableAt = now + randomStalkDelay();
+    runtime.stalkAvailableAt = now;
+    runtime.angleDiff = signedAngleDifference(runtime.entityYaw, 0);
+    director.reset();
     runtime.orientationPermission = "active";
     window.clearTimeout(runtime.sensorTimeoutId);
     elements.playHint.textContent = "ゆっくり周囲を見回してください";
+    hideMessage();
     return;
   }
 
@@ -340,6 +350,8 @@ async function startExperience() {
   runtime.entityYaw = null;
   runtime.angleDiff = null;
   runtime.turnSpeed = 0;
+  director.reset();
+  cleanupEncounterVisual();
   setState(STATES.HIDDEN);
 
   elements.game.classList.add("is-running");
@@ -353,6 +365,8 @@ async function startExperience() {
 function enterPeripheral() {
   runtime.detectedSide = sideFromDifference(runtime.angleDiff, runtime.detectedSide || "RIGHT");
   runtime.previousAbsDiff = Math.abs(runtime.angleDiff);
+  runtime.approachSpeed = 0;
+  director.begin(performance.now());
   setState(STATES.PERIPHERAL);
 }
 
@@ -364,9 +378,12 @@ function renderPeripheral() {
   );
   const side = runtime.detectedSide || "RIGHT";
   const direction = side === "RIGHT" ? 1 : -1;
-  const translate = direction * (94 - reveal * 28);
+  const level = Math.abs(runtime.angleDiff) > ENCOUNTER_CONFIG.peekThresholds[0] ? 1
+    : Math.abs(runtime.angleDiff) > ENCOUNTER_CONFIG.peekThresholds[1] ? 2 : 3;
+  encounterView.peekLevel = level;
+  const translate = direction * (ENCOUNTER_CONFIG.peekTranslations[level - 1] - reveal * 2);
   const rotation = direction * (2.8 - reveal * 1.6);
-  const scale = 0.97 + reveal * 0.06;
+  const scale = ENCOUNTER_CONFIG.peekSizes[level - 1];
 
   elements.entity.dataset.side = side;
   elements.entity.classList.add("is-visible");
@@ -387,13 +404,13 @@ function beginEscape() {
   const direction = side === "RIGHT" ? 1 : -1;
 
   window.requestAnimationFrame(() => {
+    if (runtime.state !== STATES.SPOTTED || director.currentEncounter !== "PEEK") return;
     setState(STATES.ESCAPE);
     elements.entity.classList.add("is-escaping");
     elements.entity.style.opacity = "0.08";
     elements.entity.style.transform = `translate3d(${direction * 175}%, -52%, 0) rotate(${direction * 11}deg) scale(.82)`;
 
-    window.clearTimeout(runtime.escapeTimeoutId);
-    runtime.escapeTimeoutId = window.setTimeout(relocateEntity, CONFIG.escapeDuration + 70);
+    encounterView.escapeStartedAt = performance.now();
   });
 }
 
@@ -405,13 +422,132 @@ function relocateEntity() {
   runtime.entityYaw = chooseRelocatedYaw(current, CONFIG.relocateMinimumAngle);
   runtime.angleDiff = signedAngleDifference(runtime.entityYaw, current);
   runtime.detectedSide = null;
-  runtime.stalkAvailableAt = performance.now() + randomStalkDelay();
+  runtime.stalkAvailableAt = performance.now();
+  encounterView.peekLevel = 0;
+  encounterView.escapeStartedAt = null;
+  director.finish(performance.now());
 
-  window.requestAnimationFrame(() => setState(STATES.STALKING));
+  window.requestAnimationFrame(() => {
+    if (runtime.state === STATES.RELOCATE) setState(STATES.STALKING);
+  });
 }
+
+function cleanupEncounterVisual() {
+  encounterView.animation?.cancel();
+  encounterView.animation = null;
+  encounterView.endAt = null;
+  encounterView.element.className = "encounter-visual";
+  encounterView.passDirection = "—";
+  encounterView.flyByDirection = "—";
+}
+
+function prepareEncounter(type, now, forced = false) {
+  hideEntity();
+  cleanupEncounterVisual();
+  encounterView.peekLevel = 0;
+  setState(STATES.STALKING);
+  if (type === "PEEK") {
+    if (forced) {
+      runtime.entityYaw = normalizeDegrees(runtime.relativeYaw + 40);
+      runtime.angleDiff = signedAngleDifference(runtime.entityYaw, runtime.relativeYaw);
+    }
+    runtime.stalkAvailableAt = now;
+    return;
+  }
+  director.begin(now);
+  const sign = Math.random() < 0.5 ? -1 : 1;
+  const side = sign > 0 ? "RIGHT" : "LEFT";
+  runtime.detectedSide = side;
+  encounterView.element.className = `encounter-visual is-active effect-${type.toLowerCase()}`;
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let duration;
+  let frames;
+  if (type === "PASS") {
+    duration = ENCOUNTER_CONFIG.passDuration / ENCOUNTER_CONFIG.passSpeed;
+    encounterView.passDirection = `${side} → OUT`;
+    frames = [
+      { transform: `translate3d(${sign * 65}vw, 10vh, 0) rotate(${sign * 25}deg) scale(.8)`, opacity: 0 },
+      { offset: .35, transform: `translate3d(${sign * 38}vw, -5vh, 0) rotate(${sign * -12}deg) scale(1.1)`, opacity: .72 },
+      { transform: `translate3d(${sign * 80}vw, -43vh, 0) rotate(${sign * -28}deg) scale(.65)`, opacity: .15 }
+    ];
+  } else if (type === "FLY_BY") {
+    duration = ENCOUNTER_CONFIG.flyByDuration;
+    encounterView.flyByDirection = `${side} → DIAGONAL AWAY`;
+    frames = [
+      { transform: `translate3d(${sign * 50}vw, 55vh, 0) rotate(${sign * 40}deg) scale(${ENCOUNTER_CONFIG.flyByScale[0]})`, opacity: .8 },
+      { offset: .3, opacity: .68 },
+      { transform: `translate3d(${-sign * 70}vw, -55vh, 0) rotate(${sign * -30}deg) scale(${ENCOUNTER_CONFIG.flyByScale[1]})`, opacity: .12 }
+    ];
+  } else {
+    duration = ENCOUNTER_CONFIG.closeCallDuration;
+    frames = [
+      { transform: `translate3d(${sign * 85}vw, 8vh, 0) scale(${ENCOUNTER_CONFIG.closeCallSize})`, opacity: .8 },
+      { offset: .45, transform: `translate3d(${sign * 64}vw, 6vh, 0) scale(${ENCOUNTER_CONFIG.closeCallSize})`, opacity: .87 },
+      { transform: `translate3d(${sign * 155}vw, -8vh, 0) scale(${ENCOUNTER_CONFIG.closeCallSize * .9})`, opacity: .15 }
+    ];
+  }
+  encounterView.element.style.filter = reduced ? "none" : `blur(${type === "FLY_BY" ? 3 : 1.5}px)`;
+  encounterView.animation = encounterView.element.animate(frames, { duration, easing: "linear", fill: "both" });
+  encounterView.endAt = now + duration;
+}
+
+for (const button of encounterView.buttons) {
+  button.addEventListener("click", () => {
+    if (!debugEnabled || !runtime.started || runtime.initialYaw === null) return;
+    const now = performance.now();
+    const type = button.dataset.testEncounter;
+    if (director.force(type, now)) prepareEncounter(type, now, true);
+  });
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) return;
+  cleanupEncounterVisual();
+  hideEntity();
+  director.finish(performance.now());
+  setState(STATES.STALKING);
+  encounterView.escapeStartedAt = null;
+});
 
 function updateGame(now, elapsedMs) {
   if (!runtime.started || runtime.initialYaw === null || runtime.angleDiff === null) return;
+
+  if (document.hidden) return;
+  if (now - runtime.lastOrientationAt > CONFIG.orientationTimeout) {
+    hideEntity();
+    cleanupEncounterVisual();
+    director.finish(now);
+    setState(STATES.STALKING);
+    runtime.orientationPermission = "no-data";
+    elements.playHint.textContent = "方向センサーを取得できません";
+    return;
+  }
+  runtime.orientationPermission = "active";
+  if (elements.playHint.textContent !== "ゆっくり周囲を見回してください") {
+    elements.playHint.textContent = "ゆっくり周囲を見回してください";
+  }
+  const selected = director.update(now);
+  if (selected) prepareEncounter(selected, now);
+  if (director.currentEncounter !== "PEEK") {
+    if (director.state === "EVENT" && now >= encounterView.endAt) {
+      cleanupEncounterVisual();
+      relocateEntity();
+    }
+    return;
+  }
+  if (runtime.state === STATES.ESCAPE) {
+    if (now - encounterView.escapeStartedAt >= CONFIG.escapeDuration + 70) relocateEntity();
+    return;
+  }
+  if (director.state === "ARMING" && now - director.armedAt > ENCOUNTER_CONFIG.peekArmingTimeout) {
+    relocateEntity();
+    return;
+  }
+  if (director.state === "EVENT" && runtime.state === STATES.PERIPHERAL
+      && now - director.eventStartedAt >= ENCOUNTER_CONFIG.peekMaxDuration) {
+    beginEscape();
+    return;
+  }
 
   const absoluteDifference = Math.abs(runtime.angleDiff);
 
@@ -436,8 +572,7 @@ function updateGame(now, elapsedMs) {
 
     if (absoluteDifference > CONFIG.peripheralExitAngle) {
       hideEntity();
-      runtime.stalkAvailableAt = now + 450;
-      setState(STATES.STALKING);
+      relocateEntity();
       return;
     }
 
@@ -466,6 +601,23 @@ function updateDebug(now) {
   elements.debugCamera.textContent = runtime.cameraPermission;
   elements.debugOrientation.textContent = runtime.orientationPermission;
   elements.debugMotion.textContent = runtime.motionPermission;
+  const remaining = director.currentEncounter ? "waiting for view"
+    : `${Math.max(0, (director.deadline ?? now) - now).toFixed(0)} ms`;
+  encounterView.debug.textContent = [
+    `DIRECTOR  ${director.state}`,
+    `CURRENT   ${director.currentEncounter || "—"}`,
+    `PREVIOUS  ${director.previousEncounter || "—"}`,
+    `NEXT      ${remaining}`,
+    `EVENT TIME ${director.eventStartedAt === null ? "—" : Math.max(0, now - director.eventStartedAt).toFixed(0) + " ms"}`,
+    `PEEK LEVEL ${encounterView.peekLevel}`,
+    `PASS      ${encounterView.passDirection}`,
+    `FLY_BY    ${encounterView.flyByDirection}`,
+    `CLOSE_CALL ${director.currentEncounter === "CLOSE_CALL" && director.state === "EVENT"}`
+  ].join("\n");
+  for (const button of encounterView.buttons) {
+    button.disabled = !runtime.started || runtime.initialYaw === null
+      || director.state === "EVENT" || Boolean(director.currentEncounter);
+  }
 
   const proximity = runtime.angleDiff === null
     ? 0
@@ -498,6 +650,12 @@ elements.retryButton.addEventListener("click", () => {
 window.addEventListener("pagehide", () => {
   window.clearTimeout(runtime.sensorTimeoutId);
   window.clearTimeout(runtime.escapeTimeoutId);
+  cleanupEncounterVisual();
+  hideEntity();
+  director.reset();
+  runtime.started = false;
+  elements.game.classList.remove("is-running");
+  elements.startScreen.classList.remove("is-hidden");
   stopCamera();
 });
 

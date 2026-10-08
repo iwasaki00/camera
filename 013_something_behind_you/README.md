@@ -1,99 +1,89 @@
 # 振り返ればヤツガイル
 
-iPhone の背面カメラと方向センサーを使い、視界の端に現れた人影が振り向いた瞬間に逃げるように見せる疑似 AR ホラー Web ゲームです。現実空間の認識は行わず、開始時からの相対 Yaw と仮想キャラクターの方位を使います。
+**Version 0.2.0 — PERIPHERAL HORROR**
 
-**Version 0.1.0 — SOMETHING BEHIND YOU**
+iPhoneの背面カメラと方向センサーによる疑似ARホラーです。相対Yawと仮想方位を使い、現実空間の認識は行いません。映像の保存・送信はありません。
 
-## 対応想定環境
+## 起動
 
-- iPhone の最新 Safari（縦持ちを推奨）
-- カメラと方向センサーを利用できる HTTPS 環境
-- GitHub Pages などの静的ホスティング
+GitHub PagesなどのHTTPS環境で `013_something_behind_you/` をiPhone Safariから開き、縦持ちでSTARTをタップします。カメラとモーション・方向へのアクセスを許可し、測定後にゆっくり左右を見回してください。背面カメラを優先します。権限要求はSTART操作内で開始します。
 
-`getUserMedia()` と iOS のセンサー許可には Secure Context が必要です。実機確認は HTTPS で配信してください。映像は端末上にのみ表示され、保存・送信されません。
+実機にはHTTPSが必要です。権限拒否・非対応・HTTPS問題・センサー未取得は画面に案内します。方向データが途絶えると遭遇を停止します。タブを隠すと演出を片付け、復帰後に再び待機します。
 
-## iPhone Safari での利用手順
+## Encounter Director
 
-1. HTTPS で配信した `013_something_behind_you/` を Safari で開きます。
-2. iPhone を縦向きに持ち、「START」をタップします。
-3. カメラ、およびモーションと画面の向きへのアクセスを許可します。
-4. 起動時に向いていた方向を基準の `0°` として、ゆっくり左右を見回します。
-5. 視界端の人影に気づいたら、その方向へ素早く振り向きます。
+`encounters.js` のDirectorが `IDLE → ARMING → EVENT → COOLDOWN → IDLE` を管理します。ARMINGでランダム待機して種類を抽選し、PEEKは対象方位へ近づくまで待ちます。他3種類はすぐ再生します。終了時に描画を片付け、現在方向から78°以上離して再配置します。1件ずつ実行し、実行中の抽選と強制テストを禁止します。新規タイマーを作らず、requestAnimationFrameで終了時刻を確認します。
 
-拒否した権限は、iPhone の「設定」または Safari の Web サイト設定から変更してください。方向センサーイベントが届かない場合は、Safari の「モーションと画面の向きのアクセス」も確認してください。
+抽選重みは50/30/15/5。同一種類は最大2回連続、CLOSE_CALLは連続不可です。除外後は残った重みで再抽選するため、実際の出現比率は少し変わります。
 
-## DEBUG モード
+| 遭遇 | 発生条件・表示時間・表示方法 |
+|---|---|
+| PEEK | 抽選後、角度差46°以内で画面端へ出現。36°・24°を境に3段階で表示量を増加。素早く向くとSPOTTED→ESCAPE。最大6.5秒で逃走し、16秒視界に入らなければ終了。 |
+| PASS | 280ms。細長い影の断片が画面端を高速で斜め上へ横切り、画面外へ抜ける。 |
+| FLY_BY | 340ms。手前の大きな影が斜め奥へ縮小しながら飛び去る。 |
+| CLOSE_CALL | 160ms。巨大な頭部断片だけが端に入り、即座に外へ抜ける。 |
 
-URL 末尾に `?debug=1` を付けます。
+## 設定値
 
-```text
-013_something_behind_you/?debug=1
-```
+遭遇設定は `encounters.js` の `ENCOUNTER_CONFIG`、既存角度・センサー設定は `app.js` の `CONFIG` に集約しています。
 
-DEBUG モードでは Version、カメラ方位、開始方位、相対 Yaw、キャラクター方位、角度差、回転速度、状態、検出側、各権限状態、左右 18% の Peripheral Zone を表示します。通常 URL ではすべて非表示です。
+| 設定 | 初期値 |
+|---|---|
+| weights | PEEK 50 / PASS 30 / FLY_BY 15 / CLOSE_CALL 5 |
+| minEncounterDelay / maxEncounterDelay | 3000 / 11000ms |
+| cooldownMin / cooldownMax | 1800 / 4200ms |
+| quietChance / quietExtraDelay | 20% / 8000ms追加 |
+| consecutiveLimit | 2（CLOSE_CALLは連続不可） |
+| peekMaxDuration / peekArmingTimeout | 6500 / 16000ms |
+| peekThresholds | 36° / 24° |
+| peekSizes | 0.96 / 1.00 / 1.04倍 |
+| peekTranslations | 91 / 79 / 67%（画面外への押し出し量） |
+| passDuration / passSpeed | 280ms / 1倍（実時間はduration÷speed） |
+| flyByDuration / flyByScale | 340ms / 2.3→0.18倍 |
+| closeCallDuration / closeCallSize | 160ms / 2.8倍 |
+| peripheralZonePercent | 左右18% |
+| peripheralEnterAngle / peripheralExitAngle | 46° / 58° |
+| spottedAngle | 15° |
+| fastTurnThreshold / minimumApproachSpeed | 46 / 14°/s |
+| escapeDuration / relocateMinimumAngle | 180ms / 78° |
+| entitySizeVw | 54vw（上限290px） |
 
-## Version 0.1.0 の実装範囲
+クールダウン＋次回待機に、ときどき8秒の静かな時間を追加します。PEEKの視界待ちもあるため一定周期にはなりません。
 
-- 背面カメラの全画面表示
-- START 操作を起点としたカメラ／方向センサー／モーション権限要求
-- 開始時方位を基準にした相対 Yaw と 0°／360° 境界を跨ぐ角度計算
-- 1体の差し替え可能な SVG シルエットと `entityYaw`
-- `HIDDEN → STALKING → PERIPHERAL → SPOTTED → ESCAPE → RELOCATE → STALKING` の状態遷移
-- 角度差に応じた画面端からの侵入量
-- 素早い振り向きに反応する、約 180ms の画面外への逃走演出
-- 現在方向から最低 78° 離した再配置とランダムな待機時間
-- 権限拒否、非対応、センサー値欠落、カメラ取得失敗の案内
-- portrait-first、safe-area、スクロール／選択／意図しない拡大の抑制
+## 既存0.1.0への影響
 
-## 角度判定
+カメラ・権限・相対Yaw・角度計算・左右判定・SPOTTED・ESCAPE・RELOCATEを維持しています。旧PeripheralをPEEKへ整理し、その外側にDirectorを追加しました。
 
-- `initialYaw`: ゲーム開始後、最初に正常取得した端末方位
-- `currentYaw`: センサーノイズを平滑化した現在方位
-- `relativeYaw`: `initialYaw` からの最短符号付き角度差。右方向を正として扱います
-- `entityYaw`: 開始方向を基準とした仮想空間内のキャラクター方位
-- `angleDiff`: `entityYaw - relativeYaw` を `-180°～180°` に正規化した値
-- `turnSpeed`: フレーム間の方位差を `°/s` に換算して平滑化した値
-- Peripheral: `|angleDiff| ≤ 46°` で進入し、`58°` を超えると非表示へ戻ります
-- SPOTTED: `|angleDiff| ≤ 15°`、回転速度 `46°/s` 以上、かつ人影へ近づく速度 `14°/s` 以上で成立します
+`initialYaw` は開始後の最初の正常方位、`currentYaw` は平滑化した方位、`relativeYaw` は開始からの最短符号付き角度差です。`entityYaw` は仮想キャラクター方位。`angleDiff` はentityYaw−relativeYawを-180°〜180°へ正規化し、正は右、負は左です。359°↔0°も最短差を使います。
 
-## 調整可能パラメータ
+PEEK中、角度差15°以内・回転速度46°/s以上・接近速度14°/s以上でSPOTTEDとなり、元の180msの逃走を使用します。表示しっぱなしを防ぐため最大表示時間も設けています。
 
-`app.js` 冒頭の `CONFIG` に集約しています。
+## DEBUGと実機調整
 
-| パラメータ | 現在値 | 用途 |
-|---|---:|---|
-| `peripheralZonePercent` | 18% | DEBUG の左右視界端ガイド |
-| `peripheralEnterAngle` | 46° | PERIPHERAL へ入る角度 |
-| `peripheralExitAngle` | 58° | 視界端から離れたときの解除角度 |
-| `spottedAngle` | 15° | SPOTTED の近接角度 |
-| `fastTurnThreshold` | 46°/s | 素早い振り向きの最低速度 |
-| `minimumApproachSpeed` | 14°/s | 人影へ近づいているとみなす速度 |
-| `escapeDuration` | 180ms | 逃走演出時間 |
-| `minStalkDelay` / `maxStalkDelay` | 2200ms / 5200ms | 次に出現可能になるまでの待機 |
-| `relocateMinimumAngle` | 78° | 再配置時の最低角度差 |
-| `entitySizeVw` | 54vw | キャラクター基準幅 |
+`013_something_behind_you/?debug=1` を開きます。通常URLではDEBUGとTEST操作を表示しません。
 
-## ファイル構成
+既存のVersion・方位・角度差・速度・状態・左右・権限・Peripheralガイドに、Director state、current/previous encounter、次回待機、event elapsed time、PEEK level、PASS/FLY_BY direction、CLOSE_CALL activeを追加しました。
 
-```text
-013_something_behind_you/
-├── index.html                    画面と各レイヤー
-├── style.css                     portrait-first UI と逃走演出
-├── app.js                        権限、カメラ、センサー、状態、描画、DEBUG
-├── logic.js                      角度計算などの純粋関数
-├── package.json                  ローカルテスト設定（依存パッケージなし）
-├── assets/entity-silhouette.svg  差し替え可能なキャラクター素材
-└── tests/logic.test.mjs          角度と再配置の自動テスト
-```
+START後、センサー取得が始まったら画面下のTEST PEEK / TEST PASS / TEST FLY_BY / TEST CLOSE_CALLをタップできます。実行中は無効です。PEEKテストは現在方向の右40°に対象を置きます。右へゆっくり向いて3段階を確認し、最後に素早く向いてESCAPEを確認します。他3種類は即座に再生します。通常のカメラ・センサーを使用します。
 
-## 今回未実装の主要機能
+reduced-motionでは装飾アニメーションと短時間演出のblurを削減し、必要な移動を維持します。描画要素は再利用し、終了・タブ非表示時にはアニメーションをキャンセルします。
 
-WebXR、ARKit 相当機能、SLAM、平面／壁／家具／人物／画像認識、深度推定、LiDAR、マイク、撮影・録画・保存、複数キャラクター、スコア、HP、ゲームオーバー、クリア条件、ステージ、セーブ、ランキング、オンライン機能、サーバー、データベース、PWA、課金、広告は意図的に実装していません。
+実機ではPEEKの見える量、PASSの正体不明感、FLY_BYの背後から奥へ飛ぶ感覚、CLOSE_CALLの強さ、左右と振り向き反応、静かな時間の自然さを確認してください。恐怖の感じ方はiPhoneでの確認・調整が必要です。
 
-## 実機で確認するポイント
+## ファイルとテスト
 
-- 人影が中央ではなく視界端にいると感じられるか
-- 人影へ近づくほど見える量が自然に増えるか
-- 素早く振り向いた瞬間の反応が遅すぎないか
-- 約 180ms の逃走速度と、逃げる左右方向が自然か
-- シルエットの大きさと見える量が「確認できそうでできない」範囲か
+- `index.html`: 画面とDEBUG／TEST操作
+- `app.js`: カメラ・権限・方向センサー・旧状態遷移・描画
+- `encounters.js`: 抽選・待機・重複防止・遭遇設定
+- `logic.js`: 角度・左右・再配置計算（変更なし）
+- `style.css`: iPhone UI・クリップ・reduced-motion
+- `assets/entity-silhouette.svg`: 差し替え可能な素材
+- `tests/logic.test.mjs`: 角度境界・速度・左右・再配置
+- `tests/encounters.test.mjs`: Director遷移・重複抑制・2万回抽選
+- `tests/app.test.mjs`: DOM整合・4遭遇・終了処理・権限拒否・nullセンサー
+
+Node.js 20以降でこのフォルダから `npm test` を実行します。依存ライブラリのインストールは不要です。
+
+## 未実装
+
+0.3.0の距離・接近（FAR/MID/NEAR/DANGER）、0.4.0の音響、GAME OVER・クリア・HP・スコア・制限時間・ステージ・難易度は未実装です。WebXR・空間認識・撮影・録画・保存・オンラインAPI・PWAも追加していません。
