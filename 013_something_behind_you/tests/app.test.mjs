@@ -3,6 +3,7 @@ import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 import * as logic from "../logic.js";
 import { EncounterDirector, ENCOUNTER_CONFIG } from "../encounters.js";
+import { Stalker, STALKER_CONFIG } from "../stalker.js";
 
 const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
 const source = await readFile(new URL("../app.js", import.meta.url), "utf8");
@@ -10,6 +11,7 @@ function harness(debug = true, cameraDenied = false, orientationDenied = false) 
   let now = 0;
   const frames = [];
   const documentEvents = {};
+  const windowEvents = {};
   const nodes = new Map();
   const buttonTypes = ["PEEK", "PASS", "FLY_BY", "CLOSE_CALL"];
   function node() {
@@ -27,9 +29,10 @@ function harness(debug = true, cameraDenied = false, orientationDenied = false) 
   }
   for (const match of html.matchAll(/id="([^"]+)"/g)) nodes.set("#" + match[1], node());
   const buttons = buttonTypes.map(type => Object.assign(node(), { dataset: { testEncounter: type } }));
+  const distanceButtons = ["FAR", "MID", "NEAR", "DANGER"].map(type => Object.assign(node(), { dataset: { setDistance: type } }));
   let stopped = false;
   const sandbox = {
-    ...logic, EncounterDirector, ENCOUNTER_CONFIG, URLSearchParams, console,
+    ...logic, EncounterDirector, ENCOUNTER_CONFIG, Stalker, STALKER_CONFIG, URLSearchParams, console,
     performance: { now: () => now },
     navigator: { mediaDevices: { getUserMedia: async () => {
       if (cameraDenied) throw { name: "NotAllowedError" };
@@ -38,26 +41,28 @@ function harness(debug = true, cameraDenied = false, orientationDenied = false) 
     document: {
       hidden: false, body: node(), documentElement: node(),
       querySelector: selector => { assert.ok(nodes.has(selector), "missing DOM " + selector); return nodes.get(selector); },
-      querySelectorAll: () => buttons, addEventListener(type, fn) { documentEvents[type] = fn; }
+      querySelectorAll: selector => selector === "[data-set-distance]" ? distanceButtons : buttons, addEventListener(type, fn) { documentEvents[type] = fn; }
     },
     window: {
       location: { search: "?debug=1" }, isSecureContext: true,
       DeviceOrientationEvent: { requestPermission: async () => orientationDenied ? "denied" : "granted" },
       DeviceMotionEvent: { requestPermission: async () => "denied" },
-      addEventListener() {}, requestAnimationFrame: fn => { frames.push(fn); return frames.length; },
+      addEventListener(type, fn) { windowEvents[type] = fn; }, requestAnimationFrame: fn => { frames.push(fn); return frames.length; },
       setTimeout: () => 1, clearTimeout() {}, matchMedia: () => ({ matches: true })
     }
   };
   vm.createContext(sandbox);
   vm.runInContext(source.replace(/import\s+[\s\S]*?from\s+"[^"]+";/g, "") +
-    "\nglobalThis.testApp = { runtime, director, encounterView, updateGame, handleOrientation, startExperience, relocateEntity, updateDebug };", sandbox);
+    "\nglobalThis.testApp = { runtime, director, stalker, encounterView, updateGame, handleOrientation, startExperience, relocateEntity, updateDebug, beginEscape };", sandbox);
   assert.equal(nodes.get("#debugPanel").hidden, true);
   assert.equal(nodes.get("#debugToggle").getAttribute("aria-pressed"), "false");
   if (debug) nodes.get("#debugToggle").click();
   return {
-    ...sandbox.testApp, nodes, buttons, setNow: value => { now = value; }, stopped: () => stopped,
+    ...sandbox.testApp, nodes, buttons, distanceButtons, setNow: value => { now = value; }, stopped: () => stopped,
     flushFrame(value) { now = value; frames.splice(0).forEach(fn => fn(now)); },
-    hide() { sandbox.document.hidden = true; documentEvents.visibilitychange(); }
+    hide() { sandbox.document.hidden = true; documentEvents.visibilitychange(); },
+    show() { sandbox.document.hidden = false; documentEvents.visibilitychange(); },
+    pagehide() { windowEvents.pagehide(); }
   };
 }
 
@@ -92,6 +97,7 @@ for (const type of ["PASS", "FLY_BY", "CLOSE_CALL"]) {
   assert.equal(app.director.state, "COOLDOWN");
   assert.equal(app.encounterView.animation, null);
   assert.equal(app.encounterView.element.className, "encounter-visual");
+  assert.equal(app.stalker.distance, 85, type + " must not reward distance");
 }
 app.buttons[0].click();
 app.updateGame(100, 16);
@@ -115,9 +121,13 @@ app.updateGame(140, 16);
 assert.equal(app.runtime.state, "SPOTTED");
 app.flushFrame(150);
 assert.equal(app.runtime.state, "ESCAPE");
+assert.equal(app.stalker.distance, 100, "discovered PEEK retreats 15");
+app.beginEscape(true);
+assert.equal(app.stalker.distance, 100, "escape cannot reward twice");
 app.updateGame(410, 16);
 assert.equal(app.director.state, "COOLDOWN");
 assert.equal(app.runtime.state, "RELOCATE");
+assert.equal(app.stalker.distance, 100, "relocate retains distance");
 assert.ok(Math.abs(app.runtime.angleDiff) >= 78);
 app.flushFrame(420);
 assert.equal(app.runtime.state, "STALKING");
@@ -145,4 +155,69 @@ normal.buttons[0].click();
 assert.equal(normal.director.currentEncounter, null);
 normal.nodes.get("#debugToggle").click();
 assert.equal(normal.nodes.get("#debugToggle").textContent, "DEBUG");
+
+const distanceApp = harness();
+for (const [index, range, value] of [[0, "FAR", 85], [1, "MID", 60], [2, "NEAR", 35], [3, "DANGER", 10]]) {
+  distanceApp.distanceButtons[index].click();
+  assert.equal(distanceApp.stalker.distance, value);
+  assert.equal(distanceApp.director.profile, STALKER_CONFIG.profiles[range]);
+}
+distanceApp.nodes.get("#debugToggle").click();
+distanceApp.distanceButtons[0].click();
+assert.equal(distanceApp.stalker.distance, 10, "hidden DEBUG cannot change distance");
+await distanceApp.startExperience();
+assert.equal(distanceApp.stalker.distance, 85, "START resets distance");
+distanceApp.handleOrientation({ webkitCompassHeading: 0 });
+distanceApp.runtime.angleDiff = 90;
+for (let t = 100; t <= 2000; t += 100) distanceApp.updateGame(t, 100);
+assert.equal(distanceApp.stalker.distance, 85, "motion permission unavailable pauses approach");
+distanceApp.runtime.motionPermission = "granted";
+for (let t = 100; t <= 2000; t += 100) distanceApp.updateGame(t, 100);
+assert.ok(distanceApp.stalker.distance < 85);
+distanceApp.hide();
+const pausedDistance = distanceApp.stalker.distance;
+distanceApp.updateGame(2500, 100);
+assert.equal(distanceApp.stalker.distance, pausedDistance);
+distanceApp.show();
+distanceApp.updateGame(3000, 100);
+assert.equal(distanceApp.stalker.distance, pausedDistance, "resume waits for fresh orientation");
+distanceApp.handleOrientation({ webkitCompassHeading: 0 });
+distanceApp.runtime.angleDiff = 35;
+distanceApp.updateGame(3000, 100);
+assert.equal(distanceApp.stalker.distance, pausedDistance, "LOOKING stops without recovery");
+distanceApp.runtime.stream = { getTracks: () => [{ readyState: "ended", stop() {} }] };
+distanceApp.runtime.angleDiff = 90;
+for (let i=0;i<30;i++) distanceApp.updateGame(3000,100);
+assert.equal(distanceApp.stalker.distance, pausedDistance, "ended camera pauses approach");
+distanceApp.pagehide();
+assert.equal(distanceApp.runtime.started, false);
+assert.equal(distanceApp.stalker.paused, true);
+assert.equal(distanceApp.runtime.stream, null);
+
+for (const type of ["PEEK", "PASS", "FLY_BY", "CLOSE_CALL"]) {
+  const visual = harness();
+  await visual.startExperience();
+  visual.handleOrientation({ webkitCompassHeading: 0 });
+  visual.distanceButtons[3].click();
+  visual.buttons.find(b => b.dataset.testEncounter === type).click();
+  assert.equal(visual.encounterView.profile, STALKER_CONFIG.profiles.DANGER);
+  const animation = visual.encounterView.animation;
+  visual.distanceButtons[0].click();
+  assert.equal(visual.director.profile, STALKER_CONFIG.profiles.FAR);
+  assert.equal(visual.encounterView.profile, STALKER_CONFIG.profiles.DANGER, "current effect retains profile");
+  assert.equal(visual.encounterView.animation, animation);
+}
+
+const timeoutPeek = harness();
+await timeoutPeek.startExperience();
+timeoutPeek.handleOrientation({ webkitCompassHeading: 0 });
+timeoutPeek.stalker.setDistance(60);
+timeoutPeek.buttons[0].click();
+timeoutPeek.updateGame(0, 16);
+timeoutPeek.setNow(7000);
+timeoutPeek.handleOrientation({ webkitCompassHeading: 0 });
+timeoutPeek.updateGame(7000, 16);
+timeoutPeek.flushFrame(7010);
+assert.equal(timeoutPeek.runtime.state, "ESCAPE");
+assert.equal(timeoutPeek.stalker.distance, 60, "timeout escape must not reward");
 console.log("App integration: four encounters, cleanup, overlap, peek levels, spotting, relocation, null sensor and permission rejection passed");

@@ -562,9 +562,14 @@ body.debug-enabled .debug-tests {
   left: calc(var(--safe-left) + 12px);
   right: calc(var(--safe-right) + 12px);
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 6px;
+  max-height: 38dvh;
+  overflow-y: auto;
+  touch-action: pan-y;
 }
+.debug-test-group { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.debug-test-group h2 { grid-column: 1 / -1; margin: 0; color: #bde9dc; font: 10px/1.4 ui-monospace, monospace; }
 .debug-tests button {
   min-height: 44px;
   font: 11px ui-monospace, monospace;
@@ -593,9 +598,9 @@ body.debug-enabled .debug-tests {
 .debug-toggle:focus-visible { outline: 2px solid #bde9dc; outline-offset: 2px; }
 .play-hud { padding-right: 88px; }
 .debug-panel[hidden], .debug-tests[hidden], .debug-guides[hidden] { display: none !important; }
-#debugEncounter { margin: 7px 0 0; font: inherit; white-space: pre-wrap; }
+#debugEncounter, #debugDistance { margin: 7px 0 0; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
 body.debug-enabled .debug-panel {
-  max-height: 48dvh;
+  max-height: 40dvh;
   overflow-y: auto;
   pointer-events: auto;
   touch-action: pan-y;

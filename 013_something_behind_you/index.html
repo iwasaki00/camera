@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="iPhoneを見回すと視界の端に何かが現れる、疑似ARホラーWebゲーム">
-  <title>振り返ればヤツガイル｜DEBUG BUTTON</title>
+  <title>振り返ればヤツガイル｜STALKER</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
@@ -38,7 +38,7 @@
         <div class="warning-mark" aria-hidden="true"><span></span></div>
         <p class="eyebrow">PSEUDO AR HORROR EXPERIENCE</p>
         <h1 id="gameTitle">振り返れば<br><em>ヤツガイル</em></h1>
-        <p class="english-title">DEBUG BUTTON</p>
+        <p class="english-title">SOMETHING BEHIND YOU — STALKER</p>
         <p class="lead">カメラを向けた先に、<br>何もいないとは限らない。</p>
         <button id="startButton" class="start-button" type="button">
           <span>START</span><i aria-hidden="true"></i>
@@ -46,7 +46,7 @@
         <p id="startStatus" class="start-status" role="status">カメラと方向センサーの使用を許可してください</p>
         <p class="privacy-note">映像は保存・送信されません</p>
       </div>
-      <p class="version">Version 0.2.1 <span>—</span> DEBUG BUTTON</p>
+      <p class="version">Version 0.3.0 <span>—</span> STALKER</p>
     </section>
 
     <div id="message" class="message" role="alert" aria-live="assertive" hidden>
@@ -57,9 +57,9 @@
 
     <button id="debugToggle" class="debug-toggle" type="button" aria-pressed="false" aria-controls="debugPanel debugGuides debugTests">DEBUG</button>
     <aside id="debugPanel" class="debug-panel" aria-label="デバッグ情報" aria-hidden="true" hidden>
-      <header><b>DEBUG MODE</b><span>v0.2.1</span></header>
+      <header><b>DEBUG MODE</b><span>v0.3.0</span></header>
       <dl>
-        <div><dt>VERSION</dt><dd>0.2.1</dd></div>
+        <div><dt>VERSION</dt><dd>0.3.0</dd></div>
         <div><dt>CAMERA YAW</dt><dd id="debugCurrentYaw">—</dd></div>
         <div><dt>INITIAL YAW</dt><dd id="debugInitialYaw">—</dd></div>
         <div><dt>RELATIVE YAW</dt><dd id="debugRelativeYaw">—</dd></div>
@@ -73,13 +73,24 @@
         <div><dt>MOTION</dt><dd id="debugMotion">idle</dd></div>
       </dl>
       <div class="proximity"><span id="debugProximity"></span></div>
+      <pre id="debugDistance"></pre>
       <pre id="debugEncounter"></pre>
     </aside>
-    <nav id="debugTests" class="debug-tests" aria-label="遭遇演出テスト" hidden>
+    <nav id="debugTests" class="debug-tests" aria-label="遭遇・距離テスト" hidden>
+      <section class="debug-test-group" aria-label="Encounter Test">
+      <h2>Encounter Test</h2>
       <button type="button" data-test-encounter="PEEK" disabled>TEST PEEK</button>
       <button type="button" data-test-encounter="PASS" disabled>TEST PASS</button>
       <button type="button" data-test-encounter="FLY_BY" disabled>TEST FLY_BY</button>
       <button type="button" data-test-encounter="CLOSE_CALL" disabled>TEST CLOSE_CALL</button>
+      </section>
+      <section class="debug-test-group" aria-label="Distance Test">
+      <h2>Distance Test</h2>
+      <button type="button" data-set-distance="FAR">SET FAR 85</button>
+      <button type="button" data-set-distance="MID">SET MID 60</button>
+      <button type="button" data-set-distance="NEAR">SET NEAR 35</button>
+      <button type="button" data-set-distance="DANGER">SET DANGER 10</button>
+      </section>
     </nav>
 
     <div class="landscape-notice" aria-hidden="true">

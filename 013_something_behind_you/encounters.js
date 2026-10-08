@@ -25,6 +25,7 @@ export class EncounterDirector {
   constructor(config = ENCOUNTER_CONFIG, random = Math.random) {
     this.config = config;
     this.random = random;
+    this.profile = config;
     this.reset();
   }
 
@@ -40,8 +41,18 @@ export class EncounterDirector {
 
   between(min, max) { return min + this.random() * (max - min); }
 
+  setProfile(profile, now) {
+    if (this.profile === profile) return;
+    this.profile = profile;
+    // 待機中だけ新しい間隔に更新。実行中のEncounterには干渉しない。
+    if (this.state === "ARMING" && !this.currentEncounter && Number.isFinite(now)) {
+      this.deadline = now + this.between(profile.minEncounterDelay, profile.maxEncounterDelay)
+        + (this.random() < this.config.quietChance ? this.config.quietExtraDelay : 0);
+    }
+  }
+
   choose() {
-    const entries = Object.entries(this.config.weights).filter(([type, weight]) =>
+    const entries = Object.entries(this.profile.weights).filter(([type, weight]) =>
       weight > 0 && !(type === this.previousEncounter &&
         (type === "CLOSE_CALL" || this.consecutive >= this.config.consecutiveLimit)));
     let draw = this.random() * entries.reduce((sum, [, weight]) => sum + weight, 0);
@@ -55,7 +66,7 @@ export class EncounterDirector {
   update(now) {
     if (this.state === "IDLE") {
       this.state = "ARMING";
-      this.deadline = now + this.between(this.config.minEncounterDelay, this.config.maxEncounterDelay)
+      this.deadline = now + this.between(this.profile.minEncounterDelay, this.profile.maxEncounterDelay)
         + (this.random() < this.config.quietChance ? this.config.quietExtraDelay : 0);
       this.armedAt = null;
     }

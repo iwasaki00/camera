@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { EncounterDirector, ENCOUNTER_CONFIG } from "../encounters.js";
+import { STALKER_CONFIG } from "../stalker.js";
 
 const d = new EncounterDirector(ENCOUNTER_CONFIG, () => 0);
 d.update(0);
@@ -43,4 +44,23 @@ for (let i = 0; i < 20000; i++) {
 }
 assert.ok(counts.CLOSE_CALL / 20000 < .08);
 assert.ok(Object.values(counts).every(n => n > 0));
+for (const profile of Object.values(STALKER_CONFIG.profiles)) {
+  const stage = new EncounterDirector(ENCOUNTER_CONFIG, () => 0.5);
+  stage.setProfile(profile, 0);
+  stage.update(0);
+  assert.equal(stage.deadline, (profile.minEncounterDelay + profile.maxEncounterDelay) / 2);
+  let cumulative = 0;
+  for (const [type, weight] of Object.entries(profile.weights)) {
+    stage.random = () => (cumulative + weight / 2) / 100;
+    assert.equal(stage.choose(), type);
+    cumulative += weight;
+  }
+  stage.random = () => 0.5;
+  stage.setProfile(STALKER_CONFIG.profiles.DANGER, 100);
+  assert.equal(stage.profile, STALKER_CONFIG.profiles.DANGER);
+  stage.previousEncounter = "CLOSE_CALL";
+  stage.consecutive = 1;
+  stage.random = () => .99999;
+  assert.notEqual(stage.choose(), "CLOSE_CALL");
+}
 console.log("Encounter Director: transitions, overlap, 20,000 draws passed", counts);

@@ -1,6 +1,6 @@
 # 振り返ればヤツガイル
 
-**Version 0.2.1 — DEBUG BUTTON**
+**Version 0.3.0 — STALKER**
 
 iPhoneの背面カメラと方向センサーによる疑似ARホラーです。相対Yawと仮想方位を使い、現実空間の認識は行いません。映像の保存・送信はありません。
 
@@ -14,7 +14,26 @@ GitHub PagesなどのHTTPS環境で `013_something_behind_you/` をiPhone Safari
 
 `encounters.js` のDirectorが `IDLE → ARMING → EVENT → COOLDOWN → IDLE` を管理します。ARMINGでランダム待機して種類を抽選し、PEEKは対象方位へ近づくまで待ちます。他3種類はすぐ再生します。終了時に描画を片付け、現在方向から78°以上離して再配置します。1件ずつ実行し、実行中の抽選と強制テストを禁止します。新規タイマーを作らず、requestAnimationFrameで終了時刻を確認します。
 
-抽選重みは50/30/15/5。同一種類は最大2回連続、CLOSE_CALLは連続不可です。除外後は残った重みで再抽選するため、実際の出現比率は少し変わります。
+抽選重み・次回待機時間は距離段階で切り替わります。同一種類は最大2回連続、CLOSE_CALLは連続不可です。除外後は残った重みで再抽選するため、実際の出現比率は少し変わります。
+
+## STALKERの距離
+
+距離は1本だけで初期85、最小5、最大100です。`abs(angleDiff) <= 35°` をLOOKINGとし、接近を停止します。見るだけで距離は回復しません。NOT_LOOKINGが連続1.2秒続いてから、経過秒数に応じて距離を減らします。LOOKINGに戻ると猶予時間をリセットします。
+
+| 段階 | 距離 | 接近速度 / 秒（10減る目安） | PEEK / PASS / FLY_BY / CLOSE_CALL | 次回待機 |
+|---|---|---|---|---|
+| FAR | 75〜100 | 0.67（14.9秒） | 65 / 25 / 8 / 2 | 5〜13秒 |
+| MID | 45以上75未満 | 0.87（11.5秒） | 50 / 30 / 15 / 5 | 4〜10秒 |
+| NEAR | 20以上45未満 | 1.25（8秒） | 40 / 30 / 20 / 10 | 3〜8秒 |
+| DANGER | 5以上20未満 | 1.67（6秒） | 30 / 25 / 25 / 20 | 2.5〜6秒 |
+
+速度の目安は同じ段階内での値です。境界を越えた時点から次段階の速度になります。距離5で止まり、ゲームオーバーにはなりません。
+
+実際の発見判定でPEEKがSPOTTED→ESCAPEへ移ったときだけ距離を15増加させます（最大100）。PEEKの時間切れ逃走、見失い、視界待ち終了、PASS／FLY_BY／CLOSE_CALLでは回復しません。RELOCATEは距離を保持し、STARTし直すと85へ戻ります。
+
+START前、カメラ失敗・停止、モーション権限拒否・非対応、方向データ未取得・途絶、タブ非表示、pagehideでは接近を停止します。非表示時は猶予もリセットし、復帰後は新しい方向データを待ちます。1フレームの距離計算は最大100msで、バックグラウンド経過分の追いつき処理はしません。
+
+PEEKの最大表示量での画面外押し出し基準はFAR85%／MID70%／NEAR55%／DANGER42%。角度別の3段階表示を加算し、近い段階ほど大きく・深く画面端へ侵入します。他3演出も段階別サイズ倍率を使い、時間・方向・部分クリップは維持します。演出開始時の段階を保持するため、実行中のDEBUG距離変更は現在のアニメーションを壊しません。
 
 | 遭遇 | 発生条件・表示時間・表示方法 |
 |---|---|
@@ -25,19 +44,18 @@ GitHub PagesなどのHTTPS環境で `013_something_behind_you/` をiPhone Safari
 
 ## 設定値
 
-遭遇設定は `encounters.js` の `ENCOUNTER_CONFIG`、既存角度・センサー設定は `app.js` の `CONFIG` に集約しています。
+距離・段階別速度／重み／間隔／サイズ倍率は `stalker.js` の `STALKER_CONFIG`、遭遇共通設定は `encounters.js` の `ENCOUNTER_CONFIG`、既存角度・センサー設定は `app.js` の `CONFIG` に集約しています。
 
 | 設定 | 初期値 |
 |---|---|
-| weights | PEEK 50 / PASS 30 / FLY_BY 15 / CLOSE_CALL 5 |
-| minEncounterDelay / maxEncounterDelay | 3000 / 11000ms |
+| weights / minEncounterDelay / maxEncounterDelay | 上記の距離段階別設定を使用 |
 | cooldownMin / cooldownMax | 1800 / 4200ms |
 | quietChance / quietExtraDelay | 20% / 8000ms追加 |
 | consecutiveLimit | 2（CLOSE_CALLは連続不可） |
 | peekMaxDuration / peekArmingTimeout | 6500 / 16000ms |
 | peekThresholds | 36° / 24° |
 | peekSizes | 0.96 / 1.00 / 1.04倍 |
-| peekTranslations | 91 / 79 / 67%（画面外への押し出し量） |
+| peekTranslations | 91 / 79 / 67%の差分を段階別押し出し基準に加算 |
 | passDuration / passSpeed | 280ms / 1倍（実時間はduration÷speed） |
 | flyByDuration / flyByScale | 340ms / 2.3→0.18倍 |
 | closeCallDuration / closeCallSize | 160ms / 2.8倍 |
@@ -62,7 +80,11 @@ PEEK中、角度差15°以内・回転速度46°/s以上・接近速度14°/s以
 
 通常URL `013_something_behind_you/` を開き、画面右上の **DEBUG** ボタンをタップしてON/OFFします。初期状態はOFFで、再読み込み後もOFFに戻ります。URLパラメータは不要で、旧 `?debug=1` を付けても初期状態はOFFです。
 
-ON時はボタンが「DEBUG ON」となり、情報・ガイド・4つのTEST操作を表示します。OFFにすると即座に隠れます。START前・ゲーム中・遭遇演出中でも切替可能で、カメラ・センサー・遭遇状態・実行中アニメーションはリセットしません。START前のTEST操作は無効です。Version 0.2.0の遭遇確率・待機時間・角度判定・演出・逃走・再配置は変更していません。
+ON時はボタンが「DEBUG ON」となり、情報・ガイド・Encounter Test／Distance Testを表示します。OFFにすると即座に隠れます。START前・ゲーム中・遭遇演出中でも切替可能で、カメラ・センサー・距離・遭遇状態・実行中アニメーションはリセットしません。START前のEncounter Testは無効です。
+
+Distance TestのSET FAR 85／SET MID 60／SET NEAR 35／SET DANGER 10はDEBUG ON時だけ操作できます。距離・段階・重み・次回待機範囲を即時更新します。待機中なら次回時刻を新しい範囲で再設定し、実行中・クールダウン中の演出や時刻は保持します。START前にも距離設定を確認できますが、STARTでは85へリセットします。
+
+距離DEBUGにはDISTANCE、RANGE、LOOKING／NOT_LOOKING／PAUSED、連続NOT_LOOKING秒数、猶予中か、現在の接近速度、次境界、抽選重み、待機範囲を表示します。情報欄と操作欄は高さを制限して縦スクロールでき、狭い画面でも横にあふれない2列ボタン配置です。
 
 既存のVersion・方位・角度差・速度・状態・左右・権限・Peripheralガイドに、Director state、current/previous encounter、次回待機、event elapsed time、PEEK level、PASS/FLY_BY direction、CLOSE_CALL activeを追加しました。
 
@@ -77,15 +99,17 @@ reduced-motionでは装飾アニメーションと短時間演出のblurを削�
 - `index.html`: 画面とDEBUG／TEST操作
 - `app.js`: カメラ・権限・方向センサー・旧状態遷移・描画
 - `encounters.js`: 抽選・待機・重複防止・遭遇設定
+- `stalker.js`: 単一距離・接近・猶予・段階別プロファイル
 - `logic.js`: 角度・左右・再配置計算（変更なし）
 - `style.css`: iPhone UI・クリップ・reduced-motion
 - `assets/entity-silhouette.svg`: 差し替え可能な素材
 - `tests/logic.test.mjs`: 角度境界・速度・左右・再配置
 - `tests/encounters.test.mjs`: Director遷移・重複抑制・2万回抽選
-- `tests/app.test.mjs`: DOM整合・4遭遇・終了処理・権限拒否・nullセンサー
+- `tests/stalker.test.mjs`: 境界・35°判定・猶予・速度・フレームレート非依存・上下限・停止・回復
+- `tests/app.test.mjs`: DOM整合・4遭遇・終了処理・権限拒否・nullセンサー・距離設定・発見回復と時間切れ・非表示復帰
 
 Node.js 20以降でこのフォルダから `npm test` を実行します。依存ライブラリのインストールは不要です。
 
 ## 未実装
 
-0.3.0の距離・接近（FAR/MID/NEAR/DANGER）、0.4.0の音響、GAME OVER・クリア・HP・スコア・制限時間・ステージ・難易度は未実装です。WebXR・空間認識・撮影・録画・保存・オンラインAPI・PWAも追加していません。
+0.4.0の音響、振動、GAME OVER・クリア・HP・スコア・制限時間・ステージ・難易度は未実装です。WebXR・空間認識・撮影・録画・保存・オンラインAPI・PWAも追加していません。

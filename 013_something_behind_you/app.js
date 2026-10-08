@@ -10,9 +10,12 @@ import {
 } from "./logic.js";
 
 import { EncounterDirector, ENCOUNTER_CONFIG } from "./encounters.js";
+import { Stalker, STALKER_CONFIG } from "./stalker.js";
 
-const VERSION = "0.2.1 — DEBUG BUTTON";
+const VERSION = "0.3.0 — STALKER";
 const director = new EncounterDirector();
+const stalker = new Stalker();
+director.setProfile(stalker.profile);
 const encounterView = {
   element: document.querySelector("#encounterVisual"),
   debug: document.querySelector("#debugEncounter"),
@@ -22,7 +25,8 @@ const encounterView = {
   peekLevel: 0,
   passDirection: "—",
   flyByDirection: "—",
-  escapeStartedAt: null
+  escapeStartedAt: null,
+  profile: null
 };
 
 // 実機で体感を調整する値は、このオブジェクトだけに集約する。
@@ -84,7 +88,8 @@ const elements = {
   debugCamera: document.querySelector("#debugCamera"),
   debugOrientation: document.querySelector("#debugOrientation"),
   debugMotion: document.querySelector("#debugMotion"),
-  debugProximity: document.querySelector("#debugProximity")
+  debugProximity: document.querySelector("#debugProximity"),
+  debugDistance: document.querySelector("#debugDistance")
 };
 
 if (Object.values(elements).some((element) => !element)) {
@@ -289,6 +294,7 @@ async function startCamera() {
 }
 
 function stopCamera() {
+  stalker.pause();
   runtime.stream?.getTracks().forEach((track) => track.stop());
   runtime.stream = null;
   elements.camera.srcObject = null;
@@ -352,7 +358,9 @@ async function startExperience() {
   runtime.entityYaw = null;
   runtime.angleDiff = null;
   runtime.turnSpeed = 0;
+  stalker.reset();
   director.reset();
+  director.setProfile(stalker.profile);
   cleanupEncounterVisual();
   setState(STATES.HIDDEN);
 
@@ -383,9 +391,12 @@ function renderPeripheral() {
   const level = Math.abs(runtime.angleDiff) > ENCOUNTER_CONFIG.peekThresholds[0] ? 1
     : Math.abs(runtime.angleDiff) > ENCOUNTER_CONFIG.peekThresholds[1] ? 2 : 3;
   encounterView.peekLevel = level;
-  const translate = direction * (ENCOUNTER_CONFIG.peekTranslations[level - 1] - reveal * 2);
+  const profile = encounterView.profile || stalker.profile;
+  const baseOutside = ENCOUNTER_CONFIG.peekTranslations.at(-1);
+  const translate = direction * Math.min(97, profile.peekOutside
+    + ENCOUNTER_CONFIG.peekTranslations[level - 1] - baseOutside - reveal * 2);
   const rotation = direction * (2.8 - reveal * 1.6);
-  const scale = ENCOUNTER_CONFIG.peekSizes[level - 1];
+  const scale = ENCOUNTER_CONFIG.peekSizes[level - 1] * profile.peekScale;
 
   elements.entity.dataset.side = side;
   elements.entity.classList.add("is-visible");
@@ -398,7 +409,7 @@ function hideEntity() {
   elements.entity.style.opacity = "0";
 }
 
-function beginEscape() {
+function beginEscape(discovered = false) {
   if (runtime.state !== STATES.PERIPHERAL) return;
 
   setState(STATES.SPOTTED);
@@ -408,6 +419,10 @@ function beginEscape() {
   window.requestAnimationFrame(() => {
     if (runtime.state !== STATES.SPOTTED || director.currentEncounter !== "PEEK") return;
     setState(STATES.ESCAPE);
+    if (discovered) {
+      stalker.retreat();
+      director.setProfile(stalker.profile, performance.now());
+    }
     elements.entity.classList.add("is-escaping");
     elements.entity.style.opacity = "0.08";
     elements.entity.style.transform = `translate3d(${direction * 175}%, -52%, 0) rotate(${direction * 11}deg) scale(.82)`;
@@ -447,6 +462,8 @@ function prepareEncounter(type, now, forced = false) {
   hideEntity();
   cleanupEncounterVisual();
   encounterView.peekLevel = 0;
+  const profile = stalker.profile;
+  encounterView.profile = profile;
   setState(STATES.STALKING);
   if (type === "PEEK") {
     if (forced) {
@@ -468,24 +485,24 @@ function prepareEncounter(type, now, forced = false) {
     duration = ENCOUNTER_CONFIG.passDuration / ENCOUNTER_CONFIG.passSpeed;
     encounterView.passDirection = `${side} → OUT`;
     frames = [
-      { transform: `translate3d(${sign * 65}vw, 10vh, 0) rotate(${sign * 25}deg) scale(.8)`, opacity: 0 },
-      { offset: .35, transform: `translate3d(${sign * 38}vw, -5vh, 0) rotate(${sign * -12}deg) scale(1.1)`, opacity: .72 },
-      { transform: `translate3d(${sign * 80}vw, -43vh, 0) rotate(${sign * -28}deg) scale(.65)`, opacity: .15 }
+      { transform: `translate3d(${sign * 65}vw, 10vh, 0) rotate(${sign * 25}deg) scale(${.8 * profile.passScale})`, opacity: 0 },
+      { offset: .35, transform: `translate3d(${sign * 38}vw, -5vh, 0) rotate(${sign * -12}deg) scale(${1.1 * profile.passScale})`, opacity: .72 },
+      { transform: `translate3d(${sign * 80}vw, -43vh, 0) rotate(${sign * -28}deg) scale(${.65 * profile.passScale})`, opacity: .15 }
     ];
   } else if (type === "FLY_BY") {
     duration = ENCOUNTER_CONFIG.flyByDuration;
     encounterView.flyByDirection = `${side} → DIAGONAL AWAY`;
     frames = [
-      { transform: `translate3d(${sign * 50}vw, 55vh, 0) rotate(${sign * 40}deg) scale(${ENCOUNTER_CONFIG.flyByScale[0]})`, opacity: .8 },
+      { transform: `translate3d(${sign * 50}vw, 55vh, 0) rotate(${sign * 40}deg) scale(${ENCOUNTER_CONFIG.flyByScale[0] * profile.flyByScale})`, opacity: .8 },
       { offset: .3, opacity: .68 },
       { transform: `translate3d(${-sign * 70}vw, -55vh, 0) rotate(${sign * -30}deg) scale(${ENCOUNTER_CONFIG.flyByScale[1]})`, opacity: .12 }
     ];
   } else {
     duration = ENCOUNTER_CONFIG.closeCallDuration;
     frames = [
-      { transform: `translate3d(${sign * 85}vw, 8vh, 0) scale(${ENCOUNTER_CONFIG.closeCallSize})`, opacity: .8 },
-      { offset: .45, transform: `translate3d(${sign * 64}vw, 6vh, 0) scale(${ENCOUNTER_CONFIG.closeCallSize})`, opacity: .87 },
-      { transform: `translate3d(${sign * 155}vw, -8vh, 0) scale(${ENCOUNTER_CONFIG.closeCallSize * .9})`, opacity: .15 }
+      { transform: `translate3d(${sign * 85}vw, 8vh, 0) scale(${ENCOUNTER_CONFIG.closeCallSize * profile.closeCallScale})`, opacity: .8 },
+      { offset: .45, transform: `translate3d(${sign * 64}vw, 6vh, 0) scale(${ENCOUNTER_CONFIG.closeCallSize * profile.closeCallScale})`, opacity: .87 },
+      { transform: `translate3d(${sign * 155}vw, -8vh, 0) scale(${ENCOUNTER_CONFIG.closeCallSize * .9 * profile.closeCallScale})`, opacity: .15 }
     ];
   }
   encounterView.element.style.filter = reduced ? "none" : `blur(${type === "FLY_BY" ? 3 : 1.5}px)`;
@@ -503,7 +520,10 @@ for (const button of encounterView.buttons) {
 }
 
 document.addEventListener("visibilitychange", () => {
+  stalker.pause();
+  previousFrameAt = performance.now();
   if (!document.hidden) return;
+  runtime.lastOrientationAt = -Infinity;
   cleanupEncounterVisual();
   hideEntity();
   director.finish(performance.now());
@@ -512,6 +532,13 @@ document.addEventListener("visibilitychange", () => {
 });
 
 function updateGame(now, elapsedMs) {
+  const distanceActive = runtime.started && runtime.initialYaw !== null
+    && runtime.cameraPermission === "granted" && Boolean(runtime.stream)
+    && !runtime.stream.getTracks().some(track => track.readyState === "ended")
+    && runtime.motionPermission === "granted" && !document.hidden
+    && now - runtime.lastOrientationAt <= CONFIG.orientationTimeout;
+  stalker.update(elapsedMs, runtime.angleDiff, distanceActive);
+  director.setProfile(stalker.profile, now);
   if (!runtime.started || runtime.initialYaw === null || runtime.angleDiff === null) return;
 
   if (document.hidden) return;
@@ -583,7 +610,7 @@ function updateGame(now, elapsedMs) {
     const turnedQuickly = Math.abs(runtime.turnSpeed) >= CONFIG.fastTurnThreshold;
     const movingTowardEntity = runtime.approachSpeed >= CONFIG.minimumApproachSpeed;
     if (absoluteDifference <= CONFIG.spottedAngle && turnedQuickly && movingTowardEntity) {
-      beginEscape();
+      beginEscape(true);
     }
   }
 }
@@ -603,6 +630,18 @@ function updateDebug(now) {
   elements.debugCamera.textContent = runtime.cameraPermission;
   elements.debugOrientation.textContent = runtime.orientationPermission;
   elements.debugMotion.textContent = runtime.motionPermission;
+  const profile = stalker.profile;
+  elements.debugDistance.textContent = [
+    `DISTANCE   ${stalker.distance.toFixed(1)}`,
+    `RANGE      ${stalker.distanceState}`,
+    `VISIBILITY ${stalker.paused ? "PAUSED" : stalker.looking ? "LOOKING" : "NOT_LOOKING"}`,
+    `NOT LOOKING ${(stalker.notLookingMs / 1000).toFixed(1)}s`,
+    `GRACE      ${stalker.inGrace ? "YES" : "NO"}`,
+    `APPROACH   ${stalker.approachRate.toFixed(2)} / sec`,
+    `NEXT THRESHOLD ${stalker.nextThreshold}`,
+    `WEIGHTS P/P/F/C ${Object.values(profile.weights).join("/")}`,
+    `DELAY ${(profile.minEncounterDelay / 1000).toFixed(1)}–${(profile.maxEncounterDelay / 1000).toFixed(1)}s`
+  ].join("\n");
   const remaining = director.currentEncounter ? "waiting for view"
     : `${Math.max(0, (director.deadline ?? now) - now).toFixed(0)} ms`;
   encounterView.debug.textContent = [
@@ -650,6 +689,7 @@ elements.retryButton.addEventListener("click", () => {
 });
 
 window.addEventListener("pagehide", () => {
+  stalker.pause();
   window.clearTimeout(runtime.sensorTimeoutId);
   window.clearTimeout(runtime.escapeTimeoutId);
   cleanupEncounterVisual();
@@ -677,5 +717,13 @@ function setDebugEnabled(enabled) {
 }
 
 elements.debugToggle.addEventListener("click", () => setDebugEnabled(!debugEnabled));
+for (const button of document.querySelectorAll("[data-set-distance]")) {
+  button.addEventListener("click", () => {
+    if (!debugEnabled || !stalker.setRange(button.dataset.setDistance)) return;
+    director.setProfile(stalker.profile, performance.now());
+    runtime.debugUpdatedAt = -Infinity;
+    updateDebug(performance.now());
+  });
+}
 setDebugEnabled(false);
 window.requestAnimationFrame(frame);
