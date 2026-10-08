@@ -1,13 +1,14 @@
 {
   "name": "henface-maker",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "node ./node_modules/vite/bin/vite.js",
     "build": "node ./node_modules/vite/bin/vite.js build",
     "preview": "node ./node_modules/vite/bin/vite.js preview",
-    "typecheck": "node ./node_modules/typescript/bin/tsc --noEmit"
+    "typecheck": "node ./node_modules/typescript/bin/tsc --noEmit",
+    "test:ui": "node tests/ui-settings.test.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "0.10.22-rc.20250304",

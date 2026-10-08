@@ -18,7 +18,7 @@ export type TransformOptions = {
 export type FeatureRegion = { center: Point; width: number; height: number };
 // Explicit overlap policy: details blend over larger features.
 export const FEATURE_ORDER: readonly FeatureType[] = ["nose", "mouth", "eyes", "brows"];
-export const RENDER_SETTINGS = { maxFrameDimension: 960, patchResolution: 1, patchGrid: 12 };
+export const RENDER_SETTINGS = { maxFrameDimension: 720, patchResolution: 1, patchGrid: 12 };
 const INDEXES: Record<FeatureType, number[][]> = {
   nose: [[6, 1, 2, 98, 327, 168, 197]],
   eyes: [[33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246],

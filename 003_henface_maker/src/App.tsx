@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
-import { createFeatureRenderer, EFFECT_VERSION, RENDER_SETTINGS } from "./featureRenderer";
+import { createFeatureRenderer, RENDER_SETTINGS } from "./featureRenderer";
 import type { EffectState, Landmark, PartConfig, PartId } from "./featureRenderer";
 
-const BUILD_UPDATED_AT = "2026-10-08 +09:00";
+import PartSliders from "./PartSliders";
+import { APP_VERSION, readLayout, saveLayout, randomizeParts } from "./uiSettings";
+import type { Layout, RandomStrength } from "./uiSettings";
+import type { FeatureType } from "./featureRenderer";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
 const FACE_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
@@ -36,9 +39,8 @@ const PART_DEFS: PartDefinition[] = [
   { id: "jaw", label: "顎", pair: false, supportsDistance: false, supportsScaleXY: true }
 ];
 
-const PART_IDS = PART_DEFS.map((part) => part.id);
-const ACTIVE_PART_IDS: PartId[] = ["brows", "eyes", "nose", "mouth"];
-const ACTIVE_PART_DEFS = PART_DEFS.filter((part) => ACTIVE_PART_IDS.includes(part.id));
+const ACTIVE_PART_IDS: FeatureType[] = ["brows", "eyes", "nose", "mouth"];
+const ACTIVE_PART_DEFS = PART_DEFS.filter((part) => ACTIVE_PART_IDS.includes(part.id as FeatureType));
 
 const DEFAULT_PART: PartConfig = {
   size: 1,
@@ -230,11 +232,15 @@ export default function App() {
   const lastRenderedStateRef = useRef<EffectState | null>(null);
   const effectStateRef = useRef<EffectState>(createDefaultState());
 
+  const [layout, setLayout] = useState<Layout>(readLayout);
+  const [randomStrength, setRandomStrength] = useState<RandomStrength>("normal");
+  const trackingRef = useRef<boolean | null>(null);
+  const lastDrawAtRef = useRef(0);
   const [cameraActive, setCameraActive] = useState(false);
   const [status, setStatus] = useState("待機中");
   const [message, setMessage] = useState("前面カメラで起動して、顔のパーツをリアルタイムに変形できます。");
   const [error, setError] = useState("");
-  const [activePart, setActivePart] = useState<PartId>("mouth");
+  const [activePart, setActivePart] = useState<FeatureType>("mouth");
   const [effectState, setEffectState] = useState<EffectState>(createDefaultState);
   const [accidentType, setAccidentType] = useState<AccidentType>("light");
   const [accidentRate, setAccidentRate] = useState(65);
@@ -277,6 +283,8 @@ export default function App() {
     cancelAnimationFrame(animationFrameRef.current);
     animationFrameRef.current = 0;
     lastVideoTimeRef.current = -1;
+    trackingRef.current = null;
+    lastDrawAtRef.current = 0;
     lastLandmarksRef.current = undefined;
     lastRenderedStateRef.current = null;
     rendererRef.current?.clearCache();
@@ -316,6 +324,13 @@ export default function App() {
       return;
     }
 
+    // Cap camera work at 30fps; parameter changes still render on the next RAF.
+    const now = performance.now();
+    if (lastRenderedStateRef.current === effectStateRef.current && now - lastDrawAtRef.current < 1000 / 30) {
+      animationFrameRef.current = requestAnimationFrame(renderLoop);
+      return;
+    }
+    lastDrawAtRef.current = now;
     const frameScale = Math.min(1, RENDER_SETTINGS.maxFrameDimension / Math.max(video.videoWidth, video.videoHeight));
     const width = Math.max(1, Math.round(video.videoWidth * frameScale));
     const height = Math.max(1, Math.round(video.videoHeight * frameScale));
@@ -344,17 +359,13 @@ export default function App() {
     const landmarks = lastLandmarksRef.current;
     rendererRef.current.renderFeatureEffects(sourceCanvas, ctx, landmarks, effectStateRef.current);
     lastRenderedStateRef.current = effectStateRef.current;
-    if (!landmarks) {
-      setStatus("待機中");
-      setMessage("顔を画面の中央に寄せると、パーツ変形を反映します。");
+    const tracking = !!landmarks;
+    if (trackingRef.current !== tracking) {
+      trackingRef.current = tracking;
+      setStatus(tracking ? "顔を検出中" : "待機中");
+      setMessage(tracking ? "映像を見ながらパーツを調整できます。" : "顔を画面の中央に寄せてください。");
       setError("");
-      animationFrameRef.current = requestAnimationFrame(renderLoop);
-      return;
     }
-
-    setStatus("顔を検出中");
-    setMessage("下のパネルからパーツごとの大きさ、距離、縦横、濃さを調整できます。");
-    setError("");
     animationFrameRef.current = requestAnimationFrame(renderLoop);
   }
 
@@ -426,38 +437,14 @@ export default function App() {
   }
 
   function randomizeActivePart(): void {
-    const random = mulberry32(Date.now() ^ Math.floor(Math.random() * 1000000));
-    const part = activePartDef;
-    setEffectState((current) =>
-      setPart(current, activePart, {
-        size: clamp(0.7 + random() * 0.9, 0.45, 1.8),
-        distance: part.supportsDistance ? random() * 0.32 - 0.16 : 0,
-        scaleX: clamp(0.7 + random() * 0.9, 0.45, 1.8),
-        scaleY: clamp(0.7 + random() * 0.9, 0.45, 1.8),
-        opacity: clamp(0.55 + random() * 0.75, 0.3, 1.45)
-      })
-    );
-    setDiagnosis(buildDiagnosis(45 + Math.round(random() * 35), `${part.label}だけテスト`));
+    setEffectState(current => randomizeParts(current, [activePart], randomStrength));
+    setDiagnosis(activePartDef.label + "をランダム（" + randomStrength + "）");
   }
-
   function randomizeFace(): void {
-    const random = mulberry32(Date.now() ^ Math.floor(Math.random() * 1000000));
-    let next = createDefaultState();
-
-    PART_DEFS.forEach((part) => {
-      next = setPart(next, part.id, {
-        size: clamp(0.7 + random() * 0.9, 0.45, 1.8),
-        distance: part.supportsDistance ? random() * 0.32 - 0.16 : 0,
-        scaleX: clamp(0.7 + random() * 0.9, 0.45, 1.8),
-        scaleY: clamp(0.7 + random() * 0.9, 0.45, 1.8),
-        opacity: clamp(0.55 + random() * 0.75, 0.3, 1.45)
-      });
-    });
-
-    const level = Math.round(35 + random() * 40);
-    setEffectState(next);
-    setDiagnosis(buildDiagnosis(level, "ランダム事故顔"));
+    setEffectState(current => randomizeParts(current, ACTIVE_PART_IDS, randomStrength));
+    setDiagnosis("全パーツをランダム（" + randomStrength + "）");
   }
+  useEffect(() => { saveLayout(layout); }, [layout]);
 
   function applyNamedPreset(name: keyof typeof PRESETS): void {
     setEffectState(applyPreset(name));
@@ -466,7 +453,7 @@ export default function App() {
 
   function runAccident(): void {
     const seed = Date.now() ^ ((accidentRate + 1) * 7919) ^ Math.floor(Math.random() * 1000000);
-    setLoadingOverlay(ANALYSIS_MESSAGES[seed % ANALYSIS_MESSAGES.length]);
+    setLoadingOverlay(ANALYSIS_MESSAGES[(seed >>> 0) % ANALYSIS_MESSAGES.length]);
 
     if (timeoutRef.current) {
       window.clearTimeout(timeoutRef.current);
@@ -497,221 +484,70 @@ export default function App() {
   }, []);
 
   return (
-    <main className="henface-app">
-      <section className="hero-card">
-        <p className="eyebrow">HENFACE MAKER</p>
-        <h1>変顔メーカー</h1>
-        <p className="updated-at">バージョン: {EFFECT_VERSION} / 更新日: {BUILD_UPDATED_AT}</p>
-        <p className="lead">
-          iPhone Safari を前提にした、顔パーツ変形アプリです。前面カメラで 1 人の顔を検出し、
-          眉、目、耳、頬、鼻、口、頭、顎をリアルタイムに拡大縮小、移動、縦横変形できます。
-        </p>
-
-        <div className="hero-actions">
-          <button className="primary-button" type="button" onClick={startCamera}>
-            カメラ起動
-          </button>
-          <button className="secondary-button" type="button" onClick={takeScreenshot}>
-            スクリーンショット
-          </button>
-          <p className={`status-pill status-pill--${status === "エラー" ? "error" : status === "待機中" ? "waiting" : "detecting"}`}>
-            {status}
-          </p>
-        </div>
-      </section>
-
-      <section className="viewer-card">
-        <div ref={frameRef} className="preview-frame">
-          <canvas ref={canvasRef} aria-label="変顔メーカーのプレビュー" />
-          <video ref={videoRef} playsInline muted />
-          {!cameraActive && <div className="placeholder">前面カメラで起動</div>}
-          {loadingOverlay ? <div className="loading-overlay">{loadingOverlay}</div> : null}
-        </div>
-
-        <div className="summary-bar">
-          <div>
-            <p className="summary-label">メッセージ</p>
-            <p className="summary-value">{message}</p>
+    <main className={"henface-app layout-" + layout}>
+      <header className="app-header">
+        <div><h1>変顔メーカー</h1><p className="app-subtitle">顔エフェクトカメラ</p></div>
+        <label className="layout-picker">レイアウト
+          <select aria-label="レイアウト" value={layout} onChange={event => setLayout(event.target.value as Layout)}>
+            <option value="standard">standard</option><option value="compact">compact</option><option value="edge-controls">edge-controls</option>
+          </select>
+        </label>
+      </header>
+      <div className="camera-toolbar">
+        <button className="primary-button" type="button" disabled={status === "起動中"} onClick={cameraActive ? () => { stopCamera(); setStatus("待機中"); setMessage("カメラを停止しました。"); } : startCamera}>
+          {status === "起動中" ? "起動中…" : cameraActive ? "カメラ停止" : "カメラ起動"}
+        </button>
+        <button className="secondary-button" type="button" disabled={!cameraActive} onClick={takeScreenshot}>写真を保存</button>
+        <span className="camera-status" role="status">{status}</span>
+      </div>
+      <div className="camera-workspace">
+        <section className="viewer-card" aria-label="カメラ映像">
+          <div ref={frameRef} className="preview-frame">
+            <canvas ref={canvasRef} aria-label="変顔メーカーのプレビュー" />
+            <video ref={videoRef} playsInline muted />
+            {!cameraActive && <div className="placeholder">カメラを起動して遊ぼう</div>}
+            {loadingOverlay && <div className="loading-overlay">{loadingOverlay}</div>}
           </div>
-          <div>
-            <p className="summary-label">診断</p>
-            <p className="summary-value">{diagnosis}</p>
+        </section>
+        <section className="controls-card" aria-label="顔パーツ調整">
+          <div className="tab-row" aria-label="パーツ選択">
+            {ACTIVE_PART_DEFS.map(part => <button key={part.id} type="button" aria-pressed={activePart === part.id}
+              className={"tab-button " + (activePart === part.id ? "is-active" : "")} onClick={() => setActivePart(part.id as FeatureType)}>{part.label}</button>)}
           </div>
-        </div>
-
-        {error ? <p className="error-box">{error}</p> : null}
-      </section>
-
-      <section className="controls-card">
-        <div className="tab-row">
-          {ACTIVE_PART_DEFS.map((part) => (
-            <button
-              key={part.id}
-              className={`tab-button ${activePart === part.id ? "is-active" : ""}`}
-              type="button"
-              onClick={() => setActivePart(part.id)}
-            >
-              {part.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="control-grid">
-          <label className="slider-row">
-            <span>大きくする / 小さくする</span>
-            <strong>{Math.round(effectState[activePart].size * 100)}%</strong>
-          </label>
-          <input
-            className="slider-input"
-            type="range"
-            min="40"
-            max="180"
-            step="5"
-            value={Math.round(effectState[activePart].size * 100)}
-            onChange={(event) => updatePart(activePart, { size: Number(event.target.value) / 100 })}
-          />
-
-          {activePartDef.supportsDistance ? (
-            <>
-              <label className="slider-row">
-                <span>離す / 近づける</span>
-                <strong>{Math.round(effectState[activePart].distance * 100)}%</strong>
-              </label>
-              <input
-                className="slider-input"
-                type="range"
-                min="-25"
-                max="25"
-                step="1"
-                value={Math.round(effectState[activePart].distance * 100)}
-                onChange={(event) => updatePart(activePart, { distance: Number(event.target.value) / 100 })}
-              />
-            </>
-          ) : (
-            <>
-              <label className="slider-row">
-                <span>縦に伸ばす / 縦に縮める</span>
-                <strong>{Math.round(effectState[activePart].scaleY * 100)}%</strong>
-              </label>
-              <input
-                className="slider-input"
-                type="range"
-                min="40"
-                max="180"
-                step="5"
-                value={Math.round(effectState[activePart].scaleY * 100)}
-                onChange={(event) => updatePart(activePart, { scaleY: Number(event.target.value) / 100 })}
-              />
-            </>
-          )}
-
-          <label className="slider-row">
-            <span>{activePartDef.supportsScaleXY ? "横に伸ばす / 横に縮める" : "濃くする / 薄くする"}</span>
-            <strong>
-              {Math.round(
-                (activePartDef.supportsScaleXY ? effectState[activePart].scaleX : effectState[activePart].opacity) * 100
-              )}
-              %
-            </strong>
-          </label>
-          <input
-            className="slider-input"
-            type="range"
-            min={activePartDef.supportsScaleXY ? "40" : "20"}
-            max={activePartDef.supportsScaleXY ? "180" : "150"}
-            step="5"
-            value={Math.round(
-              (activePartDef.supportsScaleXY ? effectState[activePart].scaleX : effectState[activePart].opacity) * 100
-            )}
-            onChange={(event) =>
-              updatePart(
-                activePart,
-                activePartDef.supportsScaleXY
-                  ? { scaleX: Number(event.target.value) / 100 }
-                  : { opacity: Number(event.target.value) / 100 }
-              )
-            }
-          />
-
-          {activePartDef.supportsScaleXY ? (
-            <>
-              <label className="slider-row">
-                <span>濃くする / 薄くする</span>
-                <strong>{Math.round(effectState[activePart].opacity * 100)}%</strong>
-              </label>
-              <input
-                className="slider-input"
-                type="range"
-                min="20"
-                max="150"
-                step="5"
-                value={Math.round(effectState[activePart].opacity * 100)}
-                onChange={(event) => updatePart(activePart, { opacity: Number(event.target.value) / 100 })}
-              />
-            </>
-          ) : null}
-        </div>
-
-        <div className="button-row">
-          <button className="minor-button" type="button" onClick={resetCurrentPart}>
-            このパーツをリセット
-          </button>
-          <button className="minor-button" type="button" onClick={resetAll}>
-            全部リセット
-          </button>
-          <button className="minor-button" type="button" onClick={randomizeActivePart}>
-            選択パーツをランダム
-          </button>
-        </div>
-
-        <div className="preset-row">
-          <button className="minor-button" type="button" onClick={() => applyNamedPreset("surprise")}>
-            びっくり顔
-          </button>
-          <button className="minor-button" type="button" onClick={() => applyNamedPreset("alien")}>
-            宇宙人顔
-          </button>
-          <button className="minor-button" type="button" onClick={() => applyNamedPreset("uncle")}>
-            おじさん顔
-          </button>
-        </div>
-
-        <div className="accident-box">
-          <div className="accident-head">
-            <h2>🎲 ランダム事故</h2>
-            <select
-              className="select-input"
-              value={accidentType}
-              onChange={(event) => setAccidentType(event.target.value as AccidentType)}
-            >
-              <option value="light">軽い事故</option>
-              <option value="major">大事故</option>
-              <option value="alien">宇宙人事故</option>
-              <option value="horror">ホラー事故</option>
-              <option value="gag">ギャグ事故</option>
-              <option value="handsome">イケメン事故</option>
+          <PartSliders config={effectState[activePart]} paired={activePartDef.supportsDistance} layout={layout}
+            update={patch => updatePart(activePart, patch)} />
+          <div className="main-actions">
+            <button className="minor-button" type="button" aria-label="このパーツをリセット" onClick={resetCurrentPart}><span>このパーツ</span>リセット</button>
+            <button className="minor-button" type="button" aria-label="全部リセット" onClick={resetAll}><span>全部</span>リセット</button>
+            <button className="secondary-button" type="button" aria-label="選択パーツをランダム" onClick={randomizeActivePart}><span>選択パーツ</span>ランダム</button>
+            <button className="primary-button" type="button" aria-label="全パーツをランダム" onClick={randomizeFace}><span>全パーツ</span>ランダム</button>
+          </div>
+          <label className="strength-picker">ランダム強度
+            <select aria-label="ランダム強度" value={randomStrength} onChange={event => setRandomStrength(event.target.value as RandomStrength)}>
+              <option value="weak">weak · 自然</option><option value="normal">normal · 変顔</option><option value="wild">wild · 大胆</option>
             </select>
-          </div>
-
-          <label className="slider-row">
-            <span>事故率</span>
-            <strong>{accidentRate}%</strong>
           </label>
-          <input
-            className="slider-input"
-            type="range"
-            min="0"
-            max="100"
-            step="1"
-            value={accidentRate}
-            onChange={(event) => setAccidentRate(Number(event.target.value))}
-          />
-
-          <button className="primary-button accident-button" type="button" onClick={runAccident}>
-            🎲 ランダム事故
-          </button>
+          <p className="diagnosis" aria-live="polite">{diagnosis}</p>
+        </section>
+      </div>
+      {error && <p className="error-box" role="alert">{error}</p>}
+      <details className="extra-tools"><summary>プリセット・その他</summary>
+        <p>{message}</p>
+        <div className="preset-row">
+          <button type="button" className="minor-button" onClick={() => applyNamedPreset("surprise")}>びっくり顔</button>
+          <button type="button" className="minor-button" onClick={() => applyNamedPreset("alien")}>宇宙人顔</button>
+          <button type="button" className="minor-button" onClick={() => applyNamedPreset("uncle")}>おじさん顔</button>
         </div>
-      </section>
+        <div className="accident-box">
+          <label>ランダム事故<select aria-label="ランダム事故の種類" value={accidentType} onChange={event => setAccidentType(event.target.value as AccidentType)}>
+            <option value="light">軽い事故</option><option value="major">大事故</option><option value="alien">宇宙人事故</option>
+            <option value="horror">ホラー事故</option><option value="gag">ギャグ事故</option><option value="handsome">イケメン事故</option>
+          </select></label>
+          <label className="slider-field"><span>事故率<output>{accidentRate}%</output></span><input aria-label="事故率" type="range" min="0" max="100" value={accidentRate} onChange={event => setAccidentRate(Number(event.target.value))} /></label>
+          <button className="secondary-button" type="button" onClick={runAccident}>ランダム事故を実行</button>
+        </div>
+        <small>バージョン {APP_VERSION}</small>
+      </details>
     </main>
   );
 }
