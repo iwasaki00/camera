@@ -19,7 +19,7 @@ export type TransformOptions = {
   opacity: number;
   skewY?: number;
 };
-export type FeatureRegion = { center: Point; width: number; height: number };
+export type FeatureRegion = { center: Point; width: number; height: number; angle: number };
 // Explicit overlap policy: details blend over larger features.
 export const FEATURE_ORDER: readonly FeatureType[] = ["nose", "mouth", "eyes", "brows"];
 export const RENDER_SETTINGS = { maxFrameDimension: 720, patchResolution: 1, patchGrid: 10 };
@@ -41,8 +41,14 @@ export function getFeatureRegion(landmarks: readonly Landmark[], featureType: Fe
   const mapped = points.map(p => mirror(p, options.width, options.height));
   const xs = mapped.map(p => p.x), ys = mapped.map(p => p.y);
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const meanX = xs.reduce((sum, value) => sum + value, 0) / xs.length;
+  const meanY = ys.reduce((sum, value) => sum + value, 0) / ys.length;
+  const covariance = mapped.reduce((sum, point) => sum + (point.x - meanX) * (point.y - meanY), 0);
+  const varianceX = mapped.reduce((sum, point) => sum + (point.x - meanX) ** 2, 0);
+  const varianceY = mapped.reduce((sum, point) => sum + (point.y - meanY) ** 2, 0);
+  const angle = featureType === "brows" ? 0.5 * Math.atan2(2 * covariance, varianceX - varianceY) : 0;
   return { center: { x: (minX + maxX) / 2, y: (minY + maxY) / 2 },
-    width: Math.max(4, maxX - minX), height: Math.max(4, maxY - minY) };
+    width: Math.max(4, maxX - minX), height: Math.max(4, maxY - minY), angle };
 }
 export function sliderToTransformOptions(config: PartConfig, region: FeatureRegion,
   faceCenter: Point, feature: FeatureType, frameWidth: number): TransformOptions {
@@ -100,13 +106,14 @@ function surface(): Surface {
 }
 export function createFeatureRenderer() {
   const patches = new Map<string, Surface>();
+  const browPatches = new Map<string, Surface>();
   let activeQuality: Pick<RenderQuality, "patchResolution" | "patchGrid"> = RENDER_SETTINGS;
   const metrics = { warpMs: 0, compositeMs: 0, transformedParts: 0 };
   let geometryKey = "";
   let cachedRegions: Partial<Record<FeatureType, FeatureRegion[]>> = {};
   const defaultEffects = emptyFaceEffects();
   const masks = new Map<string, HTMLCanvasElement>();
-  function mask(width: number, height: number, options: TransformOptions) {
+  function mask(width: number, height: number, options: Pick<TransformOptions, "featherRadius" | "centerWeight">) {
     const key = [width, height, options.featherRadius, options.centerWeight].join(":");
     const existing = masks.get(key);
     if (existing) return existing;
@@ -114,6 +121,45 @@ export function createFeatureRenderer() {
     buildFeatherMask(next.ctx, width, height, options);
     if (masks.size >= 24) masks.delete(masks.keys().next().value!);
     masks.set(key, next.canvas); return next.canvas;
+  }
+  function renderBrowTexture(sourceCtx: CanvasRenderingContext2D, destCtx: CanvasRenderingContext2D,
+    sourceRegion: FeatureRegion, target: { center: Point; width: number; height: number; angle: number }, alpha: number): void {
+    const sourceWidth = sourceRegion.width * 1.28;
+    const sourceHeight = sourceRegion.height * 1.65;
+    const resolution = clamp(activeQuality.patchResolution, 0.5, 1);
+    const width = Math.max(32, Math.ceil(sourceWidth * resolution / 16) * 16);
+    const height = Math.max(24, Math.ceil(sourceHeight * resolution / 8) * 8);
+    const key = width + ":" + height;
+    let patch = browPatches.get(key);
+    if (!patch) {
+      patch = surface(); patch.canvas.width = width; patch.canvas.height = height;
+      if (browPatches.size >= 8) browPatches.delete(browPatches.keys().next().value!);
+      browPatches.set(key, patch);
+    }
+    const patchCtx = patch.ctx;
+    patchCtx.setTransform(1, 0, 0, 1, 0, 0);
+    patchCtx.globalCompositeOperation = "source-over";
+    patchCtx.globalAlpha = 1;
+    patchCtx.clearRect(0, 0, width, height);
+    patchCtx.save();
+    patchCtx.translate(width / 2, height / 2);
+    patchCtx.scale(width / sourceWidth, height / sourceHeight);
+    patchCtx.rotate(-sourceRegion.angle);
+    patchCtx.translate(-sourceRegion.center.x, -sourceRegion.center.y);
+    patchCtx.drawImage(sourceCtx.canvas, 0, 0);
+    patchCtx.restore();
+    patchCtx.globalCompositeOperation = "destination-in";
+    patchCtx.drawImage(mask(width, height, { featherRadius: 0.42, centerWeight: 1 }), 0, 0);
+    patchCtx.globalCompositeOperation = "source-over";
+
+    destCtx.save();
+    destCtx.translate(target.center.x, target.center.y);
+    destCtx.rotate(target.angle);
+    destCtx.globalCompositeOperation = "multiply";
+    destCtx.globalAlpha = clamp(alpha, 0, 0.72);
+    destCtx.imageSmoothingEnabled = true;
+    destCtx.drawImage(patch.canvas, -target.width / 2, -target.height / 2, target.width, target.height);
+    destCtx.restore();
   }
   function transformFeatureRegion(sourceCtx: CanvasRenderingContext2D, destCtx: CanvasRenderingContext2D,
     _region: FeatureRegion, options: TransformOptions): void {
@@ -258,13 +304,13 @@ export function createFeatureRenderer() {
         const jawPoints = [148, 176, 149, 150, 377, 400, 378].filter(i => landmarks[i]).map(i => mirror(landmarks[i], baseFrame.width, baseFrame.height));
         const width = Math.max(mouth.width * 1.5, ...jawPoints.map(p => Math.abs(p.x - arrangementCenter.x) * 2));
         const center = { x: arrangementCenter.x, y: mouth.center.y + (chin.y - mouth.center.y) * 0.55 };
-        const region = { center, width, height: Math.max(12, chin.y - mouth.center.y) };
+        const region = { center, width, height: Math.max(12, chin.y - mouth.center.y), angle: 0 };
         const options: TransformOptions = { center, scaleX: clamp(1 + lower * 0.23, 0.78, 1.3), scaleY: clamp(1 + lower * 0.18, 0.8, 1.24), uniformScale: 1,
           influenceRadius: { x: width * 0.55, y: region.height * 0.85 }, featherRadius: 0.4, centerWeight: 1,
           translation: { x: 0, y: region.height * 0.05 * lower }, opacity: 1 };
         transformFeatureRegion(sourceCtx, destCtx, region, options);
       }
-      const browTargets: { center: Point; width: number; height: number }[] = [];
+      const browTargets: { center: Point; width: number; height: number; angle: number; source: FeatureRegion }[] = [];
       for (const feature of FEATURE_ORDER) {
         const config = specialConfig(effectState, feature, effects);
         for (const region of regions[feature] ?? []) {
@@ -273,25 +319,37 @@ export function createFeatureRenderer() {
           applyFaceOffsets(feature, region, arrangementCenter, options, effects);
           transformFeatureRegion(sourceCtx, destCtx, region, options);
           if (feature === "brows") browTargets.push({ center: { x: region.center.x + options.translation.x, y: region.center.y + options.translation.y },
-            width: region.width * options.uniformScale * options.scaleX, height: region.height * options.uniformScale * options.scaleY });
+            width: region.width * options.uniformScale * options.scaleX, height: region.height * options.uniformScale * options.scaleY,
+            angle: region.angle, source: region });
         }
       }
       const overlayStart = performance.now();
+      const thick = effects.special.thickBrows;
+      if (thick > 0) {
+        for (const brow of browTargets) renderBrowTexture(sourceCtx, destCtx, brow.source, {
+          center: brow.center,
+          width: brow.width * (1 + thick * 0.08),
+          height: brow.height * (1.15 + thick * 1.55),
+          angle: brow.angle
+        }, 0.2 + thick * 0.46);
+      }
       const connected = effects.special.connectedBrows;
       if (connected > 0 && browTargets.length === 2) {
         const [left, right] = browTargets.sort((a, b) => a.center.x - b.center.x);
-        destCtx.save(); destCtx.strokeStyle = "#2a201c"; destCtx.lineCap = "round";
-        destCtx.globalAlpha = connected * 0.9;
-        destCtx.lineWidth = Math.max(2, Math.min(left.height, right.height) * (0.45 + connected * 0.5));
-        destCtx.shadowColor = "#2a201c"; destCtx.shadowBlur = baseFrame.width * 0.002;
-        destCtx.beginPath(); destCtx.moveTo(left.center.x + left.width * 0.28, left.center.y);
-        destCtx.quadraticCurveTo((left.center.x + right.center.x) / 2, (left.center.y + right.center.y) / 2 - left.height * 0.1,
-          right.center.x - right.width * 0.28, right.center.y); destCtx.stroke(); destCtx.restore();
+        const startX = left.center.x + left.width * 0.42;
+        const endX = right.center.x - right.width * 0.42;
+        const center = { x: (startX + endX) / 2, y: (left.center.y + right.center.y) / 2 };
+        renderBrowTexture(sourceCtx, destCtx, left.source, {
+          center,
+          width: Math.max(4, endX - startX + Math.min(left.height, right.height)),
+          height: Math.min(left.height, right.height) * (0.72 + connected * 0.48),
+          angle: Math.atan2(right.center.y - left.center.y, right.center.x - left.center.x)
+        }, 0.16 + connected * 0.44);
       }
       drawOverlays?.(destCtx, landmarks);
       metrics.compositeMs += performance.now() - overlayStart;
     }
     destCtx.restore();
   }
-  return { renderFeatureEffects, transformFeatureRegion, metrics, clearCache: () => { masks.clear(); patches.clear(); geometryKey = ""; cachedRegions = {}; } };
+  return { renderFeatureEffects, transformFeatureRegion, metrics, clearCache: () => { masks.clear(); patches.clear(); browPatches.clear(); geometryKey = ""; cachedRegions = {}; } };
 }

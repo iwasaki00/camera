@@ -126,6 +126,22 @@ option {
   flex-direction: column;
   gap: 8px
 }
+.settings-toggle {
+  width: 100%;
+  min-height: 44px;
+  padding: 7px 12px;
+  border-color: #99e2fa45;
+  background: #131b29e8;
+  color: var(--blue)
+}
+.settings-toggle span {
+  display: inline-block;
+  margin-right: 7px;
+  font-size: 16px
+}
+.controls-card[hidden] {
+  display: none
+}
 .viewer-card {
   overflow: hidden;
   border: 1px solid var(--line);
@@ -320,6 +336,20 @@ option {
   height: clamp(140px,calc(100svh - 600px),440px);
   height: clamp(140px,calc(100dvh - 600px),440px)
 }
+.layout-compact .preview-frame {
+  height: clamp(250px,calc(100svh - 430px),560px);
+  height: clamp(250px,calc(100dvh - 430px),560px)
+}
+.henface-app[data-settings="closed"] .camera-workspace {
+  gap: 6px
+}
+.henface-app[data-settings="closed"] .preview-frame {
+  height: min(calc(100svh - 170px),calc((100vw - 20px) * 1.3333),720px);
+  height: min(calc(100dvh - 170px),calc((100vw - 20px) * 1.3333),720px)
+}
+.layout-compact[data-settings="closed"] {
+  padding-bottom: max(4px,env(safe-area-inset-bottom))
+}
 .layout-edge-controls .preview-frame {
   height: clamp(200px,calc(100svh - 430px),620px);
   height: clamp(200px,calc(100dvh - 430px),620px)
@@ -429,3 +459,7 @@ option {
 .layout-standard:not([data-category="parts"]) .preview-frame { height: clamp(140px, calc(100svh - 490px), 440px); height: clamp(140px, calc(100dvh - 490px), 440px); }
 .layout-edge-controls[data-category="placement"] .preview-frame { height: clamp(180px, calc(100svh - 470px), 620px); height: clamp(180px, calc(100dvh - 470px), 620px); }
 .layout-edge-controls[data-category="special"] .preview-frame { height: clamp(180px, calc(100svh - 445px), 620px); height: clamp(180px, calc(100dvh - 445px), 620px); }
+.henface-app[data-settings="closed"][data-category] .preview-frame {
+  height: min(calc(100svh - 170px),calc((100vw - 20px) * 1.3333),720px);
+  height: min(calc(100dvh - 170px),calc((100vw - 20px) * 1.3333),720px)
+}

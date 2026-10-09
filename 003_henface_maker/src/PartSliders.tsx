@@ -5,7 +5,7 @@ function Slider({ name, field, config, update }: { name: string; field: keyof Pa
   const distance = field === "distance";
   return <label className="slider-field"><span>{name}<output>{Math.round(config[field] * 100)}%</output></span>
     <input type="range" aria-label={name} min={distance ? -25 : field === "opacity" ? 20 : 40}
-      max={distance ? 25 : field === "opacity" ? 150 : 180} step={distance ? 1 : 5}
+      max={distance ? 25 : field === "opacity" ? 150 : 200} step={distance ? 1 : 5}
       value={Math.round(config[field] * 100)} onChange={event => update({ [field]: Number(event.target.value) / 100 })} />
   </label>;
 }

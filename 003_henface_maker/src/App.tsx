@@ -10,7 +10,7 @@ import { createFeatureRenderer } from "./featureRenderer";
 import type { EffectState, Landmark, PartConfig, PartId } from "./featureRenderer";
 
 import PartSliders from "./PartSliders";
-import { APP_VERSION, readLayout, saveLayout, randomizeParts } from "./uiSettings";
+import { APP_VERSION, readLayout, readSettingsOpen, saveLayout, saveSettingsOpen, randomizeParts } from "./uiSettings";
 import type { Layout, RandomStrength } from "./uiSettings";
 import type { FeatureType } from "./featureRenderer";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
@@ -253,6 +253,7 @@ export default function App() {
   const debugRef = useRef(debug);
   const debugPanelRef = useRef<HTMLPreElement | null>(null);
   const [layout, setLayout] = useState<Layout>(readLayout);
+  const [settingsOpen, setSettingsOpen] = useState(readSettingsOpen);
   const [randomStrength, setRandomStrength] = useState<RandomStrength>("normal");
   const trackingRef = useRef<boolean | null>(null);
   const lastDrawAtRef = useRef(0);
@@ -486,6 +487,7 @@ export default function App() {
     setDiagnosis((includeExtras ? "パーツ＋配置＋特殊" : "全パーツ") + "をランダム（" + randomStrength + "）");
   }
   useEffect(() => { saveLayout(layout); }, [layout]);
+  useEffect(() => { saveSettingsOpen(settingsOpen); }, [settingsOpen]);
 
   function applyNewPreset(name: FacePreset): void {
     const result = applyFacePreset(effectState, name);
@@ -535,7 +537,7 @@ export default function App() {
   }, []);
 
   return (
-    <main className={"henface-app layout-" + layout} data-category={category}>
+    <main className={"henface-app layout-" + layout} data-category={category} data-settings={settingsOpen ? "open" : "closed"}>
       <header className="app-header">
         <div><h1>変顔メーカー</h1><p className="app-subtitle">顔エフェクトカメラ</p></div>
         <label className="layout-picker">レイアウト
@@ -560,7 +562,11 @@ export default function App() {
             {loadingOverlay && <div className="loading-overlay">{loadingOverlay}</div>}
           </div>
         </section>
-        <section className="controls-card" aria-label="顔パーツ調整">
+        <button className="settings-toggle" type="button" aria-expanded={settingsOpen} aria-controls="effect-settings"
+          onClick={() => setSettingsOpen(open => !open)}>
+          <span aria-hidden="true">{settingsOpen ? "⌄" : "⌃"}</span>{settingsOpen ? "設定を閉じる" : "編集設定を開く"}
+        </button>
+        <section id="effect-settings" className="controls-card" aria-label="顔パーツ調整" hidden={!settingsOpen}>
           <CategoryTabs value={category} change={setCategory} />
           <div className="category-content">
           {category === "parts" ? <>
@@ -580,7 +586,8 @@ export default function App() {
           </div>
           <label className="strength-picker">ランダム強度
             <select aria-label="ランダム強度" value={randomStrength} onChange={event => setRandomStrength(event.target.value as RandomStrength)}>
-              <option value="weak">weak · 自然</option><option value="normal">normal · 変顔</option><option value="wild">wild · 大胆</option>
+              <option value="weak">weak · 少し</option><option value="normal">normal · 変顔</option><option value="wild">wild · 大胆</option>
+              <option value="chaos">chaos · 強い誇張</option><option value="monster">monster · 最大級</option>
             </select>
           </label>
           <p className="diagnosis" aria-live="polite">{diagnosis}</p>

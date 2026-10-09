@@ -16,7 +16,8 @@ export const emptyFaceEffects = (): FaceEffects => ({ placement: { mode: "none",
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 export function specialConfig(state: EffectState, feature: FeatureType, effects: FaceEffects) {
   const s = effects.special, c = { ...state[feature] };
-  if (feature === "brows") { c.scaleY *= 1 + s.thickBrows * 1.2; c.opacity = Math.min(1.5, c.opacity + s.thickBrows * 0.3); }
+  // Thick brows are rendered later from the original brow texture. Stretching this
+  // region would also stretch forehead skin and creates the pasted-on look.
   if (feature === "nose") { c.scaleX *= 1 + s.flatNose * 0.35; c.scaleY *= 1 - s.flatNose * 0.4; }
   if (feature === "eyes" || feature === "brows") c.size *= 1 - s.imbalance * 0.12;
   if (feature === "mouth") { c.scaleX *= 1 + s.lowerFace * 0.15 + s.imbalance * 0.12; c.scaleY *= 1 + s.imbalance * 0.12; }
@@ -55,12 +56,14 @@ export function applyFacePreset(state: EffectState, name: FacePreset): { parts: 
   return { parts, effects };
 }
 export function randomFaceEffects(strength: RandomStrength, random: () => number = Math.random): FaceEffects {
-  const effects = emptyFaceEffects(), limit = strength === "weak" ? 0.2 : strength === "normal" ? 0.45 : 0.75;
+  const limitByStrength: Record<RandomStrength, number> = { weak: 0.2, normal: 0.45, wild: 0.75, chaos: 0.92, monster: 1 };
+  const chanceByStrength: Record<RandomStrength, number> = { weak: 0.3, normal: 0.4, wild: 0.48, chaos: 0.58, monster: 0.68 };
+  const effects = emptyFaceEffects(), limit = limitByStrength[strength], chance = chanceByStrength[strength];
   const modes = Object.keys(PLACEMENTS) as PlacementMode[];
   effects.placement.mode = modes[Math.min(modes.length - 1, Math.floor(random() * modes.length))];
   effects.placement.strength = random() * limit;
   // Sparse special combinations keep strong random faces coherent and inexpensive.
-  for (const key of Object.keys(SPECIALS) as SpecialKey[]) effects.special[key] = random() < 0.4 ? random() * limit : 0;
+  for (const key of Object.keys(SPECIALS) as SpecialKey[]) effects.special[key] = random() < chance ? random() * limit : 0;
   if (effects.placement.mode === "close" || effects.placement.mode === "gather") effects.special.crossedEyes *= 0.4;
   if (effects.special.lowerFace > 0.3) effects.special.imbalance *= 0.4;
   return effects;

@@ -48,7 +48,7 @@ try {
  renderer.renderFeatureEffects(base,ctx,undefined,state);assert('顔未検出時は元フレーム',equal(original,pixels(out)));
  let rejected=false;try{renderer.renderFeatureEffects(base,b,landmarks,state);}catch{rejected=true;}assert('出力のソース再利用を拒否',rejected);
  // Frame-edge clipping and strongest combined scales must be safe.
- const edge={center:{x:5,y:5},width:40,height:30};const extreme=sliderToTransformOptions({size:1.8,scaleX:1.8,scaleY:1.8,distance:0,opacity:1},edge,{x:240,y:300},'nose',480);
+ const edge={center:{x:5,y:5},width:40,height:30,angle:0};const extreme=sliderToTransformOptions({size:1.8,scaleX:1.8,scaleY:1.8,distance:0,opacity:1},edge,{x:240,y:300},'nose',480);
  renderer.transformFeatureRegion(b,ctx,edge,extreme);assert('画面端・極端倍率でも描画完了',equal(original,pixels(base)));
  renderer.renderFeatureEffects(base,ctx,landmarks,state);
  show(base,'元画像（合成テスト用）');show(out,'複数パーツ・眼鏡・強い変形');
