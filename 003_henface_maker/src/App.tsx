@@ -542,7 +542,7 @@ export default function App() {
         <div><h1>変顔メーカー</h1><p className="app-subtitle">顔エフェクトカメラ</p></div>
         <label className="layout-picker">レイアウト
           <select aria-label="レイアウト" value={layout} onChange={event => setLayout(event.target.value as Layout)}>
-            <option value="standard">standard</option><option value="compact">compact</option><option value="edge-controls">edge-controls</option>
+            <option value="standard">standard</option><option value="compact">compact</option><option value="edge-controls">edge-controls</option><option value="simple">simple</option>
           </select>
         </label>
       </header>
@@ -560,13 +560,16 @@ export default function App() {
             <video ref={videoRef} playsInline muted />
             {!cameraActive && <div className="placeholder">カメラを起動して遊ぼう</div>}
             {loadingOverlay && <div className="loading-overlay">{loadingOverlay}</div>}
+            {layout === "simple" && <button className="simple-random-button" type="button" aria-label="全パーツをランダム" onClick={randomizeFace}>
+              <span aria-hidden="true">🎲</span> ランダム
+            </button>}
           </div>
         </section>
-        <button className="settings-toggle" type="button" aria-expanded={settingsOpen} aria-controls="effect-settings"
+        <button className="settings-toggle" type="button" hidden={layout === "simple"} aria-expanded={settingsOpen} aria-controls="effect-settings"
           onClick={() => setSettingsOpen(open => !open)}>
           <span aria-hidden="true">{settingsOpen ? "⌄" : "⌃"}</span>{settingsOpen ? "設定を閉じる" : "編集設定を開く"}
         </button>
-        <section id="effect-settings" className="controls-card" aria-label="顔パーツ調整" hidden={!settingsOpen}>
+        <section id="effect-settings" className="controls-card" aria-label="顔パーツ調整" hidden={layout === "simple" || !settingsOpen}>
           <CategoryTabs value={category} change={setCategory} />
           <div className="category-content">
           {category === "parts" ? <>
@@ -593,9 +596,9 @@ export default function App() {
           <p className="diagnosis" aria-live="polite">{diagnosis}</p>
         </section>
       </div>
-      {debug && <pre ref={debugPanelRef} className="debug-panel" aria-label="処理時間計測">カメラ起動後に1秒間隔で計測します。</pre>}
+      {debug && layout !== "simple" && <pre ref={debugPanelRef} className="debug-panel" aria-label="処理時間計測">カメラ起動後に1秒間隔で計測します。</pre>}
       {error && <p className="error-box" role="alert">{error}</p>}
-      <details className="extra-tools"><summary>品質・ランダム設定・その他</summary>
+      <details className="extra-tools" hidden={layout === "simple"}><summary>品質・ランダム設定・その他</summary>
         <p>{message}</p>
         <label className="strength-picker">品質<select aria-label="品質" value={quality} onChange={e => setQuality(e.target.value as Quality)}>
           <option value="auto">auto · 自動</option><option value="speed">speed · 速度</option><option value="balanced">balanced · 標準</option><option value="quality">quality · 高画質</option>

@@ -34,7 +34,7 @@ for(const strength of ['weak','normal','wild','chaos','monster']){
 assert.equal(readLayout(),'compact','ストレージが使えなくても起動');
 saveLayout('standard');
 const values=new Map();globalThis.localStorage={getItem:k=>values.get(k)??null,setItem:(k,v)=>values.set(k,v)};
-for(const layout of ['standard','compact','edge-controls']){saveLayout(layout);assert.equal(readLayout(),layout);}
+for(const layout of ['standard','compact','edge-controls','simple']){saveLayout(layout);assert.equal(readLayout(),layout);}
 values.set('henface.layout','invalid');assert.equal(readLayout(),'compact');
 assert.equal(readSettingsOpen(),false);saveSettingsOpen(true);assert.equal(readSettingsOpen(),true);saveSettingsOpen(false);assert.equal(readSettingsOpen(),false);
 globalThis.localStorage={getItem(){throw Error('denied');},setItem(){throw Error('denied');}};
