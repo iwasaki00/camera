@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PRESENCE Audio smoke test</title>
+<style>
+  body { background: #07100e; color: #bde9dc; margin: 20px; font: 14px/1.6 monospace; }
+  button { min-height: 44px; padding: 8px 12px; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+<h1>Audio smoke test</h1>
+<p>カメラ・マイク不要の開発用テストです。端末音量を低めにしてください。4つの短い音を順に再生し、実際のWeb Audio出力と自然終了を確認します。</p>
+<button id="run" type="button">RUN AUDIO TEST</button>
+<pre id="result" role="status">Not initialized — no autoplay</pre>
+<script type="module">
+  import { PresenceAudio } from "../audio.js";
+  const audio = new PresenceAudio(window.AudioContext || window.webkitAudioContext);
+  const result = document.querySelector("#result");
+  const button = document.querySelector("#run");
+  let generation = 0;
+  let frame = 0;
+  let analyser;
+  let finishSampling;
+  const stop = () => {
+    generation++;
+    cancelAnimationFrame(frame);
+    finishSampling?.();
+    finishSampling = null;
+    audio.stop();
+    analyser?.disconnect();
+    if (analyser) audio.master.disconnect(analyser);
+    analyser = null;
+    button.disabled = false;
+  };
+  button.addEventListener("click", async () => {
+    if (document.hidden) { result.textContent = "Open this tab in the foreground to test audio"; return; }
+    stop();
+    const run = generation;
+    button.disabled = true;
+    const unlocked = await audio.unlock();
+    if (run !== generation) return;
+    if (!unlocked) { result.textContent = "FAIL: " + audio.state; button.disabled = false; return; }
+    analyser = audio.context.createAnalyser();
+    analyser.fftSize = 32768; // 短いTAPを、遅い描画フレームでも取りこぼしにくくする。
+    audio.master.connect(analyser);
+    const samples = new Float32Array(analyser.fftSize);
+    const lines = [];
+    for (const type of ["RUSTLE", "FOOTSTEP", "TAP", "BREATH"]) {
+      if (run !== generation) return;
+      if (!audio.play({type, yaw:90}, 0, 10)) { lines.push(type + " FAIL: play"); break; }
+      let peak = 0;
+      const started = performance.now();
+      await new Promise(resolve => {
+        finishSampling = resolve;
+        const sample = () => {
+          if (run !== generation) { resolve(); return; }
+          analyser.getFloatTimeDomainData(samples);
+          for (const value of samples) peak = Math.max(peak, Math.abs(value));
+          if (!audio.voice || performance.now() - started > 2000) { resolve(); return; }
+          frame = requestAnimationFrame(sample);
+        };
+        sample();
+      });
+      finishSampling = null;
+      if (run !== generation) return;
+      const status = audio.voice || peak >= 0.12 ? "FAIL" : peak > 0 ? "PASS" : "INCONCLUSIVE (output sampling missed)";
+      lines.push(`${type}: ${status} peak=${peak.toFixed(5)} nodes cleaned=${!audio.voice}`);
+      result.textContent = lines.join("\n");
+    }
+    stop();
+    result.textContent = lines.join("\n") + "\nContext reused; no active voice";
+  });
+  document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
+  window.addEventListener("pagehide", stop);
+</script>
+</html>

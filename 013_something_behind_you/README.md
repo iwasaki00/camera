@@ -1,6 +1,6 @@
 # 振り返ればヤツガイル
 
-**Version 0.3.0 — STALKER**
+**Version 0.4.0 — PRESENCE**
 
 iPhoneの背面カメラと方向センサーによる疑似ARホラーです。相対Yawと仮想方位を使い、現実空間の認識は行いません。映像の保存・送信はありません。
 
@@ -9,6 +9,42 @@ iPhoneの背面カメラと方向センサーによる疑似ARホラーです。
 GitHub PagesなどのHTTPS環境で `013_something_behind_you/` をiPhone Safariから開き、縦持ちでSTARTをタップします。カメラとモーション・方向へのアクセスを許可し、測定後にゆっくり左右を見回してください。背面カメラを優先します。権限要求はSTART操作内で開始します。
 
 実機にはHTTPSが必要です。権限拒否・非対応・HTTPS問題・センサー未取得は画面に案内します。方向データが途絶えると遭遇を停止します。タブを隠すと演出を片付け、復帰後に再び待機します。
+
+## PRESENCE AUDIO
+
+外部音源・API・マイクは使わず、Web Audioによる4種類の短い検証用合成音を使用します。正式素材へ差し替える場合は `audio.js` の合成処理だけを変更でき、方向・距離・抽選ロジックは `presence.js` に独立しています。
+
+| 音 | 長さ | 音色・用途 |
+|---|---|---|
+| RUSTLE | 220ms | フィルター付きノイズ。短い衣擦れ・気配。 |
+| FOOTSTEP | 180ms | 90→45Hzの低い三角波。一歩だけの軋み。 |
+| TAP | 120ms | 340→170Hzの短い正弦波。小さな接触音。 |
+| BREATH | 700ms | 650Hz中心のノイズ。言葉を含まない空気音。 |
+
+Presence Directorは `IDLE → WAITING → PLAYING → COOLDOWN → WAITING`（停止時はIDLE）の独立した責務です。待機の25%で7秒の静寂を追加し、再生後は1.8〜3.5秒のクールダウンを入れます。同じ音は最大2回、BREATHは連続不可かつ最低12秒空けます。連続抑制後は残った重みで再抽選するため、実出現比率は下表と異なります。
+
+| 距離 | RUSTLE | FOOTSTEP | TAP | BREATH | 基本待機 |
+|---|---:|---:|---:|---:|---|
+| FAR | 70 | 20 | 10 | 0 | 8〜18秒 |
+| MID | 50 | 30 | 18 | 2 | 6〜14秒 |
+| NEAR | 35 | 35 | 20 | 10 | 4〜10秒 |
+| DANGER | 25 | 30 | 20 | 25 | 3〜8秒 |
+
+音方位はentityYaw±15°。相対Yawとの差が35°以内ならFRONT、125°以上ならBEHIND、それ以外は符号でLEFT／RIGHTです。パンは `sin(angleDiff) × 0.7`（最大±0.7）。再生中に振り向くとパンを更新します。StereoPanner非対応ではモノラルへフォールバックします。本体スピーカーやモノラル出力では左右差が弱くなることがあります。
+
+距離が近いほど連続的に音量を上げ、背後は音量を0.75倍・ローパスを1200Hzにします。前方等は距離に応じ2600〜4800Hz。音源ごとのフィルター・短いアタック／減衰エンベロープを通し、同時に1音だけ再生します。マスター初期55%、最大ゲイン設定0.12（初期マスターGainは0.066）。これらは `PRESENCE_CONFIG` に集約しています。実際の音圧は端末・イヤホン・OS音量によるため、安全な音圧を保証する値ではありません。必ず低い端末音量から確認してください。
+
+LOOKING中は待機完了時の35%だけ発音候補にし、残りは新しい待機へ送ります。PASS／FLY_BY／CLOSE_CALLの実行中は新しいPresenceを開始せず、音を溜めません。PEEKとの重複は許可します。方向センサー・カメラ・モーションが利用できない場合は通常Presenceも停止します。
+
+### 音 → PEEKの誘導
+
+entityが46°より外側にいる状態で発音に成功した場合、30%をBAITにします。有効時間3.2秒、最初の250msはPEEKを出しません。有効時間内に音方位とentity方位の両方から46°以内へ振り向き、映像DirectorがIDLEまたは未選択のARMINGならPEEKを準備します。entityYaw自体は変更しません。映像実行中・クールダウンは割り込まず、PEEKの3連続も禁止し、消費は1回だけです。再配置・SOUND OFF・停止・非表示でBAITを破棄します。音を無視しても追加ペナルティはありません。非BAIT音はPEEKを強制せず、通常Encounter抽選とは独立です。
+
+### SOUNDと復帰
+
+通常画面のSOUNDでON/OFFします。初期設定ONですが、ロード時はAudioContextを作りません。STARTタップの同期処理で初期化／resumeを開始します。START前にOFFへ切り替えると無音で開始できます。suspended／interrupted等の場合はSOUND RETRYをタップして復帰します。非対応ブラウザはNO AUDIOを表示し、映像ゲームを維持します。
+
+SOUND OFF・非表示・カメラ停止・再START・pagehideで音源をstopして全音声ノードを切断します。Contextは再利用し、Presence用タイマー／intervalは追加していません。復帰時は新しい方向データを待ち、新規WAITINGから再開します。溜まった音をまとめて鳴らしません。
 
 ## Encounter Director
 
@@ -80,7 +116,11 @@ PEEK中、角度差15°以内・回転速度46°/s以上・接近速度14°/s以
 
 通常URL `013_something_behind_you/` を開き、画面右上の **DEBUG** ボタンをタップしてON/OFFします。初期状態はOFFで、再読み込み後もOFFに戻ります。URLパラメータは不要で、旧 `?debug=1` を付けても初期状態はOFFです。
 
-ON時はボタンが「DEBUG ON」となり、情報・ガイド・Encounter Test／Distance Testを表示します。OFFにすると即座に隠れます。START前・ゲーム中・遭遇演出中でも切替可能で、カメラ・センサー・距離・遭遇状態・実行中アニメーションはリセットしません。START前のEncounter Testは無効です。
+ON時はボタンが「DEBUG ON」となり、STATUS、Encounter Test／Distance Test／Audio Test／Direction Testを表示します。OFFにすると即座に隠れます。START前・ゲーム中・遭遇演出中でも切替可能で、カメラ・センサー・距離・遭遇状態・実行中アニメーション・音はリセットしません。START前のEncounter／Audio Testは無効です。
+
+Audio TestはTEST RUSTLE／FOOTSTEP／TAP／BREATHを現在のentity方位・距離で鳴らします。検証用なのでTEST BREATHはFARでも可能です（通常抽選はFARで0）。Direction TestはRUSTLEをLEFT -90°／RIGHT +90°／BEHIND 180°／FRONT 0°で鳴らし、entityYawやBAITを変更しません。音再生中や強い映像実行中は音テストを無効にします。操作欄は縦スクロールで下のグループへ移動できます。
+
+Presence STATUSにはenabled、AudioContext状態、現在／前回の音、Director状態、方向、pan、推定出力Gain、次回待機、BAITと残り時間を表示します。推定出力Gainは音圧や実際の波形ピークの測定値ではありません。
 
 Distance TestのSET FAR 85／SET MID 60／SET NEAR 35／SET DANGER 10はDEBUG ON時だけ操作できます。距離・段階・重み・次回待機範囲を即時更新します。待機中なら次回時刻を新しい範囲で再設定し、実行中・クールダウン中の演出や時刻は保持します。START前にも距離設定を確認できますが、STARTでは85へリセットします。
 
@@ -100,16 +140,24 @@ reduced-motionでは装飾アニメーションと短時間演出のblurを削�
 - `app.js`: カメラ・権限・方向センサー・旧状態遷移・描画
 - `encounters.js`: 抽選・待機・重複防止・遭遇設定
 - `stalker.js`: 単一距離・接近・猶予・段階別プロファイル
+- `presence.js`: 音の段階別設定・抽選・方向・短命BAIT
+- `audio.js`: ユーザー操作起点のContext・合成音・パン／フィルター・音声cleanup
 - `logic.js`: 角度・左右・再配置計算（変更なし）
 - `style.css`: iPhone UI・クリップ・reduced-motion
 - `assets/entity-silhouette.svg`: 差し替え可能な素材
 - `tests/logic.test.mjs`: 角度境界・速度・左右・再配置
 - `tests/encounters.test.mjs`: Director遷移・重複抑制・2万回抽選
 - `tests/stalker.test.mjs`: 境界・35°判定・猶予・速度・フレームレート非依存・上下限・停止・回復
+- `tests/presence.test.mjs`: 4万回抽選・段階別設定・静寂・方向・パン・BAIT期限・停止
+- `tests/audio.test.mjs`: AudioContext初期化・4音・有限終了・ゲイン・パン・停止・復帰・フォールバック
+- `tests/fake-audio.mjs`: 自動テスト用Web Audioスタブ
+- `tests/audio-browser.html`: カメラ不要の実ブラウザ音声スモークテスト（4音の出力と自然終了）
 - `tests/app.test.mjs`: DOM整合・4遭遇・終了処理・権限拒否・nullセンサー・距離設定・発見回復と時間切れ・非表示復帰
 
 Node.js 20以降でこのフォルダから `npm test` を実行します。依存ライブラリのインストールは不要です。
 
+実機は低い音量でSTART→DEBUG ON→SET FAR／DANGER→各Audio Testを比較し、Direction Testで左右・背後を確認してください。通常プレイでは音へ振り向いたときのPEEK／空振りの自然さ、DANGERの静寂、タブ切替やSOUND OFFで確実に無音になるかも確認します。合成音の質感・前後定位・Safariの実機復帰は実機調整が必要です。
+
 ## 未実装
 
-0.4.0の音響、振動、GAME OVER・クリア・HP・スコア・制限時間・ステージ・難易度は未実装です。WebXR・空間認識・撮影・録画・保存・オンラインAPI・PWAも追加していません。
+正式な録音音源・音量スライダー・本格3D音響／独自HRTF・台詞・マイク入力・振動・GAME OVER・クリア・HP・スコア・制限時間・ステージ・難易度は未実装です。WebXR・空間認識・撮影・録画・保存・オンラインAPI・PWAも追加していません。

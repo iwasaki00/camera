@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="iPhoneを見回すと視界の端に何かが現れる、疑似ARホラーWebゲーム">
-  <title>振り返ればヤツガイル｜STALKER</title>
+  <title>振り返ればヤツガイル｜PRESENCE</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
@@ -38,15 +38,16 @@
         <div class="warning-mark" aria-hidden="true"><span></span></div>
         <p class="eyebrow">PSEUDO AR HORROR EXPERIENCE</p>
         <h1 id="gameTitle">振り返れば<br><em>ヤツガイル</em></h1>
-        <p class="english-title">SOMETHING BEHIND YOU — STALKER</p>
+        <p class="english-title">SOMETHING BEHIND YOU — PRESENCE</p>
         <p class="lead">カメラを向けた先に、<br>何もいないとは限らない。</p>
         <button id="startButton" class="start-button" type="button">
           <span>START</span><i aria-hidden="true"></i>
         </button>
         <p id="startStatus" class="start-status" role="status">カメラと方向センサーの使用を許可してください</p>
         <p class="privacy-note">映像は保存・送信されません</p>
+        <p class="audio-note">小さな音で始まります。端末音量を低めにしてください。</p>
       </div>
-      <p class="version">Version 0.3.0 <span>—</span> STALKER</p>
+      <p class="version">Version 0.4.0 <span>—</span> PRESENCE</p>
     </section>
 
     <div id="message" class="message" role="alert" aria-live="assertive" hidden>
@@ -55,11 +56,12 @@
       <button id="retryButton" type="button">もう一度試す</button>
     </div>
 
+    <button id="soundToggle" class="sound-toggle" type="button" aria-label="音声ON/OFF" aria-pressed="true">SOUND ON</button>
     <button id="debugToggle" class="debug-toggle" type="button" aria-pressed="false" aria-controls="debugPanel debugGuides debugTests">DEBUG</button>
     <aside id="debugPanel" class="debug-panel" aria-label="デバッグ情報" aria-hidden="true" hidden>
-      <header><b>DEBUG MODE</b><span>v0.3.0</span></header>
+      <header><b>STATUS</b><span>v0.4.0</span></header>
       <dl>
-        <div><dt>VERSION</dt><dd>0.3.0</dd></div>
+        <div><dt>VERSION</dt><dd>0.4.0</dd></div>
         <div><dt>CAMERA YAW</dt><dd id="debugCurrentYaw">—</dd></div>
         <div><dt>INITIAL YAW</dt><dd id="debugInitialYaw">—</dd></div>
         <div><dt>RELATIVE YAW</dt><dd id="debugRelativeYaw">—</dd></div>
@@ -75,8 +77,9 @@
       <div class="proximity"><span id="debugProximity"></span></div>
       <pre id="debugDistance"></pre>
       <pre id="debugEncounter"></pre>
+      <pre id="debugPresence"></pre>
     </aside>
-    <nav id="debugTests" class="debug-tests" aria-label="遭遇・距離テスト" hidden>
+    <nav id="debugTests" class="debug-tests" aria-label="遭遇・距離・音声テスト" hidden>
       <section class="debug-test-group" aria-label="Encounter Test">
       <h2>Encounter Test</h2>
       <button type="button" data-test-encounter="PEEK" disabled>TEST PEEK</button>
@@ -90,6 +93,20 @@
       <button type="button" data-set-distance="MID">SET MID 60</button>
       <button type="button" data-set-distance="NEAR">SET NEAR 35</button>
       <button type="button" data-set-distance="DANGER">SET DANGER 10</button>
+      </section>
+      <section class="debug-test-group" aria-label="Audio Test">
+      <h2>AUDIO TEST</h2>
+      <button type="button" data-test-audio="RUSTLE" disabled>TEST RUSTLE</button>
+      <button type="button" data-test-audio="FOOTSTEP" disabled>TEST FOOTSTEP</button>
+      <button type="button" data-test-audio="TAP" disabled>TEST TAP</button>
+      <button type="button" data-test-audio="BREATH" disabled>TEST BREATH</button>
+      </section>
+      <section class="debug-test-group" aria-label="Direction Test">
+      <h2>DIRECTION TEST</h2>
+      <button type="button" data-test-direction="LEFT" disabled>SOUND LEFT</button>
+      <button type="button" data-test-direction="RIGHT" disabled>SOUND RIGHT</button>
+      <button type="button" data-test-direction="BEHIND" disabled>SOUND BEHIND</button>
+      <button type="button" data-test-direction="FRONT" disabled>SOUND FRONT</button>
       </section>
     </nav>
 

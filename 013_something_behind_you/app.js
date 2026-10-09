@@ -11,10 +11,16 @@ import {
 
 import { EncounterDirector, ENCOUNTER_CONFIG } from "./encounters.js";
 import { Stalker, STALKER_CONFIG } from "./stalker.js";
+import { PresenceDirector, PRESENCE_CONFIG } from "./presence.js";
+import { PresenceAudio } from "./audio.js";
 
-const VERSION = "0.3.0 — STALKER";
+const VERSION = "0.4.0 — PRESENCE";
 const director = new EncounterDirector();
 const stalker = new Stalker();
+const presence = new PresenceDirector();
+const audio = new PresenceAudio(window.AudioContext || window.webkitAudioContext);
+let audioSession = 0;
+let startGeneration = 0;
 director.setProfile(stalker.profile);
 const encounterView = {
   element: document.querySelector("#encounterVisual"),
@@ -89,7 +95,9 @@ const elements = {
   debugOrientation: document.querySelector("#debugOrientation"),
   debugMotion: document.querySelector("#debugMotion"),
   debugProximity: document.querySelector("#debugProximity"),
-  debugDistance: document.querySelector("#debugDistance")
+  debugDistance: document.querySelector("#debugDistance"),
+  debugPresence: document.querySelector("#debugPresence"),
+  soundToggle: document.querySelector("#soundToggle")
 };
 
 if (Object.values(elements).some((element) => !element)) {
@@ -295,6 +303,7 @@ async function startCamera() {
 
 function stopCamera() {
   stalker.pause();
+  stopPresence();
   runtime.stream?.getTracks().forEach((track) => track.stop());
   runtime.stream = null;
   elements.camera.srcObject = null;
@@ -316,6 +325,13 @@ function beginSensorTimeout() {
 async function startExperience() {
   if (runtime.starting) return;
 
+  const generation = ++startGeneration;
+  stopCamera();
+  runtime.started = false;
+  presence.reset();
+  audio.lastSpatial = null;
+  // resumeは権限ダイアログを待つ前、STARTのユーザー操作内で開始する。
+  void audio.unlock();
   runtime.starting = true;
   elements.startButton.disabled = true;
   hideMessage();
@@ -331,6 +347,13 @@ async function startExperience() {
     motionRequest,
     cameraRequest
   ]);
+
+  if (generation !== startGeneration) {
+    stopCamera();
+    runtime.starting = false;
+    elements.startButton.disabled = false;
+    return;
+  }
 
   if (!cameraResult.ok) {
     stopCamera();
@@ -432,6 +455,7 @@ function beginEscape(discovered = false) {
 }
 
 function relocateEntity() {
+  presence.bait = null;
   setState(STATES.RELOCATE);
   hideEntity();
 
@@ -521,6 +545,7 @@ for (const button of encounterView.buttons) {
 
 document.addEventListener("visibilitychange", () => {
   stalker.pause();
+  stopPresence();
   previousFrameAt = performance.now();
   if (!document.hidden) return;
   runtime.lastOrientationAt = -Infinity;
@@ -539,6 +564,7 @@ function updateGame(now, elapsedMs) {
     && now - runtime.lastOrientationAt <= CONFIG.orientationTimeout;
   stalker.update(elapsedMs, runtime.angleDiff, distanceActive);
   director.setProfile(stalker.profile, now);
+  updatePresence(now, distanceActive);
   if (!runtime.started || runtime.initialYaw === null || runtime.angleDiff === null) return;
 
   if (document.hidden) return;
@@ -616,6 +642,7 @@ function updateGame(now, elapsedMs) {
 }
 
 function updateDebug(now) {
+  updateSoundButton();
   if (!debugEnabled || now - runtime.debugUpdatedAt < CONFIG.debugRefreshInterval) return;
   runtime.debugUpdatedAt = now;
 
@@ -642,6 +669,21 @@ function updateDebug(now) {
     `WEIGHTS P/P/F/C ${Object.values(profile.weights).join("/")}`,
     `DELAY ${(profile.minEncounterDelay / 1000).toFixed(1)}–${(profile.maxEncounterDelay / 1000).toFixed(1)}s`
   ].join("\n");
+  const spatial = audio.lastSpatial;
+  elements.debugPresence.textContent = [
+    `AUDIO ENABLED ${audio.enabled}`,
+    `CONTEXT ${audio.state}`,
+    `PRESENCE ${presence.state}`,
+    `CURRENT ${presence.currentPresence || "—"}`,
+    `PREVIOUS ${presence.previousPresence || "—"}`,
+    `DIRECTION ${spatial?.direction || "—"}`,
+    `PAN ${spatial ? spatial.pan.toFixed(2) : "—"}`,
+    `EFFECTIVE GAIN ${spatial ? spatial.effectiveVolume.toFixed(4) : "—"}`,
+    `NEXT ${presence.state === "WAITING" ? Math.max(0, presence.deadline - now).toFixed(0) + " ms" : "—"}`,
+    `BAIT ${Boolean(presence.bait)}`,
+    `BAIT REMAIN ${presence.bait ? Math.max(0, presence.bait.expiresAt - now).toFixed(0) + " ms" : "—"}`,
+    audio.error
+  ].filter(Boolean).join("\n");
   const remaining = director.currentEncounter ? "waiting for view"
     : `${Math.max(0, (director.deadline ?? now) - now).toFixed(0)} ms`;
   encounterView.debug.textContent = [
@@ -658,6 +700,10 @@ function updateDebug(now) {
   for (const button of encounterView.buttons) {
     button.disabled = !runtime.started || runtime.initialYaw === null
       || director.state === "EVENT" || Boolean(director.currentEncounter);
+  }
+  for (const button of document.querySelectorAll("[data-test-audio], [data-test-direction]")) {
+    button.disabled = !runtime.started || runtime.initialYaw === null || !audio.enabled || !audio.Context
+      || document.hidden || presence.state === "PLAYING" || strongEncounter();
   }
 
   const proximity = runtime.angleDiff === null
@@ -689,6 +735,7 @@ elements.retryButton.addEventListener("click", () => {
 });
 
 window.addEventListener("pagehide", () => {
+  startGeneration++;
   stalker.pause();
   window.clearTimeout(runtime.sensorTimeoutId);
   window.clearTimeout(runtime.escapeTimeoutId);
@@ -700,6 +747,75 @@ window.addEventListener("pagehide", () => {
   elements.startScreen.classList.remove("is-hidden");
   stopCamera();
 });
+
+function stopPresence() {
+  audioSession++;
+  audio.stop();
+  presence.pause();
+}
+
+function strongEncounter() {
+  return ["PASS", "FLY_BY", "CLOSE_CALL"].includes(director.currentEncounter);
+}
+
+function updateSoundButton() {
+  elements.soundToggle.textContent = !audio.Context ? "NO AUDIO"
+    : !audio.enabled ? "SOUND OFF" : runtime.started && !audio.ready ? "SOUND RETRY" : "SOUND ON";
+  elements.soundToggle.disabled = !audio.Context;
+  elements.soundToggle.setAttribute("aria-pressed", String(audio.enabled && Boolean(audio.Context)));
+}
+
+function updatePresence(now, active) {
+  const input = { active: active && audio.ready, range: stalker.distanceState,
+    looking: Math.abs(runtime.angleDiff) <= STALKER_CONFIG.lookingAngle,
+    relativeYaw: runtime.relativeYaw, entityYaw: runtime.entityYaw, strongEncounter: strongEncounter() };
+  const event = presence.update(now, input);
+  if (!input.active) { audio.stop(); return; }
+  if (event) {
+    if (audio.play(event, runtime.relativeYaw, stalker.distance)) presence.played(event, now, input);
+    else presence.wait(now, input.range);
+  }
+  if (audio.voice && presence.lastEvent) audio.spatial(presence.lastEvent, runtime.relativeYaw, stalker.distance);
+  const canPeek = !director.currentEncounter && ["IDLE", "ARMING"].includes(director.state)
+    && !(director.previousEncounter === "PEEK" && director.consecutive >= ENCOUNTER_CONFIG.consecutiveLimit);
+  if (presence.consumeBait(now, { ...input, canPeek }) && director.force("PEEK", now)) {
+    // entityYawを変更せず、聞こえた実際の存在方位でPEEKを開始する。
+    prepareEncounter("PEEK", now);
+  }
+}
+
+elements.soundToggle.addEventListener("click", async () => {
+  if (!audio.Context) return;
+  const retry = audio.enabled && runtime.started && !audio.ready;
+  if (!retry) audio.setEnabled(!audio.enabled);
+  stopPresence();
+  if (audio.enabled && runtime.started && !document.hidden) await audio.unlock();
+  updateSoundButton();
+  runtime.debugUpdatedAt = -Infinity;
+  updateDebug(performance.now());
+});
+
+async function testPresence(type, direction) {
+  if (!debugEnabled || !runtime.started || runtime.initialYaw === null || !audio.enabled
+    || document.hidden || strongEncounter() || presence.state === "PLAYING") return;
+  const session = audioSession;
+  await audio.unlock();
+  if (session !== audioSession || !debugEnabled || !runtime.started || !audio.ready || document.hidden
+    || strongEncounter() || presence.state === "PLAYING") return;
+  const offsets = { LEFT: -90, RIGHT: 90, BEHIND: 180, FRONT: 0 };
+  const event = { type, yaw: direction ? normalizeDegrees(runtime.relativeYaw + offsets[direction]) : runtime.entityYaw };
+  if (audio.play(event, runtime.relativeYaw, stalker.distance)) {
+    presence.played(event, performance.now(), { entityYaw: runtime.entityYaw, relativeYaw: runtime.relativeYaw }, !direction);
+    runtime.debugUpdatedAt = -Infinity;
+    updateDebug(performance.now());
+  }
+}
+for (const button of document.querySelectorAll("[data-test-audio]")) {
+  button.addEventListener("click", () => testPresence(button.dataset.testAudio));
+}
+for (const button of document.querySelectorAll("[data-test-direction]")) {
+  button.addEventListener("click", () => testPresence("RUSTLE", button.dataset.testDirection));
+}
 
 function setDebugEnabled(enabled) {
   debugEnabled = enabled;

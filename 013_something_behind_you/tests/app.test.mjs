@@ -4,10 +4,13 @@ import { readFile } from "node:fs/promises";
 import * as logic from "../logic.js";
 import { EncounterDirector, ENCOUNTER_CONFIG } from "../encounters.js";
 import { Stalker, STALKER_CONFIG } from "../stalker.js";
+import { PresenceDirector, PRESENCE_CONFIG } from "../presence.js";
+import { PresenceAudio } from "../audio.js";
+import { FakeAudioContext } from "./fake-audio.mjs";
 
 const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
 const source = await readFile(new URL("../app.js", import.meta.url), "utf8");
-function harness(debug = true, cameraDenied = false, orientationDenied = false) {
+function harness(debug = true, cameraDenied = false, orientationDenied = false, withAudio = false) {
   let now = 0;
   const frames = [];
   const documentEvents = {};
@@ -30,9 +33,14 @@ function harness(debug = true, cameraDenied = false, orientationDenied = false) 
   for (const match of html.matchAll(/id="([^"]+)"/g)) nodes.set("#" + match[1], node());
   const buttons = buttonTypes.map(type => Object.assign(node(), { dataset: { testEncounter: type } }));
   const distanceButtons = ["FAR", "MID", "NEAR", "DANGER"].map(type => Object.assign(node(), { dataset: { setDistance: type } }));
+  const audioButtons = ["RUSTLE", "FOOTSTEP", "TAP", "BREATH"].map(type => Object.assign(node(), { dataset: { testAudio: type } }));
+  const directionButtons = ["LEFT", "RIGHT", "BEHIND", "FRONT"].map(type => Object.assign(node(), { dataset: { testDirection: type } }));
+  const groups = { "[data-test-encounter]": buttons, "[data-set-distance]": distanceButtons,
+    "[data-test-audio]": audioButtons, "[data-test-direction]": directionButtons,
+    "[data-test-audio], [data-test-direction]": [...audioButtons,...directionButtons] };
   let stopped = false;
   const sandbox = {
-    ...logic, EncounterDirector, ENCOUNTER_CONFIG, Stalker, STALKER_CONFIG, URLSearchParams, console,
+    ...logic, EncounterDirector, ENCOUNTER_CONFIG, Stalker, STALKER_CONFIG, PresenceDirector, PRESENCE_CONFIG, PresenceAudio, URLSearchParams, console,
     performance: { now: () => now },
     navigator: { mediaDevices: { getUserMedia: async () => {
       if (cameraDenied) throw { name: "NotAllowedError" };
@@ -41,10 +49,11 @@ function harness(debug = true, cameraDenied = false, orientationDenied = false) 
     document: {
       hidden: false, body: node(), documentElement: node(),
       querySelector: selector => { assert.ok(nodes.has(selector), "missing DOM " + selector); return nodes.get(selector); },
-      querySelectorAll: selector => selector === "[data-set-distance]" ? distanceButtons : buttons, addEventListener(type, fn) { documentEvents[type] = fn; }
+      querySelectorAll: selector => { assert.ok(groups[selector],selector); return groups[selector]; }, addEventListener(type, fn) { documentEvents[type] = fn; }
     },
     window: {
       location: { search: "?debug=1" }, isSecureContext: true,
+      AudioContext: withAudio ? FakeAudioContext : undefined,
       DeviceOrientationEvent: { requestPermission: async () => orientationDenied ? "denied" : "granted" },
       DeviceMotionEvent: { requestPermission: async () => "denied" },
       addEventListener(type, fn) { windowEvents[type] = fn; }, requestAnimationFrame: fn => { frames.push(fn); return frames.length; },
@@ -53,12 +62,12 @@ function harness(debug = true, cameraDenied = false, orientationDenied = false) 
   };
   vm.createContext(sandbox);
   vm.runInContext(source.replace(/import\s+[\s\S]*?from\s+"[^"]+";/g, "") +
-    "\nglobalThis.testApp = { runtime, director, stalker, encounterView, updateGame, handleOrientation, startExperience, relocateEntity, updateDebug, beginEscape };", sandbox);
+    "\nglobalThis.testApp = { runtime, director, stalker, presence, audio, updatePresence, testPresence, encounterView, updateGame, handleOrientation, startExperience, relocateEntity, updateDebug, beginEscape };", sandbox);
   assert.equal(nodes.get("#debugPanel").hidden, true);
   assert.equal(nodes.get("#debugToggle").getAttribute("aria-pressed"), "false");
   if (debug) nodes.get("#debugToggle").click();
   return {
-    ...sandbox.testApp, nodes, buttons, distanceButtons, setNow: value => { now = value; }, stopped: () => stopped,
+    ...sandbox.testApp, nodes, buttons, distanceButtons, audioButtons, directionButtons, setNow: value => { now = value; }, stopped: () => stopped,
     flushFrame(value) { now = value; frames.splice(0).forEach(fn => fn(now)); },
     hide() { sandbox.document.hidden = true; documentEvents.visibilitychange(); },
     show() { sandbox.document.hidden = false; documentEvents.visibilitychange(); },
@@ -220,4 +229,132 @@ timeoutPeek.updateGame(7000, 16);
 timeoutPeek.flushFrame(7010);
 assert.equal(timeoutPeek.runtime.state, "ESCAPE");
 assert.equal(timeoutPeek.stalker.distance, 60, "timeout escape must not reward");
+
+const soundApp = harness(true, false, false, true);
+assert.equal(soundApp.audio.context, null);
+await soundApp.nodes.get("#soundToggle").click();
+assert.equal(soundApp.audio.enabled, false);
+assert.equal(soundApp.audio.context, null, "pre-START toggle does not create context");
+await soundApp.startExperience();
+assert.equal(soundApp.audio.context, null, "muted START does not unlock audio");
+soundApp.handleOrientation({ webkitCompassHeading: 0 });
+soundApp.runtime.motionPermission = "granted";
+await soundApp.nodes.get("#soundToggle").click();
+assert.equal(soundApp.audio.state, "running");
+const context = soundApp.audio.context;
+for (const button of soundApp.audioButtons) {
+  await button.click();
+  assert.equal(soundApp.presence.currentPresence, button.dataset.testAudio);
+  assert.ok(soundApp.audio.voice);
+  soundApp.audio.stop(); soundApp.presence.pause();
+}
+for (const button of soundApp.directionButtons) {
+  const yaw = soundApp.runtime.entityYaw;
+  await button.click();
+  assert.equal(soundApp.audio.lastSpatial.direction, button.dataset.testDirection);
+  assert.equal(soundApp.runtime.entityYaw, yaw, "direction tests do not relocate entity");
+  assert.equal(soundApp.presence.bait, null, "direction tests do not create unrelated bait");
+  soundApp.audio.stop(); soundApp.presence.pause();
+}
+soundApp.buttons[2].click();
+const strongStarts = context.starts;
+await soundApp.audioButtons[1].click();
+assert.equal(context.starts, strongStarts, "strong visual suppresses new sound");
+soundApp.hide();
+assert.equal(soundApp.audio.voice, null);
+soundApp.updateGame(1000,100);
+assert.equal(context.starts, strongStarts, "hidden does not start sound");
+soundApp.show();
+soundApp.updateGame(1100,100);
+assert.equal(context.starts,strongStarts,"resume needs fresh sensor and fresh wait");
+soundApp.setNow(1200);
+soundApp.handleOrientation({webkitCompassHeading:0});
+soundApp.presence.random=()=>0;
+soundApp.updateGame(1200,16);
+assert.equal(soundApp.presence.state,"WAITING");
+assert.ok(soundApp.presence.deadline>1200);
+await soundApp.nodes.get("#soundToggle").click();
+assert.equal(soundApp.audio.enabled,false);
+assert.equal(soundApp.presence.bait,null);
+soundApp.updateGame(1300,16);
+assert.equal(context.starts,strongStarts,"mute causes no playback request");
+await soundApp.nodes.get("#soundToggle").click();
+context.state="suspended";
+soundApp.updateDebug(1500);
+assert.equal(soundApp.nodes.get("#soundToggle").textContent,"SOUND RETRY");
+await soundApp.nodes.get("#soundToggle").click();
+assert.equal(context.state,"running");
+await soundApp.testPresence("TAP");
+const oldVoice=soundApp.audio.voice;
+await soundApp.startExperience();
+assert.equal(soundApp.audio.context,context,"restart reuses one context");
+assert.equal(soundApp.audio.voice,null);
+assert.ok(oldVoice.nodes.every(node=>node.disconnected));
+assert.equal(soundApp.presence.state,"IDLE");
+assert.equal(soundApp.presence.deadline,null);
+soundApp.handleOrientation({webkitCompassHeading:0});
+soundApp.runtime.motionPermission="granted";
+soundApp.updateGame(1500,16);
+const oneDeadline=soundApp.presence.deadline;
+soundApp.updateGame(1501,16);
+assert.equal(soundApp.presence.deadline,oneDeadline,"no double schedule after restart");
+soundApp.pagehide();
+assert.equal(soundApp.audio.voice,null);
+assert.equal(soundApp.presence.state,"IDLE");
+
+const baitApp=harness(true,false,false,true);
+await baitApp.startExperience();
+baitApp.handleOrientation({webkitCompassHeading:0});
+baitApp.runtime.motionPermission="granted";
+baitApp.runtime.entityYaw=120;
+baitApp.runtime.angleDiff=120;
+baitApp.presence.random=()=>0;
+baitApp.updateGame(0,16);
+baitApp.director.deadline=Infinity; // 独立した通常Encounter抽選を隔離して誘導経路を検証。
+baitApp.setNow(15000);
+baitApp.handleOrientation({webkitCompassHeading:0});
+baitApp.updateGame(15000,16);
+assert.equal(baitApp.presence.currentPresence,"RUSTLE");
+assert.ok(baitApp.presence.bait);
+// 実機のセンサーフレームに相当する整合した相対方位を設定する。
+baitApp.runtime.relativeYaw=85;
+baitApp.runtime.angleDiff=35;
+baitApp.runtime.lastOrientationAt=15300;
+baitApp.setNow(15300);
+baitApp.updateGame(15300,16);
+assert.equal(baitApp.director.currentEncounter,"PEEK");
+assert.equal(baitApp.runtime.state,"PERIPHERAL");
+assert.equal(baitApp.runtime.entityYaw,120,"bait preserves the sounded entity direction");
+assert.equal(baitApp.presence.bait,null,"bait consumed once");
+baitApp.director.reset();
+baitApp.director.previousEncounter="PEEK";
+baitApp.director.consecutive=2;
+baitApp.presence.bait={entityYaw:120,soundYaw:105,readyAt:0,expiresAt:18000};
+baitApp.updatePresence(15400,true);
+assert.equal(baitApp.director.currentEncounter,null,"bait preserves maximum two PEEK encounters");
+
+const emptyApp=harness(true,false,false,true);
+await emptyApp.startExperience();
+emptyApp.handleOrientation({webkitCompassHeading:0});
+emptyApp.runtime.motionPermission="granted";
+emptyApp.runtime.entityYaw=120;
+emptyApp.presence.random=()=>0.99;
+await emptyApp.testPresence("RUSTLE");
+assert.equal(emptyApp.presence.bait,null,"non-bait sound leaves an empty turn");
+emptyApp.runtime.relativeYaw=85;
+emptyApp.runtime.angleDiff=35;
+emptyApp.updateGame(300,16);
+assert.equal(emptyApp.director.currentEncounter,null);
+emptyApp.nodes.get("#debugToggle").click();
+const hiddenStarts=emptyApp.audio.context.starts;
+await emptyApp.audioButtons[0].click();
+assert.equal(emptyApp.audio.context.starts,hiddenStarts,"DEBUG OFF cannot trigger audio tests");
+console.log("Presence integration: sound/direction controls, bait PEEK and empty turn, strong-event suppression, hidden/mute/resume/restart cleanup passed");
+const interruptedStart=harness(true,false,false,true);
+const pendingStart=interruptedStart.startExperience();
+interruptedStart.pagehide();
+await pendingStart;
+assert.equal(interruptedStart.runtime.started,false,"pagehide cancels pending START");
+assert.equal(interruptedStart.runtime.stream,null);
+assert.equal(interruptedStart.audio.voice,null);
 console.log("App integration: four encounters, cleanup, overlap, peek levels, spotting, relocation, null sensor and permission rejection passed");

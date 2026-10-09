@@ -1,9 +1,9 @@
 {
   "name": "something-behind-you",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/logic.test.mjs && node tests/encounters.test.mjs && node tests/stalker.test.mjs && node tests/app.test.mjs"
+    "test": "node tests/logic.test.mjs && node tests/encounters.test.mjs && node tests/stalker.test.mjs && node tests/presence.test.mjs && node tests/audio.test.mjs && node tests/app.test.mjs"
   }
 }
