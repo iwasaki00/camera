@@ -15,6 +15,8 @@ function harness(debug = true, cameraDenied = false, orientationDenied = false, 
   const frames = [];
   const documentEvents = {};
   const windowEvents = {};
+  const timers = new Set();
+  let timerId = 0;
   const nodes = new Map();
   const buttonTypes = ["PEEK", "PASS", "FLY_BY", "CLOSE_CALL"];
   function node() {
@@ -57,7 +59,7 @@ function harness(debug = true, cameraDenied = false, orientationDenied = false, 
       DeviceOrientationEvent: { requestPermission: async () => orientationDenied ? "denied" : "granted" },
       DeviceMotionEvent: { requestPermission: async () => "denied" },
       addEventListener(type, fn) { windowEvents[type] = fn; }, removeEventListener(type) { delete windowEvents[type]; }, requestAnimationFrame: fn => { frames.push(fn); return frames.length; },
-      setTimeout: () => 1, clearTimeout() {}, matchMedia: () => ({ matches: true })
+      setTimeout: () => { timers.add(++timerId); return timerId; }, clearTimeout(id) { timers.delete(id); }, matchMedia: () => ({ matches: true })
     }
   };
   vm.createContext(sandbox);
@@ -69,6 +71,8 @@ function harness(debug = true, cameraDenied = false, orientationDenied = false, 
   if (debug) nodes.get("#debugToggle").click();
   return {
     ...sandbox.testApp, nodes, buttons, distanceButtons, audioButtons, directionButtons, setNow: value => { now = value; }, stopped: () => stopped,
+    pendingCamera(fn) { sandbox.navigator.mediaDevices.getUserMedia = fn; },
+    resources() { return { sensors: Number(Boolean(windowEvents.deviceorientation)), timers: timers.size, frames: frames.length, nodes: nodes.size }; },
     flushFrame(value) { now = value; frames.splice(0).forEach(fn => fn(now)); },
     hide() { sandbox.document.hidden = true; documentEvents.visibilitychange(); },
     show() { sandbox.document.hidden = false; documentEvents.visibilitychange(); },
@@ -362,3 +366,79 @@ assert.equal(interruptedStart.runtime.stream,null);
 assert.equal(interruptedStart.audio.voice,null);
 
 console.log("App integration: four encounters, cleanup, overlap, peek levels, spotting, relocation, null sensor and permission rejection passed");
+
+const lifecycle = harness(true, false, false, true);
+assert.equal(lifecycle.runtime.appState, "READY");
+const initialNodes = lifecycle.resources().nodes;
+for (let i = 0; i < 30; i++) {
+  const starting = lifecycle.startExperience();
+  assert.equal(lifecycle.runtime.appState, "STARTING");
+  await lifecycle.startExperience(); // START連打は新しい取得を開始しない。
+  await starting;
+  assert.equal(lifecycle.runtime.appState, "RUNNING");
+  lifecycle.handleOrientation({ webkitCompassHeading: i * 3 });
+  lifecycle.runtime.motionPermission = "granted";
+  assert.equal(lifecycle.runtime.relativeYaw, 0);
+  assert.equal(lifecycle.resources().sensors, 1);
+  assert.equal(lifecycle.resources().timers, 0);
+  await lifecycle.testPresence("TAP");
+  lifecycle.buttons[1].click();
+  const voice = lifecycle.audio.voice;
+  assert.ok(voice);
+  const context = lifecycle.audio.context;
+  lifecycle.nodes.get("#stopButton").click();
+  lifecycle.stopExperience(); // STOP連打も安全。
+  assert.equal(lifecycle.runtime.appState, "STOPPED");
+  assert.equal(lifecycle.runtime.stream, null);
+  assert.equal(lifecycle.audio.voice, null);
+  assert.ok(voice.nodes.every(node => node.disconnected));
+  assert.equal(lifecycle.presence.bait, null);
+  assert.equal(lifecycle.director.currentEncounter, null);
+  assert.equal(lifecycle.encounterView.animation, null);
+  assert.equal(lifecycle.resources().sensors, 0);
+  assert.equal(lifecycle.resources().timers, 0);
+  assert.equal(lifecycle.resources().nodes, initialNodes);
+  lifecycle.handleOrientation({ webkitCompassHeading: 180 });
+  assert.equal(lifecycle.runtime.currentYaw, null, "STOP ignores sensor data");
+  lifecycle.flushFrame(i * 1000);
+  assert.equal(lifecycle.resources().frames, 1, "one shared render loop");
+  assert.equal(lifecycle.audio.context, context);
+}
+
+const endless = harness();
+await endless.startExperience();
+endless.handleOrientation({ webkitCompassHeading: 0 });
+endless.runtime.motionPermission = "granted";
+endless.stalker.setDistance(5);
+for (const now of [60000, 120000, 3600000]) {
+  endless.runtime.lastOrientationAt = now;
+  endless.updateGame(now, 100);
+  assert.equal(endless.runtime.appState, "RUNNING", "no time or distance ending");
+}
+endless.hide();
+const held = endless.stalker.distance;
+const cycle = endless.stalker.cycleMs;
+endless.updateGame(7200000, 100);
+assert.equal(endless.stalker.distance, held);
+assert.equal(endless.stalker.cycleMs, cycle);
+endless.show();
+endless.updateGame(7200000, 100);
+assert.equal(endless.stalker.distance, held, "resume waits for fresh orientation");
+
+const race = harness();
+let resolveOld;
+let oldStopped = false;
+race.pendingCamera(() => new Promise(resolve => { resolveOld = resolve; }));
+const oldStart = race.startExperience();
+race.stopExperience();
+race.pendingCamera(async () => ({ getTracks: () => [{ stop() {} }] }));
+await race.startExperience();
+const newStream = race.runtime.stream;
+resolveOld({ getTracks: () => [{ stop() { oldStopped = true; } }] });
+await oldStart;
+assert.equal(oldStopped, true, "late permission result releases its own camera");
+assert.equal(race.runtime.stream, newStream, "old START cannot stop newer camera");
+assert.equal(race.runtime.appState, "RUNNING");
+race.stopExperience();
+assert.ok(!/SurvivalGame|surviveTimer|finishGame|resultScreen|data-test-game/.test(source + html));
+console.log("Experience integration: lifecycle x30, no win/time limit, sensor/timer/DOM stability, hidden pause and canceled camera race passed");
