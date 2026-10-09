@@ -8,8 +8,8 @@ export const PRESENCE_CONFIG = Object.freeze({
   behindCutoff: 1200,
   yawOffset: 15,
   lookingChance: 0.35,
-  quietChance: 0.25,
-  quietExtraMs: 7000,
+  quietChance: 0.4,
+  quietExtraMs: 10000,
   cooldownMin: 1800,
   cooldownMax: 3500,
   breathCooldownMs: 12000,
@@ -18,10 +18,10 @@ export const PRESENCE_CONFIG = Object.freeze({
   baitMinDelayMs: 250,
   baitAngle: 46,
   profiles: {
-    FAR: { weights: { RUSTLE: 70, FOOTSTEP: 20, TAP: 10, BREATH: 0 }, delay: [8000, 18000] },
-    MID: { weights: { RUSTLE: 50, FOOTSTEP: 30, TAP: 18, BREATH: 2 }, delay: [6000, 14000] },
-    NEAR: { weights: { RUSTLE: 35, FOOTSTEP: 35, TAP: 20, BREATH: 10 }, delay: [4000, 10000] },
-    DANGER: { weights: { RUSTLE: 25, FOOTSTEP: 30, TAP: 20, BREATH: 25 }, delay: [3000, 8000] }
+    FAR: { weights: { RUSTLE: 70, FOOTSTEP: 20, TAP: 10, BREATH: 0 }, delay: [12000, 26000] },
+    MID: { weights: { RUSTLE: 50, FOOTSTEP: 30, TAP: 18, BREATH: 2 }, delay: [10000, 22000] },
+    NEAR: { weights: { RUSTLE: 35, FOOTSTEP: 35, TAP: 20, BREATH: 10 }, delay: [8000, 18000] },
+    DANGER: { weights: { RUSTLE: 25, FOOTSTEP: 30, TAP: 20, BREATH: 25 }, delay: [8000, 16000] }
   },
   sounds: {
     RUSTLE: { duration: 220, attack: 0.012, peak: 0.65, frequency: 1600 },

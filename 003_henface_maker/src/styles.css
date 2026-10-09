@@ -136,8 +136,8 @@ option {
   position: relative;
   width: 100%;
   height: 280px;
-  height: clamp(180px,calc(100svh - 490px),480px);
-  height: clamp(180px,calc(100dvh - 490px),480px);
+  height: clamp(140px,calc(100svh - 540px),480px);
+  height: clamp(140px,calc(100dvh - 540px),480px);
   overflow: hidden;
   background: #05070c
 }
@@ -317,12 +317,12 @@ option {
   overflow-wrap: anywhere
 }
 .layout-standard .preview-frame {
-  height: clamp(180px,calc(100svh - 550px),440px);
-  height: clamp(180px,calc(100dvh - 550px),440px)
+  height: clamp(140px,calc(100svh - 600px),440px);
+  height: clamp(140px,calc(100dvh - 600px),440px)
 }
 .layout-edge-controls .preview-frame {
-  height: clamp(240px,calc(100svh - 380px),620px);
-  height: clamp(240px,calc(100dvh - 380px),620px)
+  height: clamp(200px,calc(100svh - 430px),620px);
+  height: clamp(200px,calc(100dvh - 430px),620px)
 }
 .layout-edge-controls .main-actions {
   position: absolute;
@@ -410,3 +410,22 @@ option {
     transition: background-color .12s
   }
 }
+
+.category-tabs { margin-bottom: 6px; }
+.category-tabs .tab-button { font-size: 12px; }
+.effect-controls { margin-top: 5px; }
+.effect-choice { display: flex; gap: 6px; margin-bottom: 4px; }
+.effect-choice select { flex: 1; min-width: 0; }
+.face-presets { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px 0; }
+.face-presets button { font-size: 12px; }
+.effect-note { font-size: 10px; color: var(--muted); margin: 6px 0; }
+.checkbox-option { display: flex; gap: 8px; align-items: center; min-height: 44px; font-size: 12px; }
+.checkbox-option input { width: 18px; height: 18px; accent-color: var(--accent); }
+.debug-panel { font: 11px/1.6 monospace; color: var(--blue); background: var(--panel); padding: 8px; border-radius: 12px; white-space: pre-wrap; }
+
+/* Give single-effect categories the space freed by the part sliders. */
+.layout-compact[data-category="placement"] .preview-frame { height: clamp(140px, calc(100svh - 485px), 480px); height: clamp(140px, calc(100dvh - 485px), 480px); }
+.layout-compact[data-category="special"] .preview-frame, .layout-compact[data-category="presets"] .preview-frame { height: clamp(140px, calc(100svh - 460px), 480px); height: clamp(140px, calc(100dvh - 460px), 480px); }
+.layout-standard:not([data-category="parts"]) .preview-frame { height: clamp(140px, calc(100svh - 490px), 440px); height: clamp(140px, calc(100dvh - 490px), 440px); }
+.layout-edge-controls[data-category="placement"] .preview-frame { height: clamp(180px, calc(100svh - 470px), 620px); height: clamp(180px, calc(100dvh - 470px), 620px); }
+.layout-edge-controls[data-category="special"] .preview-frame { height: clamp(180px, calc(100svh - 445px), 620px); height: clamp(180px, calc(100dvh - 445px), 620px); }

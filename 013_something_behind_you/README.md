@@ -1,6 +1,6 @@
 # 振り返ればヤツガイル
 
-**Version 0.4.0 — PRESENCE**
+**Version 0.5.0 — SURVIVE**
 
 iPhoneの背面カメラと方向センサーによる疑似ARホラーです。相対Yawと仮想方位を使い、現実空間の認識は行いません。映像の保存・送信はありません。
 
@@ -9,6 +9,20 @@ iPhoneの背面カメラと方向センサーによる疑似ARホラーです。
 GitHub PagesなどのHTTPS環境で `013_something_behind_you/` をiPhone Safariから開き、縦持ちでSTARTをタップします。カメラとモーション・方向へのアクセスを許可し、測定後にゆっくり左右を見回してください。背面カメラを優先します。権限要求はSTART操作内で開始します。
 
 実機にはHTTPSが必要です。権限拒否・非対応・HTTPS問題・センサー未取得は画面に案内します。方向データが途絶えると遭遇を停止します。タブを隠すと演出を片付け、復帰後に再び待機します。
+
+## SURVIVE
+
+`READY → STARTING → PLAYING → CLEAR / GAME_OVER` のGame Stateを、既存のEncounter・Presenceとは別に管理します。カメラ等の初期化後、最初の正常な方位でPLAYINGへ移ります。通常HUDは `SURVIVE 01:00` の残り時間だけで、距離・HPは表示しません。
+
+`survival.js` の `SURVIVAL_CONFIG` に制限時間60秒、捕獲距離5、CLEAR演出350ms、GAME OVER演出800msを集約しています。生存時間はフレーム数ではなく経過ミリ秒を積算します。残り時間0でCLEAR、距離5以下でGAME_OVER。同じ更新で両方成立した場合は捕獲を優先します。自然終了とDEBUG強制終了は同じ終了処理を使用し、重複終了を防ぎます。
+
+終了すると接近・遭遇・気配音・BAIT・アニメーションを停止します。CLEARは静かな暗転、GAME OVERは画面端の影と暗転のみで、大音量や新しい効果音はありません。結果はSURVIVED / CAUGHT、生存秒数、最終距離、最接近距離を表示します。演出中はRESTART・テスト・SET操作をロックします。
+
+RESTARTはリロードせず、時間・距離85・最接近距離・相対Yaw・履歴・Director・BAIT・結果表示を初期化します。旧カメラを停止して再取得し、新しい正常方位を基準に開始します。AudioContextは再利用します。
+
+タブ非表示、カメラ停止／ミュート、方向データ未取得／途絶、モーション権限拒否ではタイマーと接近を一時停止します。復帰後は新しい方向データを待ち、非表示中の時間を取り戻しません。権限拒否時の既存映像確認は維持しますが、生存時間は進めません。センサー／カメラ異常時は遭遇を片付け、再開待機の時刻も補正します。ゲーム用の新規intervalや描画ループは追加していません。
+
+**バランス上の注意:** 0.4.0の初期距離85・接近速度・猶予を維持すると、見ないまま距離5に達する最短時間は約79.6秒です。通常の60秒ゲームでは自然な捕獲に到達しません。捕獲動作はDEBUGと自動テストで検証し、難度調整は実機確認後の課題として残しています。
 
 ## PRESENCE AUDIO
 
@@ -63,7 +77,7 @@ SOUND OFF・非表示・カメラ停止・再START・pagehideで音源をstopし
 | NEAR | 20以上45未満 | 1.25（8秒） | 40 / 30 / 20 / 10 | 3〜8秒 |
 | DANGER | 5以上20未満 | 1.67（6秒） | 30 / 25 / 25 / 20 | 2.5〜6秒 |
 
-速度の目安は同じ段階内での値です。境界を越えた時点から次段階の速度になります。距離5で止まり、ゲームオーバーにはなりません。
+速度の目安は同じ段階内での値です。境界を越えた時点から次段階の速度になります。PLAYING中に距離5へ到達するとGAME OVERです。
 
 実際の発見判定でPEEKがSPOTTED→ESCAPEへ移ったときだけ距離を15増加させます（最大100）。PEEKの時間切れ逃走、見失い、視界待ち終了、PASS／FLY_BY／CLOSE_CALLでは回復しません。RELOCATEは距離を保持し、STARTし直すと85へ戻ります。
 
@@ -116,7 +130,9 @@ PEEK中、角度差15°以内・回転速度46°/s以上・接近速度14°/s以
 
 通常URL `013_something_behind_you/` を開き、画面右上の **DEBUG** ボタンをタップしてON/OFFします。初期状態はOFFで、再読み込み後もOFFに戻ります。URLパラメータは不要で、旧 `?debug=1` を付けても初期状態はOFFです。
 
-ON時はボタンが「DEBUG ON」となり、STATUS、Encounter Test／Distance Test／Audio Test／Direction Testを表示します。OFFにすると即座に隠れます。START前・ゲーム中・遭遇演出中でも切替可能で、カメラ・センサー・距離・遭遇状態・実行中アニメーション・音はリセットしません。START前のEncounter／Audio Testは無効です。
+ON時はボタンが「DEBUG ON」となり、STATUS、Game Test／Encounter Test／Distance Test／Audio Test／Direction Testを表示します。OFFにすると即座に隠れます。START前・ゲーム中・遭遇演出中でも切替可能で、カメラ・センサー・距離・遭遇状態・実行中アニメーション・音はリセットしません。START前のGame／Encounter／Audio Testは無効です。
+
+Game STATUSはGame State、残り時間、生存時間、最接近距離、捕獲閾値、一時停止状態を表示します。TEST CLEAR／TEST GAME OVERはPLAYING時のみ有効です。終了後は各テストと距離SETを無効にします。任意項目の10秒モードは追加していません。
 
 Audio TestはTEST RUSTLE／FOOTSTEP／TAP／BREATHを現在のentity方位・距離で鳴らします。検証用なのでTEST BREATHはFARでも可能です（通常抽選はFARで0）。Direction TestはRUSTLEをLEFT -90°／RIGHT +90°／BEHIND 180°／FRONT 0°で鳴らし、entityYawやBAITを変更しません。音再生中や強い映像実行中は音テストを無効にします。操作欄は縦スクロールで下のグループへ移動できます。
 
@@ -140,6 +156,7 @@ reduced-motionでは装飾アニメーションと短時間演出のblurを削�
 - `app.js`: カメラ・権限・方向センサー・旧状態遷移・描画
 - `encounters.js`: 抽選・待機・重複防止・遭遇設定
 - `stalker.js`: 単一距離・接近・猶予・段階別プロファイル
+- `survival.js`: Game State・実時間タイマー・最接近距離・勝敗判定
 - `presence.js`: 音の段階別設定・抽選・方向・短命BAIT
 - `audio.js`: ユーザー操作起点のContext・合成音・パン／フィルター・音声cleanup
 - `logic.js`: 角度・左右・再配置計算（変更なし）
@@ -148,11 +165,12 @@ reduced-motionでは装飾アニメーションと短時間演出のblurを削�
 - `tests/logic.test.mjs`: 角度境界・速度・左右・再配置
 - `tests/encounters.test.mjs`: Director遷移・重複抑制・2万回抽選
 - `tests/stalker.test.mjs`: 境界・35°判定・猶予・速度・フレームレート非依存・上下限・停止・回復
+- `tests/survival.test.mjs`: 初期化・タイマー・一時停止・勝敗競合・最接近距離・重複終了・再開始
 - `tests/presence.test.mjs`: 4万回抽選・段階別設定・静寂・方向・パン・BAIT期限・停止
 - `tests/audio.test.mjs`: AudioContext初期化・4音・有限終了・ゲイン・パン・停止・復帰・フォールバック
 - `tests/fake-audio.mjs`: 自動テスト用Web Audioスタブ
 - `tests/audio-browser.html`: カメラ不要の実ブラウザ音声スモークテスト（4音の出力と自然終了）
-- `tests/app.test.mjs`: DOM整合・4遭遇・終了処理・権限拒否・nullセンサー・距離設定・発見回復と時間切れ・非表示復帰
+- `tests/app.test.mjs`: DOM整合・4遭遇・権限拒否・nullセンサー・距離設定・発見回復・非表示復帰・自然／強制勝敗・終了後停止・RESTART連打・Context再利用・カメラ異常
 
 Node.js 20以降でこのフォルダから `npm test` を実行します。依存ライブラリのインストールは不要です。
 
@@ -160,4 +178,4 @@ Node.js 20以降でこのフォルダから `npm test` を実行します。依�
 
 ## 未実装
 
-正式な録音音源・音量スライダー・本格3D音響／独自HRTF・台詞・マイク入力・振動・GAME OVER・クリア・HP・スコア・制限時間・ステージ・難易度は未実装です。WebXR・空間認識・撮影・録画・保存・オンラインAPI・PWAも追加していません。
+正式な録音音源・音量スライダー・本格3D音響／独自HRTF・台詞・マイク入力・振動・HP・スコア・ランキング・アイテム・ステージ・難易度選択は未実装です。WebXR・空間認識・撮影・録画・保存・オンラインAPI・PWAも追加していません。

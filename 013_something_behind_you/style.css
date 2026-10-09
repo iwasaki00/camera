@@ -142,55 +142,6 @@ button {
   filter: blur(4px) contrast(1.25);
 }
 
-.play-hud {
-  position: absolute;
-  z-index: 6;
-  inset: calc(var(--safe-top) + 14px) calc(var(--safe-right) + 16px) auto calc(var(--safe-left) + 16px);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  opacity: 0;
-  transition: opacity .5s ease;
-  pointer-events: none;
-}
-
-.game-shell.is-running .play-hud {
-  opacity: .72;
-}
-
-.live-mark {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  letter-spacing: .13em;
-}
-
-.live-mark i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #a31616;
-  box-shadow: 0 0 9px rgba(207, 33, 33, .75);
-  animation: pulse 2.2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  50% { opacity: .35; }
-}
-
-.play-hud p {
-  margin: 0;
-  max-width: 60vw;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: rgba(238, 234, 226, .72);
-  font-size: 10px;
-  letter-spacing: .08em;
-}
-
 .start-screen {
   position: absolute;
   z-index: 20;
@@ -579,7 +530,7 @@ body.debug-enabled .debug-tests {
   border: 1px solid #438675;
 }
 .debug-tests button:disabled { opacity: .4; }
-.debug-toggle, .sound-toggle {
+.debug-toggle, .sound-toggle, .stop-button {
   position: absolute;
   z-index: 60;
   top: calc(var(--safe-top) + 4px);
@@ -599,9 +550,11 @@ body.debug-enabled .debug-tests {
 .sound-toggle { right: calc(var(--safe-right) + 96px); min-width: 96px; }
 .sound-toggle[aria-pressed="true"] { color: #bde9dc; }
 .debug-toggle:focus-visible, .sound-toggle:focus-visible { outline: 2px solid #bde9dc; outline-offset: 2px; }
-.play-hud { top: calc(var(--safe-top) + 58px); }
+.stop-button { left: calc(var(--safe-left) + 10px); right: auto; min-width: 64px; }
+.stop-button[hidden] { display: none; }
+.stop-button:focus-visible { outline: 2px solid #bde9dc; outline-offset: 2px; }
 .debug-panel[hidden], .debug-tests[hidden], .debug-guides[hidden] { display: none !important; }
-#debugEncounter, #debugDistance, #debugPresence { margin: 7px 0 0; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
+#debugEncounter, #debugDistance, #debugPresence, #debugApp { margin: 7px 0 0; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
 body.debug-enabled .debug-panel {
   max-height: 40dvh;
   overflow-y: auto;
@@ -640,7 +593,6 @@ body.debug-enabled .debug-panel {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .camera-noise,
-  .live-mark i { animation: none; }
+  .camera-noise { animation: none; }
   .entity.is-escaping { filter: none; }
 }

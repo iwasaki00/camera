@@ -1,4 +1,4 @@
-// 距離・接近・段階別演出の実機調整値。
+// distanceは勝敗ではなく映像・音の距離感。時刻は有効フレームだけ積算する。
 export const STALKER_CONFIG = Object.freeze({
   initialDistance: 85,
   minimumDistance: 5,
@@ -7,29 +7,35 @@ export const STALKER_CONFIG = Object.freeze({
   notLookingGraceMs: 1200,
   spottedRetreatDistance: 15,
   maxDeltaMs: 100,
+  cycleDelayMs: [25000, 45000],
+  cycleTargets: [35, 60, 85],
+  dangerMaxMs: 8000,
+  farReturnDistance: [80, 95],
+  closeCallReturnChance: 0.7,
   profiles: {
     FAR: { minimum: 75, preset: 85, approachRate: 0.67,
       weights: { PEEK: 65, PASS: 25, FLY_BY: 8, CLOSE_CALL: 2 },
-      minEncounterDelay: 5000, maxEncounterDelay: 13000,
+      minEncounterDelay: 12000, maxEncounterDelay: 24000,
       peekScale: 0.86, peekOutside: 85, passScale: 0.7, flyByScale: 0.8, closeCallScale: 0.78 },
     MID: { minimum: 45, preset: 60, approachRate: 0.87,
       weights: { PEEK: 50, PASS: 30, FLY_BY: 15, CLOSE_CALL: 5 },
-      minEncounterDelay: 4000, maxEncounterDelay: 10000,
+      minEncounterDelay: 10000, maxEncounterDelay: 20000,
       peekScale: 1, peekOutside: 70, passScale: 1, flyByScale: 1, closeCallScale: 1 },
     NEAR: { minimum: 20, preset: 35, approachRate: 1.25,
       weights: { PEEK: 40, PASS: 30, FLY_BY: 20, CLOSE_CALL: 10 },
-      minEncounterDelay: 3000, maxEncounterDelay: 8000,
+      minEncounterDelay: 8000, maxEncounterDelay: 16000,
       peekScale: 1.12, peekOutside: 55, passScale: 1.18, flyByScale: 1.15, closeCallScale: 1.12 },
     DANGER: { minimum: 5, preset: 10, approachRate: 1.67,
       weights: { PEEK: 30, PASS: 25, FLY_BY: 25, CLOSE_CALL: 20 },
-      minEncounterDelay: 2500, maxEncounterDelay: 6000,
+      minEncounterDelay: 8000, maxEncounterDelay: 14000,
       peekScale: 1.24, peekOutside: 42, passScale: 1.35, flyByScale: 1.3, closeCallScale: 1.25 }
   }
 });
 
 export class Stalker {
-  constructor(config = STALKER_CONFIG) {
+  constructor(config = STALKER_CONFIG, random = Math.random) {
     this.config = config;
+    this.random = random;
     this.reset();
   }
 
@@ -48,7 +54,15 @@ export class Stalker {
   setDistance(value) {
     if (!Number.isFinite(value)) return;
     this.distance = Math.min(this.config.maximumDistance, Math.max(this.config.minimumDistance, value));
+    this.cycleMs = 0;
+    this.dangerMs = 0;
+    this.nextCycleMs = this.between(...this.config.cycleDelayMs);
     this.pause();
+  }
+  between(min, max) { return min + this.random() * (max - min); }
+  returnFar() { this.setDistance(this.between(...this.config.farReturnDistance)); }
+  afterEncounter(type) {
+    if (type === "CLOSE_CALL" && this.random() < this.config.closeCallReturnChance) this.returnFar();
   }
   setRange(name) {
     if (!this.config.profiles[name]) return false;
@@ -63,6 +77,7 @@ export class Stalker {
   retreat() {
     this.distance = Math.min(this.config.maximumDistance, this.distance + this.config.spottedRetreatDistance);
     this.notLookingMs = 0;
+    if (this.distanceState !== "DANGER") this.dangerMs = 0;
   }
 
   update(elapsedMs, angleDiff, active) {
@@ -72,6 +87,14 @@ export class Stalker {
     }
     const dt = Math.min(elapsedMs, this.config.maxDeltaMs);
     this.paused = false;
+    this.cycleMs += dt;
+    this.dangerMs = this.distanceState === "DANGER" ? this.dangerMs + dt : 0;
+    if (this.dangerMs >= this.config.dangerMaxMs) { this.returnFar(); return; }
+    if (this.cycleMs >= this.nextCycleMs) {
+      const candidates = this.config.cycleTargets.filter(value => Math.abs(value - this.distance) > 10);
+      this.setDistance(candidates[Math.floor(this.random() * candidates.length)] ?? this.config.initialDistance);
+      return;
+    }
     this.looking = Math.abs(angleDiff) <= this.config.lookingAngle;
     if (this.looking) { this.notLookingMs = 0; return; }
     const previous = this.notLookingMs;

@@ -56,15 +56,16 @@ function harness(debug = true, cameraDenied = false, orientationDenied = false, 
       AudioContext: withAudio ? FakeAudioContext : undefined,
       DeviceOrientationEvent: { requestPermission: async () => orientationDenied ? "denied" : "granted" },
       DeviceMotionEvent: { requestPermission: async () => "denied" },
-      addEventListener(type, fn) { windowEvents[type] = fn; }, requestAnimationFrame: fn => { frames.push(fn); return frames.length; },
+      addEventListener(type, fn) { windowEvents[type] = fn; }, removeEventListener(type) { delete windowEvents[type]; }, requestAnimationFrame: fn => { frames.push(fn); return frames.length; },
       setTimeout: () => 1, clearTimeout() {}, matchMedia: () => ({ matches: true })
     }
   };
   vm.createContext(sandbox);
   vm.runInContext(source.replace(/import\s+[\s\S]*?from\s+"[^"]+";/g, "") +
-    "\nglobalThis.testApp = { runtime, director, stalker, presence, audio, updatePresence, testPresence, encounterView, updateGame, handleOrientation, startExperience, relocateEntity, updateDebug, beginEscape };", sandbox);
+    "\nglobalThis.testApp = { runtime, stopExperience, director, stalker, presence, audio, updatePresence, testPresence, encounterView, updateGame, handleOrientation, startExperience, relocateEntity, updateDebug, beginEscape };", sandbox);
   assert.equal(nodes.get("#debugPanel").hidden, true);
   assert.equal(nodes.get("#debugToggle").getAttribute("aria-pressed"), "false");
+  sandbox.testApp.stalker.random = () => .99;
   if (debug) nodes.get("#debugToggle").click();
   return {
     ...sandbox.testApp, nodes, buttons, distanceButtons, audioButtons, directionButtons, setNow: value => { now = value; }, stopped: () => stopped,
@@ -228,7 +229,8 @@ timeoutPeek.handleOrientation({ webkitCompassHeading: 0 });
 timeoutPeek.updateGame(7000, 16);
 timeoutPeek.flushFrame(7010);
 assert.equal(timeoutPeek.runtime.state, "ESCAPE");
-assert.equal(timeoutPeek.stalker.distance, 60, "timeout escape must not reward");
+timeoutPeek.flushFrame(6601);
+assert.equal(timeoutPeek.stalker.distance, 75, "every PEEK escape increases distance");
 
 const soundApp = harness(true, false, false, true);
 assert.equal(soundApp.audio.context, null);
@@ -286,6 +288,7 @@ await soundApp.nodes.get("#soundToggle").click();
 assert.equal(context.state,"running");
 await soundApp.testPresence("TAP");
 const oldVoice=soundApp.audio.voice;
+soundApp.stopExperience();
 await soundApp.startExperience();
 assert.equal(soundApp.audio.context,context,"restart reuses one context");
 assert.equal(soundApp.audio.voice,null);
@@ -311,17 +314,17 @@ baitApp.runtime.angleDiff=120;
 baitApp.presence.random=()=>0;
 baitApp.updateGame(0,16);
 baitApp.director.deadline=Infinity; // 独立した通常Encounter抽選を隔離して誘導経路を検証。
-baitApp.setNow(15000);
+baitApp.setNow(22000);
 baitApp.handleOrientation({webkitCompassHeading:0});
-baitApp.updateGame(15000,16);
+baitApp.updateGame(22000,16);
 assert.equal(baitApp.presence.currentPresence,"RUSTLE");
 assert.ok(baitApp.presence.bait);
 // 実機のセンサーフレームに相当する整合した相対方位を設定する。
 baitApp.runtime.relativeYaw=85;
 baitApp.runtime.angleDiff=35;
-baitApp.runtime.lastOrientationAt=15300;
-baitApp.setNow(15300);
-baitApp.updateGame(15300,16);
+baitApp.runtime.lastOrientationAt=22300;
+baitApp.setNow(22300);
+baitApp.updateGame(22300,16);
 assert.equal(baitApp.director.currentEncounter,"PEEK");
 assert.equal(baitApp.runtime.state,"PERIPHERAL");
 assert.equal(baitApp.runtime.entityYaw,120,"bait preserves the sounded entity direction");
@@ -329,8 +332,8 @@ assert.equal(baitApp.presence.bait,null,"bait consumed once");
 baitApp.director.reset();
 baitApp.director.previousEncounter="PEEK";
 baitApp.director.consecutive=2;
-baitApp.presence.bait={entityYaw:120,soundYaw:105,readyAt:0,expiresAt:18000};
-baitApp.updatePresence(15400,true);
+baitApp.presence.bait={entityYaw:120,soundYaw:105,readyAt:0,expiresAt:25000};
+baitApp.updatePresence(22400,true);
 assert.equal(baitApp.director.currentEncounter,null,"bait preserves maximum two PEEK encounters");
 
 const emptyApp=harness(true,false,false,true);
@@ -357,4 +360,5 @@ await pendingStart;
 assert.equal(interruptedStart.runtime.started,false,"pagehide cancels pending START");
 assert.equal(interruptedStart.runtime.stream,null);
 assert.equal(interruptedStart.audio.voice,null);
+
 console.log("App integration: four encounters, cleanup, overlap, peek levels, spotting, relocation, null sensor and permission rejection passed");

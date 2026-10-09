@@ -1,6 +1,12 @@
+import EffectControls, { CategoryTabs } from "./EffectControls";
+import type { Category } from "./EffectControls";
+import { emptyFaceEffects, randomFaceEffects, applyFacePreset, FACE_PRESETS } from "./faceEffects";
+import type { FaceEffects, FacePreset } from "./faceEffects";
+import { advanceFrameClock, FrameMetrics, LandmarkSmoother, QUALITY_PROFILES } from "./performance";
+import type { Quality } from "./performance";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
-import { createFeatureRenderer, RENDER_SETTINGS } from "./featureRenderer";
+import { createFeatureRenderer } from "./featureRenderer";
 import type { EffectState, Landmark, PartConfig, PartId } from "./featureRenderer";
 
 import PartSliders from "./PartSliders";
@@ -232,6 +238,20 @@ export default function App() {
   const lastRenderedStateRef = useRef<EffectState | null>(null);
   const effectStateRef = useRef<EffectState>(createDefaultState());
 
+  const [category, setCategory] = useState<Category>("parts");
+  const [faceEffects, setFaceEffects] = useState<FaceEffects>(emptyFaceEffects);
+  const faceEffectsRef = useRef(faceEffects);
+  const lastExtrasRef = useRef<FaceEffects | null>(null);
+  const [quality, setQuality] = useState<Quality>("auto");
+  const qualityRef = useRef(quality);
+  const lastQualityRef = useRef("");
+  const smootherRef = useRef(new LandmarkSmoother());
+  const metricsRef = useRef(new FrameMetrics());
+  const lastDetectionRef = useRef(-Infinity);
+  const [includeExtras, setIncludeExtras] = useState(false);
+  const [debug, setDebug] = useState(() => new URLSearchParams(location.search).get("debug") === "1");
+  const debugRef = useRef(debug);
+  const debugPanelRef = useRef<HTMLPreElement | null>(null);
   const [layout, setLayout] = useState<Layout>(readLayout);
   const [randomStrength, setRandomStrength] = useState<RandomStrength>("normal");
   const trackingRef = useRef<boolean | null>(null);
@@ -283,6 +303,11 @@ export default function App() {
     cancelAnimationFrame(animationFrameRef.current);
     animationFrameRef.current = 0;
     lastVideoTimeRef.current = -1;
+    lastExtrasRef.current = null;
+    lastQualityRef.current = "";
+    lastDetectionRef.current = -Infinity;
+    smootherRef.current.reset(); metricsRef.current.reset();
+    if (debugPanelRef.current) debugPanelRef.current.textContent = "カメラ起動後に1秒間隔で計測します。";
     trackingRef.current = null;
     lastDrawAtRef.current = 0;
     lastLandmarksRef.current = undefined;
@@ -324,41 +349,54 @@ export default function App() {
       return;
     }
 
-    // Cap camera work at 30fps; parameter changes still render on the next RAF.
     const now = performance.now();
-    if (lastRenderedStateRef.current === effectStateRef.current && now - lastDrawAtRef.current < 1000 / 30) {
-      animationFrameRef.current = requestAnimationFrame(renderLoop);
-      return;
+    const level = qualityRef.current === "auto" ? metricsRef.current.autoLevel : qualityRef.current;
+    const profile = QUALITY_PROFILES[level];
+    const detectInterval = now < smootherRef.current.fastUntil ? Math.min(profile.detectInterval, 65) : profile.detectInterval;
+    const settingsChanged = lastRenderedStateRef.current !== effectStateRef.current || lastExtrasRef.current !== faceEffectsRef.current || lastQualityRef.current !== level;
+    if (!settingsChanged && now - lastDrawAtRef.current < 1000 / profile.fps - 1) {
+      animationFrameRef.current = requestAnimationFrame(renderLoop); return;
     }
-    lastDrawAtRef.current = now;
-    const frameScale = Math.min(1, RENDER_SETTINGS.maxFrameDimension / Math.max(video.videoWidth, video.videoHeight));
-    const width = Math.max(1, Math.round(video.videoWidth * frameScale));
-    const height = Math.max(1, Math.round(video.videoHeight * frameScale));
+    const frameScale = Math.min(1, profile.maxFrameDimension / Math.max(video.videoWidth, video.videoHeight));
+    const width = Math.max(1, Math.round(video.videoWidth * frameScale)), height = Math.max(1, Math.round(video.videoHeight * frameScale));
     const resized = canvas.width !== width || canvas.height !== height;
+    const newFrame = video.currentTime !== lastVideoTimeRef.current;
+    if (!newFrame && !settingsChanged && !resized) { animationFrameRef.current = requestAnimationFrame(renderLoop); return; }
+    lastDrawAtRef.current = advanceFrameClock(lastDrawAtRef.current, now, profile.fps, settingsChanged);
     if (resized) {
-      canvas.width = sourceCanvas.width = width;
-      canvas.height = sourceCanvas.height = height;
+      canvas.width = sourceCanvas.width = width; canvas.height = sourceCanvas.height = height;
       frame.style.aspectRatio = width + " / " + height;
       rendererRef.current?.clearCache();
     }
-    if (!resized && video.currentTime === lastVideoTimeRef.current && lastRenderedStateRef.current === effectStateRef.current) {
-      animationFrameRef.current = requestAnimationFrame(renderLoop);
-      return;
-    }
-    // Capture once. Every patch reads this immutable mirrored camera frame.
-    // On repeated requestAnimationFrame callbacks keep both frame and landmarks;
-    // still redraw so slider changes apply without a flash of the unprocessed video.
-    if (resized || video.currentTime !== lastVideoTimeRef.current) {
-      sourceCtx.clearRect(0, 0, width, height);
-      drawMirroredVideo(sourceCtx, video, width, height);
+    const captureStart = performance.now();
+    if (newFrame || resized) {
+      sourceCtx.clearRect(0, 0, width, height); drawMirroredVideo(sourceCtx, video, width, height);
       lastVideoTimeRef.current = video.currentTime;
-      const result = landmarker.detectForVideo(video, performance.now());
-      lastLandmarksRef.current = result.faceLandmarks?.[0];
     }
+    const captureMs = performance.now() - captureStart;
+    let detectMs: number | undefined;
+    if (newFrame && (now - lastDetectionRef.current >= detectInterval)) {
+      const detectStart = performance.now();
+      const result = landmarker.detectForVideo(video, now);
+      detectMs = performance.now() - detectStart;
+      lastDetectionRef.current = now;
+      lastLandmarksRef.current = result.faceLandmarks?.[0];
+      smootherRef.current.update(lastLandmarksRef.current, now);
+    }
+    const landmarks = smootherRef.current.sample(now);
     if (!rendererRef.current) rendererRef.current = createFeatureRenderer();
-    const landmarks = lastLandmarksRef.current;
-    rendererRef.current.renderFeatureEffects(sourceCanvas, ctx, landmarks, effectStateRef.current);
+    rendererRef.current.renderFeatureEffects(sourceCanvas, ctx, landmarks, effectStateRef.current, undefined,
+      { effects: faceEffectsRef.current, quality: profile });
     lastRenderedStateRef.current = effectStateRef.current;
+    lastExtrasRef.current = faceEffectsRef.current; lastQualityRef.current = level;
+    const timings = rendererRef.current.metrics;
+    if (metricsRef.current.record(now, detectMs, timings.warpMs, timings.compositeMs + captureMs, performance.now() - now)
+      && debugRef.current && debugPanelRef.current) {
+      const m = metricsRef.current.latest;
+      debugPanelRef.current.textContent = "FPS " + m.fps.toFixed(1) + " / " + level + " / " + width + "×" + height +
+        "\n顔検出 " + m.detectMs.toFixed(1) + "ms（更新時） 変形 " + m.warpMs.toFixed(1) + "ms 合成 " + m.compositeMs.toFixed(1) +
+        "ms\n全処理 " + m.totalMs.toFixed(1) + "ms/frame / 格子 " + profile.patchGrid + " / 検出間隔 " + detectInterval + "ms";
+    }
     const tracking = !!landmarks;
     if (trackingRef.current !== tracking) {
       trackingRef.current = tracking;
@@ -386,6 +424,7 @@ export default function App() {
         audio: false,
         video: {
           facingMode: "user",
+          frameRate: { ideal: 30, max: 30 },
           width: { ideal: 720 },
           height: { ideal: 960 }
         }
@@ -433,6 +472,7 @@ export default function App() {
 
   function resetAll(): void {
     setEffectState(createDefaultState());
+    setFaceEffects(emptyFaceEffects());
     setDiagnosis(buildDiagnosis(32, "調整前の素顔"));
   }
 
@@ -442,12 +482,22 @@ export default function App() {
   }
   function randomizeFace(): void {
     setEffectState(current => randomizeParts(current, ACTIVE_PART_IDS, randomStrength));
-    setDiagnosis("全パーツをランダム（" + randomStrength + "）");
+    if (includeExtras) setFaceEffects(randomFaceEffects(randomStrength));
+    setDiagnosis((includeExtras ? "パーツ＋配置＋特殊" : "全パーツ") + "をランダム（" + randomStrength + "）");
   }
   useEffect(() => { saveLayout(layout); }, [layout]);
 
+  function applyNewPreset(name: FacePreset): void {
+    const result = applyFacePreset(effectState, name);
+    setEffectState(result.parts); setFaceEffects(result.effects); setDiagnosis(FACE_PRESETS[name]);
+  }
+  useEffect(() => { faceEffectsRef.current = faceEffects; }, [faceEffects]);
+  useEffect(() => { qualityRef.current = quality; }, [quality]);
+  useEffect(() => { debugRef.current = debug; }, [debug]);
+
   function applyNamedPreset(name: keyof typeof PRESETS): void {
     setEffectState(applyPreset(name));
+    setFaceEffects(emptyFaceEffects());
     setDiagnosis(PRESET_DIAGNOSIS[name]);
   }
 
@@ -462,6 +512,7 @@ export default function App() {
     timeoutRef.current = window.setTimeout(() => {
       const result = buildAccidentState(accidentType, accidentRate, seed);
       setEffectState(result.state);
+      setFaceEffects(emptyFaceEffects());
       setDiagnosis(buildDiagnosis(result.diagnosis.level, result.diagnosis.label));
       setLoadingOverlay("");
       timeoutRef.current = null;
@@ -484,7 +535,7 @@ export default function App() {
   }, []);
 
   return (
-    <main className={"henface-app layout-" + layout}>
+    <main className={"henface-app layout-" + layout} data-category={category}>
       <header className="app-header">
         <div><h1>変顔メーカー</h1><p className="app-subtitle">顔エフェクトカメラ</p></div>
         <label className="layout-picker">レイアウト
@@ -510,12 +561,17 @@ export default function App() {
           </div>
         </section>
         <section className="controls-card" aria-label="顔パーツ調整">
+          <CategoryTabs value={category} change={setCategory} />
+          <div className="category-content">
+          {category === "parts" ? <>
           <div className="tab-row" aria-label="パーツ選択">
             {ACTIVE_PART_DEFS.map(part => <button key={part.id} type="button" aria-pressed={activePart === part.id}
               className={"tab-button " + (activePart === part.id ? "is-active" : "")} onClick={() => setActivePart(part.id as FeatureType)}>{part.label}</button>)}
           </div>
           <PartSliders config={effectState[activePart]} paired={activePartDef.supportsDistance} layout={layout}
             update={patch => updatePart(activePart, patch)} />
+          </> : <EffectControls category={category} effects={faceEffects} update={setFaceEffects} preset={applyNewPreset} />}
+          </div>
           <div className="main-actions">
             <button className="minor-button" type="button" aria-label="このパーツをリセット" onClick={resetCurrentPart}><span>このパーツ</span>リセット</button>
             <button className="minor-button" type="button" aria-label="全部リセット" onClick={resetAll}><span>全部</span>リセット</button>
@@ -530,9 +586,15 @@ export default function App() {
           <p className="diagnosis" aria-live="polite">{diagnosis}</p>
         </section>
       </div>
+      {debug && <pre ref={debugPanelRef} className="debug-panel" aria-label="処理時間計測">カメラ起動後に1秒間隔で計測します。</pre>}
       {error && <p className="error-box" role="alert">{error}</p>}
-      <details className="extra-tools"><summary>プリセット・その他</summary>
+      <details className="extra-tools"><summary>品質・ランダム設定・その他</summary>
         <p>{message}</p>
+        <label className="strength-picker">品質<select aria-label="品質" value={quality} onChange={e => setQuality(e.target.value as Quality)}>
+          <option value="auto">auto · 自動</option><option value="speed">speed · 速度</option><option value="balanced">balanced · 標準</option><option value="quality">quality · 高画質</option>
+        </select></label>
+        <label className="checkbox-option"><input type="checkbox" checked={includeExtras} onChange={e => setIncludeExtras(e.target.checked)} />全パーツランダムに配置・特殊も含める</label>
+        <label className="checkbox-option"><input type="checkbox" checked={debug} onChange={e => setDebug(e.target.checked)} />処理時間を表示（開発用）</label>
         <div className="preset-row">
           <button type="button" className="minor-button" onClick={() => applyNamedPreset("surprise")}>びっくり顔</button>
           <button type="button" className="minor-button" onClick={() => applyNamedPreset("alien")}>宇宙人顔</button>

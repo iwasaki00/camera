@@ -14,13 +14,14 @@ import { Stalker, STALKER_CONFIG } from "./stalker.js";
 import { PresenceDirector, PRESENCE_CONFIG } from "./presence.js";
 import { PresenceAudio } from "./audio.js";
 
-const VERSION = "0.4.0 — PRESENCE";
+const VERSION = "1.0.0 — PRESENCE EXPERIENCE";
 const director = new EncounterDirector();
 const stalker = new Stalker();
 const presence = new PresenceDirector();
 const audio = new PresenceAudio(window.AudioContext || window.webkitAudioContext);
 let audioSession = 0;
 let startGeneration = 0;
+let encounterPausedAt = null;
 director.setProfile(stalker.profile);
 const encounterView = {
   element: document.querySelector("#encounterVisual"),
@@ -73,8 +74,7 @@ const elements = {
   startScreen: document.querySelector("#startScreen"),
   startButton: document.querySelector("#startButton"),
   startStatus: document.querySelector("#startStatus"),
-  playHud: document.querySelector("#playHud"),
-  playHint: document.querySelector("#playHint"),
+  stopButton: document.querySelector("#stopButton"),
   message: document.querySelector("#message"),
   messageTitle: document.querySelector("#messageTitle"),
   messageBody: document.querySelector("#messageBody"),
@@ -97,7 +97,8 @@ const elements = {
   debugProximity: document.querySelector("#debugProximity"),
   debugDistance: document.querySelector("#debugDistance"),
   debugPresence: document.querySelector("#debugPresence"),
-  soundToggle: document.querySelector("#soundToggle")
+  soundToggle: document.querySelector("#soundToggle"),
+  debugApp: document.querySelector("#debugApp")
 };
 
 if (Object.values(elements).some((element) => !element)) {
@@ -105,6 +106,7 @@ if (Object.values(elements).some((element) => !element)) {
 }
 
 const runtime = {
+  appState: "READY",
   started: false,
   starting: false,
   state: STATES.HIDDEN,
@@ -168,6 +170,7 @@ function orientationYaw(event) {
 }
 
 function handleOrientation(event) {
+  if (!runtime.started || document.hidden) return;
   const rawYaw = orientationYaw(event);
   if (rawYaw === null) return;
 
@@ -201,7 +204,6 @@ function handleOrientation(event) {
     director.reset();
     runtime.orientationPermission = "active";
     window.clearTimeout(runtime.sensorTimeoutId);
-    elements.playHint.textContent = "ゆっくり周囲を見回してください";
     hideMessage();
     return;
   }
@@ -272,7 +274,7 @@ function cameraFailureMessage(error) {
   return "カメラ映像を取得できませんでした。ほかのアプリがカメラを使用していないか確認してください。";
 }
 
-async function startCamera() {
+async function startCamera(generation) {
   runtime.cameraPermission = "requesting";
 
   if (!navigator.mediaDevices?.getUserMedia) {
@@ -290,12 +292,18 @@ async function startCamera() {
       }
     });
 
+    if (generation !== startGeneration) {
+      stream.getTracks().forEach(track => track.stop());
+      return { ok: false };
+    }
     runtime.stream = stream;
     elements.camera.srcObject = stream;
     await elements.camera.play();
+    if (generation !== startGeneration) return { ok: false };
     runtime.cameraPermission = "granted";
     return { ok: true };
   } catch (error) {
+    if (generation !== startGeneration) return { ok: false };
     runtime.cameraPermission = error?.name === "NotAllowedError" ? "denied" : "failed";
     return { ok: false, message: cameraFailureMessage(error) };
   }
@@ -314,7 +322,6 @@ function beginSensorTimeout() {
   runtime.sensorTimeoutId = window.setTimeout(() => {
     if (!runtime.started || runtime.initialYaw !== null) return;
     runtime.orientationPermission = "no-data";
-    elements.playHint.textContent = "方向センサーを取得できません";
     showMessage(
       "方向センサーを取得できません",
       "Safariの「モーションと画面の向きのアクセス」を有効にして、ページを再読み込みしてください。"
@@ -323,11 +330,16 @@ function beginSensorTimeout() {
 }
 
 async function startExperience() {
-  if (runtime.starting) return;
+  if (runtime.starting || runtime.started) return;
 
   const generation = ++startGeneration;
   stopCamera();
   runtime.started = false;
+  runtime.appState = "STARTING";
+  encounterPausedAt = null;
+  elements.game.classList.remove("is-running");
+  elements.startScreen.classList.remove("is-hidden");
+  elements.stopButton.hidden = false;
   presence.reset();
   audio.lastSpatial = null;
   // resumeは権限ダイアログを待つ前、STARTのユーザー操作内で開始する。
@@ -340,7 +352,7 @@ async function startExperience() {
   // requestPermissionはタップの同期処理内で呼び出す必要があるため、先に全て開始する。
   const orientationRequest = requestOrientationPermission();
   const motionRequest = requestMotionPermission();
-  const cameraRequest = startCamera();
+  const cameraRequest = startCamera(generation);
 
   const [orientationStatus, , cameraResult] = await Promise.all([
     orientationRequest,
@@ -349,9 +361,6 @@ async function startExperience() {
   ]);
 
   if (generation !== startGeneration) {
-    stopCamera();
-    runtime.starting = false;
-    elements.startButton.disabled = false;
     return;
   }
 
@@ -360,6 +369,8 @@ async function startExperience() {
     setStartStatus(cameraResult.message, true);
     elements.startButton.disabled = false;
     runtime.starting = false;
+    runtime.appState = "READY";
+    elements.stopButton.hidden = true;
     return;
   }
 
@@ -371,16 +382,28 @@ async function startExperience() {
     setStartStatus(message, true);
     elements.startButton.disabled = false;
     runtime.starting = false;
+    runtime.appState = "READY";
+    elements.stopButton.hidden = true;
     return;
   }
 
   runtime.started = true;
+  runtime.appState = "RUNNING";
   runtime.starting = false;
   runtime.initialYaw = null;
   runtime.relativeYaw = null;
   runtime.entityYaw = null;
   runtime.angleDiff = null;
   runtime.turnSpeed = 0;
+  runtime.currentYaw = null;
+  runtime.previousYaw = null;
+  runtime.previousAbsDiff = null;
+  runtime.approachSpeed = 0;
+  runtime.detectedSide = null;
+  runtime.lastOrientationAt = -Infinity;
+  encounterView.escapeStartedAt = null;
+  encounterView.peekLevel = 0;
+  encounterView.profile = null;
   stalker.reset();
   director.reset();
   director.setProfile(stalker.profile);
@@ -389,9 +412,8 @@ async function startExperience() {
 
   elements.game.classList.add("is-running");
   elements.startScreen.classList.add("is-hidden");
-  elements.playHud.setAttribute("aria-hidden", "false");
+  window.addEventListener("deviceorientation", handleOrientation, true);
   elements.startButton.disabled = false;
-  elements.playHint.textContent = "方向を測定しています…";
   beginSensorTimeout();
 }
 
@@ -433,6 +455,7 @@ function hideEntity() {
 }
 
 function beginEscape(discovered = false) {
+  const generation = startGeneration;
   if (runtime.state !== STATES.PERIPHERAL) return;
 
   setState(STATES.SPOTTED);
@@ -440,12 +463,10 @@ function beginEscape(discovered = false) {
   const direction = side === "RIGHT" ? 1 : -1;
 
   window.requestAnimationFrame(() => {
-    if (runtime.state !== STATES.SPOTTED || director.currentEncounter !== "PEEK") return;
+    if (generation !== startGeneration || document.hidden || runtime.appState !== "RUNNING" || runtime.state !== STATES.SPOTTED || director.currentEncounter !== "PEEK") return;
     setState(STATES.ESCAPE);
-    if (discovered) {
-      stalker.retreat();
-      director.setProfile(stalker.profile, performance.now());
-    }
+    stalker.retreat();
+    director.setProfile(stalker.profile, performance.now());
     elements.entity.classList.add("is-escaping");
     elements.entity.style.opacity = "0.08";
     elements.entity.style.transform = `translate3d(${direction * 175}%, -52%, 0) rotate(${direction * 11}deg) scale(.82)`;
@@ -455,6 +476,8 @@ function beginEscape(discovered = false) {
 }
 
 function relocateEntity() {
+  const generation = startGeneration;
+  stalker.afterEncounter(director.currentEncounter);
   presence.bait = null;
   setState(STATES.RELOCATE);
   hideEntity();
@@ -469,7 +492,7 @@ function relocateEntity() {
   director.finish(performance.now());
 
   window.requestAnimationFrame(() => {
-    if (runtime.state === STATES.RELOCATE) setState(STATES.STALKING);
+    if (generation === startGeneration && !document.hidden && runtime.appState === "RUNNING" && runtime.state === STATES.RELOCATE) setState(STATES.STALKING);
   });
 }
 
@@ -536,7 +559,7 @@ function prepareEncounter(type, now, forced = false) {
 
 for (const button of encounterView.buttons) {
   button.addEventListener("click", () => {
-    if (!debugEnabled || !runtime.started || runtime.initialYaw === null) return;
+    if (!debugEnabled || runtime.appState !== "RUNNING" || !runtime.started || runtime.initialYaw === null || document.hidden) return;
     const now = performance.now();
     const type = button.dataset.testEncounter;
     if (director.force(type, now)) prepareEncounter(type, now, true);
@@ -552,35 +575,39 @@ document.addEventListener("visibilitychange", () => {
   cleanupEncounterVisual();
   hideEntity();
   director.finish(performance.now());
-  setState(STATES.STALKING);
+  if (encounterPausedAt === null) encounterPausedAt = performance.now();
+  if (runtime.appState === "RUNNING") setState(STATES.STALKING);
   encounterView.escapeStartedAt = null;
 });
 
 function updateGame(now, elapsedMs) {
-  const distanceActive = runtime.started && runtime.initialYaw !== null
-    && runtime.cameraPermission === "granted" && Boolean(runtime.stream)
-    && !runtime.stream.getTracks().some(track => track.readyState === "ended")
-    && runtime.motionPermission === "granted" && !document.hidden
+  const progressActive = runtime.appState === "RUNNING" && runtime.started && runtime.initialYaw !== null
+    && hasLiveCamera()
+    && !document.hidden
     && now - runtime.lastOrientationAt <= CONFIG.orientationTimeout;
+  const distanceActive = progressActive && runtime.motionPermission === "granted";
   stalker.update(elapsedMs, runtime.angleDiff, distanceActive);
+  if (runtime.appState !== "RUNNING") return;
   director.setProfile(stalker.profile, now);
   updatePresence(now, distanceActive);
   if (!runtime.started || runtime.initialYaw === null || runtime.angleDiff === null) return;
 
-  if (document.hidden) return;
-  if (now - runtime.lastOrientationAt > CONFIG.orientationTimeout) {
+  if (!progressActive) {
+    if (encounterPausedAt === null) encounterPausedAt = now;
     hideEntity();
     cleanupEncounterVisual();
     director.finish(now);
     setState(STATES.STALKING);
-    runtime.orientationPermission = "no-data";
-    elements.playHint.textContent = "方向センサーを取得できません";
+    if (now - runtime.lastOrientationAt > CONFIG.orientationTimeout) {
+      runtime.orientationPermission = "no-data";
+    }
     return;
   }
-  runtime.orientationPermission = "active";
-  if (elements.playHint.textContent !== "ゆっくり周囲を見回してください") {
-    elements.playHint.textContent = "ゆっくり周囲を見回してください";
+  if (encounterPausedAt !== null) {
+    if (director.deadline !== null) director.deadline += Math.max(0, now - encounterPausedAt);
+    encounterPausedAt = null;
   }
+  runtime.orientationPermission = "active";
   const selected = director.update(now);
   if (selected) prepareEncounter(selected, now);
   if (director.currentEncounter !== "PEEK") {
@@ -645,6 +672,7 @@ function updateDebug(now) {
   updateSoundButton();
   if (!debugEnabled || now - runtime.debugUpdatedAt < CONFIG.debugRefreshInterval) return;
   runtime.debugUpdatedAt = now;
+  elements.debugApp.textContent = `APP ${runtime.appState}\nCYCLE ${(stalker.cycleMs / 1000).toFixed(1)}s\nDANGER ${(stalker.dangerMs / 1000).toFixed(1)}s`;
 
   elements.debugCurrentYaw.textContent = readableAngle(runtime.currentYaw);
   elements.debugInitialYaw.textContent = readableAngle(runtime.initialYaw);
@@ -698,12 +726,15 @@ function updateDebug(now) {
     `CLOSE_CALL ${director.currentEncounter === "CLOSE_CALL" && director.state === "EVENT"}`
   ].join("\n");
   for (const button of encounterView.buttons) {
-    button.disabled = !runtime.started || runtime.initialYaw === null
+    button.disabled = runtime.appState !== "RUNNING" || !runtime.started || runtime.initialYaw === null || document.hidden
       || director.state === "EVENT" || Boolean(director.currentEncounter);
   }
   for (const button of document.querySelectorAll("[data-test-audio], [data-test-direction]")) {
-    button.disabled = !runtime.started || runtime.initialYaw === null || !audio.enabled || !audio.Context
+    button.disabled = runtime.appState !== "RUNNING" || !runtime.started || runtime.initialYaw === null || !audio.enabled || !audio.Context
       || document.hidden || presence.state === "PLAYING" || strongEncounter();
+  }
+  for (const button of document.querySelectorAll("[data-set-distance]")) {
+    button.disabled = runtime.appState === "STARTING";
   }
 
   const proximity = runtime.angleDiff === null
@@ -721,32 +752,48 @@ function frame(now) {
   window.requestAnimationFrame(frame);
 }
 
-window.addEventListener("deviceorientation", handleOrientation, true);
 elements.startButton.addEventListener("click", startExperience);
+elements.stopButton.addEventListener("click", stopExperience);
 elements.retryButton.addEventListener("click", () => {
   hideMessage();
-  if (runtime.started && runtime.initialYaw === null) {
-    runtime.started = false;
-    elements.game.classList.remove("is-running");
-    elements.startScreen.classList.remove("is-hidden");
-    stopCamera();
-  }
+  if (runtime.started) stopExperience();
   startExperience();
 });
 
-window.addEventListener("pagehide", () => {
+window.addEventListener("pagehide", stopExperience);
+
+function stopExperience() {
   startGeneration++;
+  runtime.appState = "STOPPED";
+  runtime.started = false;
+  runtime.starting = false;
+  window.removeEventListener("deviceorientation", handleOrientation, true);
   stalker.pause();
   window.clearTimeout(runtime.sensorTimeoutId);
   window.clearTimeout(runtime.escapeTimeoutId);
   cleanupEncounterVisual();
   hideEntity();
   director.reset();
-  runtime.started = false;
+  setState(STATES.HIDDEN);
+  runtime.initialYaw = null;
+  runtime.currentYaw = null;
+  runtime.relativeYaw = null;
+  runtime.angleDiff = null;
+  runtime.lastOrientationAt = -Infinity;
+  encounterView.escapeStartedAt = null;
+  encounterView.peekLevel = 0;
+  encounterPausedAt = null;
   elements.game.classList.remove("is-running");
   elements.startScreen.classList.remove("is-hidden");
   stopCamera();
-});
+  runtime.cameraPermission = "stopped";
+  elements.stopButton.hidden = true;
+  elements.startButton.disabled = false;
+  hideMessage();
+  setStartStatus("STARTで再開できます");
+  runtime.debugUpdatedAt = -Infinity;
+  updateDebug(performance.now());
+}
 
 function stopPresence() {
   audioSession++;
@@ -758,6 +805,11 @@ function strongEncounter() {
   return ["PASS", "FLY_BY", "CLOSE_CALL"].includes(director.currentEncounter);
 }
 
+function hasLiveCamera() {
+  return runtime.cameraPermission === "granted" && Boolean(runtime.stream) && runtime.stream.active !== false
+    && runtime.stream.getTracks().some(track => track.kind !== "audio" && track.readyState !== "ended" && !track.muted);
+}
+
 function updateSoundButton() {
   elements.soundToggle.textContent = !audio.Context ? "NO AUDIO"
     : !audio.enabled ? "SOUND OFF" : runtime.started && !audio.ready ? "SOUND RETRY" : "SOUND ON";
@@ -766,7 +818,7 @@ function updateSoundButton() {
 }
 
 function updatePresence(now, active) {
-  const input = { active: active && audio.ready, range: stalker.distanceState,
+  const input = { active: active && runtime.appState === "RUNNING" && audio.ready, range: stalker.distanceState,
     looking: Math.abs(runtime.angleDiff) <= STALKER_CONFIG.lookingAngle,
     relativeYaw: runtime.relativeYaw, entityYaw: runtime.entityYaw, strongEncounter: strongEncounter() };
   const event = presence.update(now, input);
@@ -796,11 +848,11 @@ elements.soundToggle.addEventListener("click", async () => {
 });
 
 async function testPresence(type, direction) {
-  if (!debugEnabled || !runtime.started || runtime.initialYaw === null || !audio.enabled
+  if (!debugEnabled || runtime.appState !== "RUNNING" || !runtime.started || runtime.initialYaw === null || !audio.enabled
     || document.hidden || strongEncounter() || presence.state === "PLAYING") return;
   const session = audioSession;
   await audio.unlock();
-  if (session !== audioSession || !debugEnabled || !runtime.started || !audio.ready || document.hidden
+  if (session !== audioSession || !debugEnabled || runtime.appState !== "RUNNING" || !runtime.started || !audio.ready || document.hidden
     || strongEncounter() || presence.state === "PLAYING") return;
   const offsets = { LEFT: -90, RIGHT: 90, BEHIND: 180, FRONT: 0 };
   const event = { type, yaw: direction ? normalizeDegrees(runtime.relativeYaw + offsets[direction]) : runtime.entityYaw };
@@ -835,7 +887,7 @@ function setDebugEnabled(enabled) {
 elements.debugToggle.addEventListener("click", () => setDebugEnabled(!debugEnabled));
 for (const button of document.querySelectorAll("[data-set-distance]")) {
   button.addEventListener("click", () => {
-    if (!debugEnabled || !stalker.setRange(button.dataset.setDistance)) return;
+    if (!debugEnabled || runtime.appState === "STARTING" || !stalker.setRange(button.dataset.setDistance)) return;
     director.setProfile(stalker.profile, performance.now());
     runtime.debugUpdatedAt = -Infinity;
     updateDebug(performance.now());

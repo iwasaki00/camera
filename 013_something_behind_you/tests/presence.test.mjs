@@ -34,7 +34,7 @@ for (const range of Object.keys(PRESENCE_CONFIG.profiles)) {
 const d = new PresenceDirector(PRESENCE_CONFIG, () => 0);
 assert.equal(d.update(0,input), null);
 const deadline = d.deadline;
-assert.equal(deadline, 15000, "quiet extra time retained");
+assert.equal(deadline, PRESENCE_CONFIG.profiles.FAR.delay[0] + PRESENCE_CONFIG.quietExtraMs, "quiet extra time retained");
 assert.equal(d.update(deadline,{...input,active:false}), null);
 assert.equal(d.state,"IDLE");
 d.update(deadline+1,input);

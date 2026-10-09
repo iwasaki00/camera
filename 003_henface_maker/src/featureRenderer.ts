@@ -1,3 +1,6 @@
+import { applyFaceOffsets, emptyFaceEffects, specialConfig } from "./faceEffects";
+import type { FaceEffects } from "./faceEffects";
+import type { RenderQuality } from "./performance";
 /** Immutable camera source -> local patches -> output -> drawing overlays. */
 export const EFFECT_VERSION = "0.2.0-feather";
 export type PartId = "brows" | "eyes" | "ears" | "cheeks" | "nose" | "mouth" | "head" | "jaw";
@@ -14,11 +17,12 @@ export type TransformOptions = {
   center: Point;
   translation: Point;
   opacity: number;
+  skewY?: number;
 };
 export type FeatureRegion = { center: Point; width: number; height: number };
 // Explicit overlap policy: details blend over larger features.
 export const FEATURE_ORDER: readonly FeatureType[] = ["nose", "mouth", "eyes", "brows"];
-export const RENDER_SETTINGS = { maxFrameDimension: 720, patchResolution: 1, patchGrid: 12 };
+export const RENDER_SETTINGS = { maxFrameDimension: 720, patchResolution: 1, patchGrid: 10 };
 const INDEXES: Record<FeatureType, number[][]> = {
   nose: [[6, 1, 2, 98, 327, 168, 197]],
   eyes: [[33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246],
@@ -26,6 +30,7 @@ const INDEXES: Record<FeatureType, number[][]> = {
   mouth: [[61, 291, 13, 14, 78, 308, 0, 17]],
   brows: [[46, 53, 52, 65, 55, 70, 63, 105, 66, 107], [276, 283, 282, 295, 285, 300, 293, 334, 296, 336]]
 };
+const LANDMARK_IDS = Object.values(INDEXES).flat(2);
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 const amplify = (v: number, amount: number) => clamp(1 + (v - 1) * amount, 0.2, 3.2);
 const mirror = (p: Point, w: number, h: number): Point => ({ x: (1 - p.x) * w, y: p.y * h });
@@ -94,7 +99,12 @@ function surface(): Surface {
   return { canvas, ctx };
 }
 export function createFeatureRenderer() {
-  const patch = surface();
+  const patches = new Map<string, Surface>();
+  let activeQuality: Pick<RenderQuality, "patchResolution" | "patchGrid"> = RENDER_SETTINGS;
+  const metrics = { warpMs: 0, compositeMs: 0, transformedParts: 0 };
+  let geometryKey = "";
+  let cachedRegions: Partial<Record<FeatureType, FeatureRegion[]>> = {};
+  const defaultEffects = emptyFaceEffects();
   const masks = new Map<string, HTMLCanvasElement>();
   function mask(width: number, height: number, options: TransformOptions) {
     const key = [width, height, options.featherRadius, options.centerWeight].join(":");
@@ -108,41 +118,52 @@ export function createFeatureRenderer() {
   function transformFeatureRegion(sourceCtx: CanvasRenderingContext2D, destCtx: CanvasRenderingContext2D,
     _region: FeatureRegion, options: TransformOptions): void {
     if (sourceCtx.canvas === destCtx.canvas) throw new Error("変形ソースと出力canvasは分離してください。");
+    const begin = performance.now();
     const sx = options.scaleX * options.uniformScale, sy = options.scaleY * options.uniformScale;
-    if (sx === 1 && sy === 1 && options.translation.x === 0 && options.translation.y === 0 && options.opacity === 1) return;
+    if (sx === 1 && sy === 1 && options.translation.x === 0 && options.translation.y === 0 && options.opacity === 1 && !options.skewY) return;
+    metrics.transformedParts++;
     const rx = options.influenceRadius.x, ry = options.influenceRadius.y;
     const cx = options.center.x, cy = options.center.y;
     const left = Math.max(0, cx - rx), top = Math.max(0, cy - ry);
     const right = Math.min(sourceCtx.canvas.width, cx + rx), bottom = Math.min(sourceCtx.canvas.height, cy + ry);
     if (right <= left || bottom <= top) return;
-    const resolution = clamp(RENDER_SETTINGS.patchResolution, 0.25, 1);
-    const w = Math.max(8, Math.ceil((right - left) * resolution / 8) * 8);
-    const h = Math.max(8, Math.ceil((bottom - top) * resolution / 8) * 8);
-    if (patch.canvas.width !== w) patch.canvas.width = w;
-    if (patch.canvas.height !== h) patch.canvas.height = h;
+    const resolution = clamp(activeQuality.patchResolution, 0.25, 1);
+    const w = Math.max(32, Math.ceil((right - left) * resolution / 32) * 32);
+    const h = Math.max(32, Math.ceil((bottom - top) * resolution / 32) * 32);
+    const patchKey = w + ":" + h;
+    let patch = patches.get(patchKey);
+    if (!patch) {
+      patch = surface(); patch.canvas.width = w; patch.canvas.height = h;
+      if (patches.size >= 12) patches.delete(patches.keys().next().value!);
+      patches.set(patchKey, patch);
+    }
     const ctx = patch.ctx;
-    ctx.clearRect(0, 0, w, h); ctx.save();
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(sourceCtx.canvas, left, top, right - left, bottom - top, 0, 0, w, h);
+    ctx.save();
     ctx.scale(w / (right - left), h / (bottom - top)); ctx.translate(-left, -top);
     // A small resampling grid inside the cut-out keeps adjacent samples connected.
     // All triangles read the camera source; no output pixel is ever a source.
     // This is a Canvas-only patch backend, replaceable by a future face mesh/GPU.
-    const grid = Math.round(clamp(RENDER_SETTINGS.patchGrid, 8, 24));
+    const hasGeometry = sx !== 1 || sy !== 1 || options.translation.x !== 0 || options.translation.y !== 0 || !!options.skewY;
+    const grid = Math.round(clamp(activeQuality.patchGrid, 8, 24));
     const core = 0.32;
     const inverseX = Math.min(0.92 / core, 1 / sx), inverseY = Math.min(0.92 / core, 1 / sy);
     const exponentX = Math.log(core * inverseX) / Math.log(core);
     const exponentY = Math.log(core * inverseY) / Math.log(core);
     const samples: { dest: Point; source: Point }[] = [];
-    for (let y = 0; y <= grid; y++) {
+    if (hasGeometry) for (let y = 0; y <= grid; y++) {
       for (let x = 0; x <= grid; x++) {
         const dx = left + (right - left) * x / grid - cx;
         const dy = top + (bottom - top) * y / grid - cy;
         const radius = Math.min(1, Math.hypot(dx / rx, dy / ry));
         const sampleX = radius <= core ? inverseX : Math.pow(radius, exponentX - 1);
         const sampleY = radius <= core ? inverseY : Math.pow(radius, exponentY - 1);
-        const falloff = Math.pow(1 - radius, 2);
+        const t = Math.max(0, (radius - core) / (1 - core));
+        const falloff = 1 - t * t * (3 - 2 * t);
         samples.push({ dest: { x: cx + dx, y: cy + dy }, source: {
           x: clamp(cx + (dx - options.translation.x * falloff) * sampleX, 0, sourceCtx.canvas.width),
-          y: clamp(cy + (dy - options.translation.y * falloff) * sampleY, 0, sourceCtx.canvas.height)
+          y: clamp(cy + (dy - options.translation.y * falloff - (options.skewY ?? 0) * dx * falloff) * sampleY, 0, sourceCtx.canvas.height)
         } });
       }
     }
@@ -169,9 +190,11 @@ export function createFeatureRenderer() {
         a.dest.y - m12 * a.source.x - m22 * a.source.y);
       ctx.drawImage(sourceCtx.canvas, 0, 0); ctx.restore();
     }
-    for (let y = 0; y < grid; y++) {
+    if (hasGeometry) for (let y = 0; y < grid; y++) {
       for (let x = 0; x < grid; x++) {
         const i = y * (grid + 1) + x;
+        const vertices = [samples[i], samples[i + 1], samples[i + grid + 1], samples[i + grid + 2]];
+        if (vertices.every(p => Math.abs(p.source.x - p.dest.x) + Math.abs(p.source.y - p.dest.y) < 0.01)) continue;
         triangle(samples[i], samples[i + 1], samples[i + grid + 1]);
         triangle(samples[i + 1], samples[i + grid + 2], samples[i + grid + 1]);
       }
@@ -183,42 +206,92 @@ export function createFeatureRenderer() {
     ctx.save(); ctx.globalCompositeOperation = "destination-in";
     ctx.drawImage(cachedMask, (cx - rx - left) * w / (right - left), (cy - ry - top) * h / (bottom - top),
       rx * 2 * w / (right - left), ry * 2 * h / (bottom - top)); ctx.restore();
+    metrics.warpMs += performance.now() - begin;
+    const compositeStart = performance.now();
     destCtx.save(); destCtx.globalAlpha = Math.min(1, options.opacity);
     const contrast = Math.max(0.25, 1 + (options.opacity - 1) * 0.85);
     const brightness = Math.max(0.65, 1 + (options.opacity - 1) * 0.12);
     // Geometry and alpha work even on Safari versions without Canvas filter.
     if ("filter" in destCtx) destCtx.filter = "contrast(" + contrast + ") brightness(" + brightness + ")";
     destCtx.drawImage(patch.canvas, left, top, right - left, bottom - top); destCtx.restore();
+    metrics.compositeMs += performance.now() - compositeStart;
   }
   function renderFeatureEffects(baseFrame: HTMLCanvasElement, destCtx: CanvasRenderingContext2D,
     landmarks: readonly Landmark[] | undefined, effectState: EffectState,
-    drawOverlays?: (ctx: CanvasRenderingContext2D, landmarks: readonly Landmark[]) => void): void {
+    drawOverlays?: (ctx: CanvasRenderingContext2D, landmarks: readonly Landmark[]) => void,
+    frameOptions?: { effects?: FaceEffects; quality?: RenderQuality }): void {
+    metrics.warpMs = metrics.compositeMs = metrics.transformedParts = 0;
+    activeQuality = frameOptions?.quality ?? RENDER_SETTINGS;
+    const effects = frameOptions?.effects ?? defaultEffects;
+    const compositionStart = performance.now();
     if (baseFrame === destCtx.canvas) throw new Error("元フレームを出力先に使うことはできません。");
     const sourceCtx = baseFrame.getContext("2d"); if (!sourceCtx) return;
     destCtx.save(); destCtx.setTransform(1, 0, 0, 1, 0, 0);
     destCtx.globalAlpha = 1; destCtx.globalCompositeOperation = "source-over";
     if ("filter" in destCtx) destCtx.filter = "none";
     destCtx.clearRect(0, 0, destCtx.canvas.width, destCtx.canvas.height); destCtx.drawImage(baseFrame, 0, 0);
+    metrics.compositeMs += performance.now() - compositionStart;
+    const neutral = FEATURE_ORDER.every(id => { const c = effectState[id]; return c.size === 1 && c.scaleX === 1 && c.scaleY === 1 && c.distance === 0 && c.opacity === 1; }) &&
+      (effects.placement.mode === "none" || effects.placement.strength === 0) && Object.values(effects.special).every(v => v === 0);
+    if (neutral && !drawOverlays) { destCtx.restore(); return; }
     if (landmarks?.[1] && landmarks[168]) {
       const nose = mirror(landmarks[1], baseFrame.width, baseFrame.height);
       const brow = mirror(landmarks[168], baseFrame.width, baseFrame.height);
       const faceCenter = { x: (nose.x + brow.x) / 2, y: (nose.y + brow.y) / 2 };
-      const regions: Partial<Record<FeatureType, FeatureRegion[]>> = {};
-      for (const feature of FEATURE_ORDER) {
-        regions[feature] = INDEXES[feature].map((_, pairIndex) =>
-          getFeatureRegion(landmarks, feature, { width: baseFrame.width, height: baseFrame.height, pairIndex })
-        ).filter((region): region is FeatureRegion => region !== null);
-      }
-      for (const feature of FEATURE_ORDER) {
-        for (const region of regions[feature] ?? []) {
-          const options = sliderToTransformOptions(effectState[feature], region, faceCenter, feature, baseFrame.width);
-          options.influenceRadius = getFeatureMaskRange(region, options, feature, regions);
-          transformFeatureRegion(sourceCtx, destCtx, region, options);
+      // Cache only geometry, never transformed pixels. Quantization is subpixel.
+      const key = baseFrame.width + ":" + baseFrame.height + ":" + LANDMARK_IDS.map(i =>
+        landmarks[i] ? Math.round(landmarks[i].x * baseFrame.width * 2) + "," + Math.round(landmarks[i].y * baseFrame.height * 2) : "missing").join(";");
+      if (key !== geometryKey) {
+        geometryKey = key; cachedRegions = {};
+        for (const feature of FEATURE_ORDER) {
+          cachedRegions[feature] = INDEXES[feature].map((_, pairIndex) => getFeatureRegion(landmarks, feature,
+            { width: baseFrame.width, height: baseFrame.height, pairIndex })).filter((r): r is FeatureRegion => r !== null);
         }
       }
+      const regions = cachedRegions;
+      const eyes = regions.eyes ?? [], mouth = regions.mouth?.[0];
+      const arrangementCenter = { x: eyes.length === 2 ? (eyes[0].center.x + eyes[1].center.x) / 2 : faceCenter.x,
+        y: eyes.length && mouth ? (eyes[0].center.y + mouth.center.y) / 2 : faceCenter.y };
+      const lower = effects.special.lowerFace + effects.special.imbalance * 0.45;
+      if (Math.abs(lower) > 0.001 && mouth && landmarks[152]) {
+        const chin = mirror(landmarks[152], baseFrame.width, baseFrame.height);
+        const jawPoints = [148, 176, 149, 150, 377, 400, 378].filter(i => landmarks[i]).map(i => mirror(landmarks[i], baseFrame.width, baseFrame.height));
+        const width = Math.max(mouth.width * 1.5, ...jawPoints.map(p => Math.abs(p.x - arrangementCenter.x) * 2));
+        const center = { x: arrangementCenter.x, y: mouth.center.y + (chin.y - mouth.center.y) * 0.55 };
+        const region = { center, width, height: Math.max(12, chin.y - mouth.center.y) };
+        const options: TransformOptions = { center, scaleX: clamp(1 + lower * 0.23, 0.78, 1.3), scaleY: clamp(1 + lower * 0.18, 0.8, 1.24), uniformScale: 1,
+          influenceRadius: { x: width * 0.55, y: region.height * 0.85 }, featherRadius: 0.4, centerWeight: 1,
+          translation: { x: 0, y: region.height * 0.05 * lower }, opacity: 1 };
+        transformFeatureRegion(sourceCtx, destCtx, region, options);
+      }
+      const browTargets: { center: Point; width: number; height: number }[] = [];
+      for (const feature of FEATURE_ORDER) {
+        const config = specialConfig(effectState, feature, effects);
+        for (const region of regions[feature] ?? []) {
+          const options = sliderToTransformOptions(config, region, faceCenter, feature, baseFrame.width);
+          options.influenceRadius = getFeatureMaskRange(region, options, feature, regions);
+          applyFaceOffsets(feature, region, arrangementCenter, options, effects);
+          transformFeatureRegion(sourceCtx, destCtx, region, options);
+          if (feature === "brows") browTargets.push({ center: { x: region.center.x + options.translation.x, y: region.center.y + options.translation.y },
+            width: region.width * options.uniformScale * options.scaleX, height: region.height * options.uniformScale * options.scaleY });
+        }
+      }
+      const overlayStart = performance.now();
+      const connected = effects.special.connectedBrows;
+      if (connected > 0 && browTargets.length === 2) {
+        const [left, right] = browTargets.sort((a, b) => a.center.x - b.center.x);
+        destCtx.save(); destCtx.strokeStyle = "#2a201c"; destCtx.lineCap = "round";
+        destCtx.globalAlpha = connected * 0.9;
+        destCtx.lineWidth = Math.max(2, Math.min(left.height, right.height) * (0.45 + connected * 0.5));
+        destCtx.shadowColor = "#2a201c"; destCtx.shadowBlur = baseFrame.width * 0.002;
+        destCtx.beginPath(); destCtx.moveTo(left.center.x + left.width * 0.28, left.center.y);
+        destCtx.quadraticCurveTo((left.center.x + right.center.x) / 2, (left.center.y + right.center.y) / 2 - left.height * 0.1,
+          right.center.x - right.width * 0.28, right.center.y); destCtx.stroke(); destCtx.restore();
+      }
       drawOverlays?.(destCtx, landmarks);
+      metrics.compositeMs += performance.now() - overlayStart;
     }
     destCtx.restore();
   }
-  return { renderFeatureEffects, transformFeatureRegion, clearCache: () => masks.clear() };
+  return { renderFeatureEffects, transformFeatureRegion, metrics, clearCache: () => { masks.clear(); patches.clear(); geometryKey = ""; cachedRegions = {}; } };
 }

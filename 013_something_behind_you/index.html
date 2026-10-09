@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#030405">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="description" content="iPhoneを見回すと視界の端に何かが現れる、疑似ARホラーWebゲーム">
-  <title>振り返ればヤツガイル｜PRESENCE</title>
+  <meta name="description" content="カメラ越しに、何かが見えるかもしれない。iPhoneカメラ疑似AR怪奇現象体験">
+  <title>振り返ればヤツガイル｜PRESENCE EXPERIENCE</title>
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
@@ -28,18 +28,13 @@
       <div class="debug-zone debug-zone--right"><span>RIGHT PERIPHERAL</span></div>
     </div>
 
-    <header id="playHud" class="play-hud" aria-hidden="true">
-      <div class="live-mark"><i></i><span>SEARCHING</span></div>
-      <p id="playHint">ゆっくり周囲を見回してください</p>
-    </header>
-
     <section id="startScreen" class="start-screen" aria-labelledby="gameTitle">
       <div class="start-content">
         <div class="warning-mark" aria-hidden="true"><span></span></div>
         <p class="eyebrow">PSEUDO AR HORROR EXPERIENCE</p>
         <h1 id="gameTitle">振り返れば<br><em>ヤツガイル</em></h1>
-        <p class="english-title">SOMETHING BEHIND YOU — PRESENCE</p>
-        <p class="lead">カメラを向けた先に、<br>何もいないとは限らない。</p>
+        <p class="english-title">SOMETHING BEHIND YOU</p>
+        <p class="lead">カメラ越しに、何かが見えるかもしれない。</p>
         <button id="startButton" class="start-button" type="button">
           <span>START</span><i aria-hidden="true"></i>
         </button>
@@ -47,7 +42,7 @@
         <p class="privacy-note">映像は保存・送信されません</p>
         <p class="audio-note">小さな音で始まります。端末音量を低めにしてください。</p>
       </div>
-      <p class="version">Version 0.4.0 <span>—</span> PRESENCE</p>
+      <p class="version">Version 1.0.0 <span>—</span> PRESENCE EXPERIENCE</p>
     </section>
 
     <div id="message" class="message" role="alert" aria-live="assertive" hidden>
@@ -56,12 +51,14 @@
       <button id="retryButton" type="button">もう一度試す</button>
     </div>
 
+    <button id="stopButton" class="stop-button" type="button" hidden>STOP</button>
     <button id="soundToggle" class="sound-toggle" type="button" aria-label="音声ON/OFF" aria-pressed="true">SOUND ON</button>
     <button id="debugToggle" class="debug-toggle" type="button" aria-pressed="false" aria-controls="debugPanel debugGuides debugTests">DEBUG</button>
     <aside id="debugPanel" class="debug-panel" aria-label="デバッグ情報" aria-hidden="true" hidden>
-      <header><b>STATUS</b><span>v0.4.0</span></header>
+      <header><b>STATUS</b><span>v1.0.0</span></header>
+      <pre id="debugApp"></pre>
       <dl>
-        <div><dt>VERSION</dt><dd>0.4.0</dd></div>
+        <div><dt>VERSION</dt><dd>1.0.0</dd></div>
         <div><dt>CAMERA YAW</dt><dd id="debugCurrentYaw">—</dd></div>
         <div><dt>INITIAL YAW</dt><dd id="debugInitialYaw">—</dd></div>
         <div><dt>RELATIVE YAW</dt><dd id="debugRelativeYaw">—</dd></div>

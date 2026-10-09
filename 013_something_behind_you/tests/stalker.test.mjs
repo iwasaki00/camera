@@ -38,7 +38,7 @@ for(let i=0;i<13;i++) s.update(100,90,true);
 assert.equal(s.distanceState, "MID");
 assert.ok(s.distance < 75);
 s.setDistance(5.01);
-for(let i=0;i<100;i++) s.update(100,90,true);
+for(let i=0;i<70;i++) s.update(100,90,true);
 assert.equal(s.distance, 5);
 assert.equal(s.approachRate, 0);
 s.retreat(); assert.equal(s.distance, 20);
