@@ -35,7 +35,8 @@ try {
   assert('カメラ枠を縦に拡大', frame.clientHeight > beforeHeight);
   assert('横スクロールなし', document.documentElement.scrollWidth <= innerWidth);
   assert('主要UIが画面内', f.bottom <= innerHeight && b.bottom <= f.bottom);
-  assert('映像の比率を維持', getComputedStyle(camera).objectFit === 'contain');
+  assert('映像を比率維持で枠いっぱいに拡大', getComputedStyle(camera).objectFit === 'cover');
+  assert('画面下端までカメラ表示', Math.abs(f.bottom - (innerHeight - 9)) < 3);
   // Deterministic alternating draws verify successive taps execute the same live handler.
   const originalRandom = Math.random;
   for (const value of [.1, .9, .2]) {
@@ -50,6 +51,7 @@ try {
     await select('レイアウト', layout);
     assert(layout + 'の編集UIと状態を復元', visible(toggle) && visible(document.querySelector('.controls-card')) && visible(document.querySelector('.extra-tools')) && size.value === randomized);
     assert(layout + 'のsimpleボタンなし', !document.querySelector('.simple-random-button'));
+    assert(layout + 'の映像表示方式を維持', getComputedStyle(camera).objectFit === 'contain');
   }
   toggle.click(); await tick(); await select('レイアウト', 'simple'); await select('レイアウト', 'compact');
   assert('閉じていた編集状態も保持', document.querySelector('.controls-card').hidden && localStorage.getItem('henface.settingsOpen') === '0');

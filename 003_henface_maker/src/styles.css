@@ -471,8 +471,31 @@ option {
   display: none
 }
 .layout-simple[data-settings][data-category] .preview-frame {
-  height: max(200px,calc(100svh - 130px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
-  height: max(200px,calc(100dvh - 130px - env(safe-area-inset-top) - env(safe-area-inset-bottom)))
+  height: 100%;
+  aspect-ratio: auto !important
+}
+.layout-simple {
+  height: 100svh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column
+}
+.layout-simple .app-header,
+.layout-simple .camera-toolbar {
+  flex-shrink: 0
+}
+.layout-simple .camera-workspace {
+  flex: 1;
+  min-height: 0
+}
+.layout-simple .viewer-card {
+  flex: 1;
+  min-height: 0
+}
+.layout-simple .preview-frame canvas,
+.layout-simple .preview-frame video {
+  object-fit: cover;
+  object-position: center
 }
 .simple-random-button {
   position: absolute;
