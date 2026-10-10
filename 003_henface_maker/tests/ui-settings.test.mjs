@@ -4,7 +4,7 @@ import ts from 'typescript';
 // Test the same pure helpers as the UI, without adding a test dependency.
 const source = await fs.readFile(new URL('../src/uiSettings.ts', import.meta.url), 'utf8');
 const js = ts.transpileModule(source, {compilerOptions:{module:ts.ModuleKind.ES2020}}).outputText;
-const {randomizeParts, RANDOM_LIMITS, readLayout, saveLayout, readSettingsOpen, saveSettingsOpen} = await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+const {randomizeParts, RANDOM_LIMITS, readLayout, saveLayout, readRandomStrength, saveRandomStrength, readSettingsOpen, saveSettingsOpen} = await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
 const ids=['brows','eyes','nose','mouth','ears','head','jaw','cheeks'];
 const defaults=()=>Object.fromEntries(ids.map(id=>[id,{size:1,scaleX:1,scaleY:1,distance:0,opacity:1}]));
 assert(RANDOM_LIMITS.monster.max>RANDOM_LIMITS.chaos.max&&RANDOM_LIMITS.chaos.max>RANDOM_LIMITS.wild.max,'強度ごとの最大振れ幅が段階的に増える');
@@ -31,13 +31,22 @@ for(const strength of ['weak','normal','wild','chaos','monster']){
  for(const id of ids.filter(id=>id!=='eyes'))assert.equal(next[id],state[id],'選択以外は変更しない');
  assert.notDeepEqual(next.eyes,state.eyes);
 }
-assert.equal(readLayout(),'compact','ストレージが使えなくても起動');
+assert.equal(readLayout(),'simple','ストレージが使えなくても起動');
+assert.equal(readRandomStrength(),'monster');
 saveLayout('standard');
+saveRandomStrength('weak');
 const values=new Map();globalThis.localStorage={getItem:k=>values.get(k)??null,setItem:(k,v)=>values.set(k,v)};
+assert.equal(readLayout(),'simple','未保存時はsimple');
+assert.equal(readRandomStrength(),'monster','未保存時はmonster');
 for(const layout of ['standard','compact','edge-controls','simple']){saveLayout(layout);assert.equal(readLayout(),layout);}
-values.set('henface.layout','invalid');assert.equal(readLayout(),'compact');
+for(const strength of ['weak','normal','wild','chaos','monster']){saveRandomStrength(strength);assert.equal(readRandomStrength(),strength);}
+for(const invalid of ['invalid','','MONSTER']){
+ values.set('henface.layout',invalid);assert.equal(readLayout(),'simple');
+ values.set('henface.randomStrength',invalid);assert.equal(readRandomStrength(),'monster');
+}
 assert.equal(readSettingsOpen(),false);saveSettingsOpen(true);assert.equal(readSettingsOpen(),true);saveSettingsOpen(false);assert.equal(readSettingsOpen(),false);
 globalThis.localStorage={getItem(){throw Error('denied');},setItem(){throw Error('denied');}};
-assert.equal(readLayout(),'compact');assert.doesNotThrow(()=>saveLayout('compact'));
+assert.equal(readLayout(),'simple');assert.doesNotThrow(()=>saveLayout('compact'));
+assert.equal(readRandomStrength(),'monster');assert.doesNotThrow(()=>saveRandomStrength('normal'));
 assert.equal(readSettingsOpen(),false);assert.doesNotThrow(()=>saveSettingsOpen(true));
-console.log('PASS: 2000 random cases, selected/all scope, multiplier limits, layout/settings persistence and storage failures');
+console.log('PASS: 2000 random cases, selected/all scope, multiplier limits, simple/monster defaults, layout/strength/settings persistence and storage failures');

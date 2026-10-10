@@ -1,15 +1,24 @@
 import type { EffectState, FeatureType, PartConfig } from "./featureRenderer";
-export const APP_VERSION = "0.5.2-simple-fullheight";
+export const APP_VERSION = "0.5.3-default-simple-monster";
 export const LAYOUTS = ["standard", "compact", "edge-controls", "simple"] as const;
 export type Layout = typeof LAYOUTS[number];
-export type RandomStrength = "weak" | "normal" | "wild" | "chaos" | "monster";
+export const RANDOM_STRENGTHS = ["weak", "normal", "wild", "chaos", "monster"] as const;
+export type RandomStrength = typeof RANDOM_STRENGTHS[number];
 const KEY = "henface.layout";
+const RANDOM_STRENGTH_KEY = "henface.randomStrength";
 const SETTINGS_OPEN_KEY = "henface.settingsOpen";
 export function readLayout(): Layout {
-  try { const value = localStorage.getItem(KEY); return LAYOUTS.includes(value as Layout) ? value as Layout : "compact"; }
-  catch { return "compact"; }
+  try { const value = localStorage.getItem(KEY); return LAYOUTS.includes(value as Layout) ? value as Layout : "simple"; }
+  catch { return "simple"; }
 }
 export function saveLayout(value: Layout): void { try { localStorage.setItem(KEY, value); } catch { /* Private mode can deny storage. */ } }
+export function readRandomStrength(): RandomStrength {
+  try { const value = localStorage.getItem(RANDOM_STRENGTH_KEY); return RANDOM_STRENGTHS.includes(value as RandomStrength) ? value as RandomStrength : "monster"; }
+  catch { return "monster"; }
+}
+export function saveRandomStrength(value: RandomStrength): void {
+  try { localStorage.setItem(RANDOM_STRENGTH_KEY, value); } catch { /* Private mode can deny storage. */ }
+}
 export function readSettingsOpen(): boolean {
   try { const value = localStorage.getItem(SETTINGS_OPEN_KEY); return value === null ? false : value === "1"; }
   catch { return false; }

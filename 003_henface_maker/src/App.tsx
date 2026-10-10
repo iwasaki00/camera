@@ -10,7 +10,7 @@ import { createFeatureRenderer } from "./featureRenderer";
 import type { EffectState, Landmark, PartConfig, PartId } from "./featureRenderer";
 
 import PartSliders from "./PartSliders";
-import { APP_VERSION, readLayout, readSettingsOpen, saveLayout, saveSettingsOpen, randomizeParts } from "./uiSettings";
+import { APP_VERSION, readLayout, readRandomStrength, readSettingsOpen, saveLayout, saveRandomStrength, saveSettingsOpen, randomizeParts } from "./uiSettings";
 import type { Layout, RandomStrength } from "./uiSettings";
 import type { FeatureType } from "./featureRenderer";
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
@@ -254,7 +254,7 @@ export default function App() {
   const debugPanelRef = useRef<HTMLPreElement | null>(null);
   const [layout, setLayout] = useState<Layout>(readLayout);
   const [settingsOpen, setSettingsOpen] = useState(readSettingsOpen);
-  const [randomStrength, setRandomStrength] = useState<RandomStrength>("normal");
+  const [randomStrength, setRandomStrength] = useState<RandomStrength>(readRandomStrength);
   const trackingRef = useRef<boolean | null>(null);
   const lastDrawAtRef = useRef(0);
   const [cameraActive, setCameraActive] = useState(false);
@@ -487,6 +487,7 @@ export default function App() {
     setDiagnosis((includeExtras ? "パーツ＋配置＋特殊" : "全パーツ") + "をランダム（" + randomStrength + "）");
   }
   useEffect(() => { saveLayout(layout); }, [layout]);
+  useEffect(() => { saveRandomStrength(randomStrength); }, [randomStrength]);
   useEffect(() => { saveSettingsOpen(settingsOpen); }, [settingsOpen]);
 
   function applyNewPreset(name: FacePreset): void {
