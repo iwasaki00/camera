@@ -8,6 +8,8 @@ type PartRegion = FeatureRegion & { kind: BlinkDropPart };
 type Box = { x: number; y: number; width: number; height: number };
 type Target = { center: Point; width: number; height: number };
 type Sample = { box: Box; opacity: number };
+export type BlinkDropDebugMode = "normal" | "parts-only" | "original" | "blank-face" | "bounds";
+const PART_COLORS: Record<BlinkDropPart, string> = { rightEye: "#ff9a88", leftEye: "#99e2fa", nose: "#c5a0ff", mouth: "#a7ffb6" };
 const activePhases = new Set(["countdown", "playing", "fixing", "paused", "completed"]);
 const BLANK_FACE = {
   eyeWidth: 1.82, eyeHeight: 3.4, eyeSampleOffset: 0.88,
@@ -187,20 +189,42 @@ export function createBlinkDropRenderer() {
   }
 
   function render(base: HTMLCanvasElement, dest: CanvasRenderingContext2D, landmarks: readonly Landmark[] | undefined,
-    session: BlinkDropSession, now: number): boolean {
+    session: BlinkDropSession, now: number, debugMode: BlinkDropDebugMode = "normal"): boolean {
     const started = performance.now(); metrics.warpMs = 0; metrics.transformedParts = 0;
     dest.save(); dest.setTransform(1, 0, 0, 1, 0, 0); dest.globalAlpha = 1; dest.globalCompositeOperation = "source-over";
-    dest.clearRect(0, 0, dest.canvas.width, dest.canvas.height); dest.drawImage(base, 0, 0, dest.canvas.width, dest.canvas.height);
-    if (!landmarks || !activePhases.has(session.phase)) { dest.restore(); metrics.compositeMs = performance.now() - started; return false; }
+    dest.clearRect(0, 0, dest.canvas.width, dest.canvas.height);
+    if (debugMode === "parts-only") { dest.fillStyle = "#11151d"; dest.fillRect(0, 0, dest.canvas.width, dest.canvas.height); }
+    else dest.drawImage(base, 0, 0, dest.canvas.width, dest.canvas.height);
+    if (!landmarks || debugMode === "original" || (debugMode === "normal" && !activePhases.has(session.phase))) { dest.restore(); metrics.compositeMs = performance.now() - started; return false; }
     const source = base.getContext("2d"), partRegions = regions(landmarks, base.width, base.height);
     if (!source || !partRegions) { dest.restore(); metrics.compositeMs = performance.now() - started; return false; }
-    renderBlankFace(source, dest, partRegions);
-    session.fixedOffsets.forEach((offset, index) => { if (offset !== null) drawPart(source, dest, partRegions[BLINK_DROP_PARTS[index]], offset); });
-    if (session.phase === "playing" || session.phase === "paused") {
+    if (debugMode !== "parts-only" && debugMode !== "bounds") renderBlankFace(source, dest, partRegions);
+    const preview = debugMode === "blank-face" || debugMode === "bounds";
+    if (!preview) session.fixedOffsets.forEach((offset, index) => { if (offset !== null) drawPart(source, dest, partRegions[BLINK_DROP_PARTS[index]], offset); });
+    if (!preview && (session.phase === "playing" || session.phase === "paused")) {
       drawPart(source, dest, partRegions[BLINK_DROP_PARTS[session.currentIndex]], fallingOffsetAt(session, now));
+    }
+    if (debugMode === "parts-only" && !activePhases.has(session.phase)) {
+      for (const part of BLINK_DROP_PARTS) drawPart(source, dest, partRegions[part], 0);
+    }
+    if (debugMode === "bounds") {
+      for (const part of BLINK_DROP_PARTS) {
+        const region = partRegions[part], width = region.width * 1.36, height = region.height * 1.7;
+        dest.strokeStyle = PART_COLORS[part]; dest.fillStyle = PART_COLORS[part]; dest.lineWidth = 2;
+        dest.strokeRect(region.center.x - width / 2, region.center.y - height / 2, width, height);
+        dest.font = "12px sans-serif"; dest.fillText(part, region.center.x - width / 2, region.center.y - height / 2 - 4);
+      }
     }
     dest.restore(); metrics.transformedParts = 4; metrics.compositeMs = performance.now() - started; return true;
   }
 
-  return { render, metrics, clearCache: () => { patches.clear(); masks.clear(); } };
+  // Own canvas: subsequent camera frames and debug renders cannot change the result.
+  function captureResult(base: HTMLCanvasElement, landmarks: readonly Landmark[], session: BlinkDropSession, now: number): HTMLCanvasElement {
+    const frame = createSurface();
+    frame.canvas.width = base.width; frame.canvas.height = base.height;
+    render(base, frame.ctx, landmarks, session, now, "normal");
+    return frame.canvas;
+  }
+
+  return { render, captureResult, metrics, clearCache: () => { patches.clear(); masks.clear(); } };
 }

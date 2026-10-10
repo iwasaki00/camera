@@ -592,10 +592,49 @@ option {
 .game-countdown span {
   color: var(--muted)
 }
-.game-result-panel>strong {
+.game-result-card>strong {
   font-size: 23px;
   color: var(--accent)
 }
+.game-panel.game-result-panel {
+  padding: 10px;
+  gap: 10px;
+  justify-content: flex-start;
+  background: #060912;
+  backdrop-filter: none;
+  overflow: auto
+}
+.game-result-image {
+  display: block;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  object-fit: contain
+}
+.game-result-card {
+  flex: none;
+  width: 100%;
+  padding: 12px;
+  border-radius: 18px;
+  background: #192131;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px
+}
+.game-result-card p { margin: 0 }
+.game-result-card button { min-height: 44px }
+.game-debug-tools {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px
+}
+.game-debug-tools label { display: flex; align-items: center; gap: 6px }
+.game-debug-tools select { max-width: 240px }
+.game-debug-tools button { min-height: 36px; padding: 6px 10px; font-size: 11px }
 .game-result-actions {
   width: min(100%,300px);
   display: grid;

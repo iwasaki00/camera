@@ -11,9 +11,10 @@ type Props = {
   restart: () => void;
   exit: () => void;
   save: () => void;
+  resultSnapshot?: string;
 };
 
-export default function BlinkDropHud({ session, cameraActive, tracking, start, pause, resume, restart, exit, save }: Props) {
+export default function BlinkDropHud({ session, cameraActive, tracking, start, pause, resume, restart, exit, save, resultSnapshot }: Props) {
   const current = BLINK_DROP_PARTS[session.currentIndex];
   if (session.phase === "ready" || session.phase === "error") return <div className="game-panel game-start-panel">
     <h2>瞬きキャッチ</h2>
@@ -27,11 +28,14 @@ export default function BlinkDropHud({ session, cameraActive, tracking, start, p
   if (session.phase === "completed") {
     const score = blinkDropScore(session);
     return <div className="game-panel game-result-panel">
+      {resultSnapshot && <img className="game-result-image" src={resultSnapshot} alt="瞬きキャッチの完成した顔" />}
+      <div className="game-result-card">
       <h2>完成！</h2><strong>{score.title}</strong>
       <p>正解度 {score.accuracy}　変顔度 {score.funny}</p>
       <div className="game-result-actions"><button className="primary-button" type="button" onClick={restart}>もう一回</button>
-        <button className="secondary-button" type="button" disabled={!cameraActive} onClick={save}>保存</button></div>
+        <button className="secondary-button" type="button" disabled={!resultSnapshot} onClick={save}>保存</button></div>
       <button className="minor-button" type="button" onClick={exit}>通常モードへ戻る</button>
+      </div>
     </div>;
   }
   return <div className="game-hud">

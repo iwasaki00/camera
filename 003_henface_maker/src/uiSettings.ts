@@ -1,5 +1,5 @@
 import type { EffectState, FeatureType, PartConfig } from "./featureRenderer";
-export const APP_VERSION = "0.6.1-blank-face";
+export const APP_VERSION = "0.6.2-debug-results";
 export const LAYOUTS = ["standard", "compact", "edge-controls", "simple"] as const;
 export type Layout = typeof LAYOUTS[number];
 export const RANDOM_STRENGTHS = ["weak", "normal", "wild", "chaos", "monster"] as const;

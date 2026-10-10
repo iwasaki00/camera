@@ -13,6 +13,7 @@ import { BlinkDetector, advanceBlinkDrop, beginBlinkDrop, catchBlinkDropPart, cr
   pauseBlinkDrop, resumeBlinkDrop, startBlinkDropCountdown } from "./game/blinkDropGame";
 import type { BlinkDropSession } from "./game/blinkDropGame";
 import { createBlinkDropRenderer } from "./game/blinkDropRenderer";
+import type { BlinkDropDebugMode } from "./game/blinkDropRenderer";
 
 import PartSliders from "./PartSliders";
 import { APP_VERSION, readLayout, readRandomStrength, readSettingsOpen, saveLayout, saveRandomStrength, saveSettingsOpen, randomizeParts } from "./uiSettings";
@@ -249,6 +250,10 @@ export default function App() {
   const gameSessionRef = useRef<BlinkDropSession>(createBlinkDropSession());
   const blinkDetectorRef = useRef(new BlinkDetector());
   const gameTimerRef = useRef<number | null>(null);
+  const finalFrameRef = useRef<HTMLCanvasElement | null>(null);
+  const gameDebugModeRef = useRef<BlinkDropDebugMode>("normal");
+  const [gameDebugMode, setGameDebugMode] = useState<BlinkDropDebugMode>("normal");
+  const [resultSnapshot, setResultSnapshot] = useState<string | undefined>();
 
   const [category, setCategory] = useState<Category>("parts");
   const [faceEffects, setFaceEffects] = useState<FaceEffects>(emptyFaceEffects);
@@ -370,6 +375,10 @@ export default function App() {
     }
 
     const now = performance.now();
+    // Completed has its own immutable result frame; skip capture, detection and live rendering.
+    if (appModeRef.current === "blink-drop" && gameSessionRef.current.phase === "completed" && finalFrameRef.current) {
+      animationFrameRef.current = requestAnimationFrame(renderLoop); return;
+    }
     const level = qualityRef.current === "auto" ? metricsRef.current.autoLevel : qualityRef.current;
     const profile = QUALITY_PROFILES[level];
     const detectInterval = now < smootherRef.current.fastUntil ? Math.min(profile.detectInterval, 65) : profile.detectInterval;
@@ -404,7 +413,8 @@ export default function App() {
       lastDetectionRef.current = now;
       lastLandmarksRef.current = result.faceLandmarks?.[0];
       smootherRef.current.update(lastLandmarksRef.current, now);
-      if (gameActive && gameSessionRef.current.phase === "playing" && blinkDetectorRef.current.update(lastLandmarksRef.current, now)) {
+      if (gameActive && gameSessionRef.current.phase === "playing" &&
+        (gameDebugModeRef.current === "normal" || gameDebugModeRef.current === "parts-only") && blinkDetectorRef.current.update(lastLandmarksRef.current, now)) {
         const next = catchBlinkDropPart(gameSessionRef.current, now);
         gameSessionRef.current = next; setGameSession(next);
       }
@@ -412,9 +422,14 @@ export default function App() {
     const landmarks = smootherRef.current.sample(now);
     if (!rendererRef.current) rendererRef.current = createFeatureRenderer();
     if (!gameRendererRef.current) gameRendererRef.current = createBlinkDropRenderer();
-    if (gameActive) gameRendererRef.current.render(sourceCanvas, ctx, landmarks, gameSessionRef.current, now);
+    if (gameActive) gameRendererRef.current.render(sourceCanvas, ctx, landmarks, gameSessionRef.current, now, gameDebugModeRef.current);
     else rendererRef.current.renderFeatureEffects(sourceCanvas, ctx, landmarks, effectStateRef.current, undefined,
       { effects: faceEffectsRef.current, quality: profile });
+    // Keep a normal final face if tracking disappears during the last catch animation.
+    if (gameActive && landmarks && gameSessionRef.current.phase === "fixing" && gameSessionRef.current.currentIndex === 3 && !finalFrameRef.current) {
+      finalFrameRef.current = gameRendererRef.current.captureResult(sourceCanvas, landmarks,
+        { ...gameSessionRef.current, phase: "completed" }, now);
+    }
     lastRenderedStateRef.current = effectStateRef.current;
     lastGameSessionRef.current = gameSessionRef.current; lastAppModeRef.current = appModeRef.current;
     lastExtrasRef.current = faceEffectsRef.current; lastQualityRef.current = level;
@@ -483,7 +498,8 @@ export default function App() {
   }
 
   function takeScreenshot(): void {
-    const canvas = canvasRef.current;
+    const canvas = appModeRef.current === "blink-drop" && gameSessionRef.current.phase === "completed"
+      ? finalFrameRef.current : canvasRef.current;
     if (!canvas) {
       return;
     }
@@ -528,6 +544,7 @@ export default function App() {
   useEffect(() => { faceEffectsRef.current = faceEffects; }, [faceEffects]);
   useEffect(() => { qualityRef.current = quality; }, [quality]);
   useEffect(() => { debugRef.current = debug; }, [debug]);
+  useEffect(() => { gameDebugModeRef.current = debug ? gameDebugMode : "normal"; }, [debug, gameDebugMode]);
 
   function applyNamedPreset(name: keyof typeof PRESETS): void {
     setEffectState(applyPreset(name));
@@ -554,6 +571,30 @@ export default function App() {
   }
 
   function updateGame(next: BlinkDropSession): void {
+    if (next.phase === "completed" && gameSessionRef.current.phase !== "completed") {
+      const output = canvasRef.current, base = sourceCanvasRef.current;
+      if (output) {
+        const now = performance.now();
+        const landmarks = smootherRef.current.sample(now) ?? lastLandmarksRef.current;
+        const canCapture = base && landmarks && gameRendererRef.current;
+        const finalFrame = canCapture
+          ? gameRendererRef.current!.captureResult(base!, landmarks!, next, now)
+          : finalFrameRef.current ?? document.createElement("canvas");
+        const needsCopy = !canCapture && !finalFrameRef.current;
+        if (needsCopy) {
+          finalFrame.width = output.width; finalFrame.height = output.height;
+        }
+        const ctx = finalFrame.getContext("2d");
+        if (ctx) {
+          if (needsCopy) ctx.drawImage(output, 0, 0);
+          finalFrameRef.current = finalFrame;
+          setResultSnapshot(finalFrame.toDataURL("image/png"));
+          output.getContext("2d")?.drawImage(finalFrame, 0, 0);
+        }
+      }
+    } else if (next.phase === "ready" || next.phase === "countdown" || next.phase === "error") {
+      finalFrameRef.current = null; setResultSnapshot(undefined);
+    }
     gameSessionRef.current = next;
     setGameSession(next);
   }
@@ -629,6 +670,25 @@ export default function App() {
           </select>
         </label>}
       </header>
+      {appMode === "blink-drop" && debug && <div className="game-debug-tools">
+        <label>開発表示<select aria-label="ゲームデバッグ表示" value={gameDebugMode} onChange={e => {
+          const mode = e.target.value as BlinkDropDebugMode; gameDebugModeRef.current = mode; setGameDebugMode(mode);
+          if (mode === "original" || mode === "blank-face" || mode === "bounds") {
+            if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current);
+            gameTimerRef.current = null;
+            blinkDetectorRef.current.reset(); updateGame(createBlinkDropSession());
+          }
+        }} disabled={gameSession.phase === "completed"}>
+          <option value="normal">normal · ゲーム</option><option value="parts-only">parts-only · パーツのみ</option>
+          <option value="original">original · 元映像</option><option value="blank-face">blank-face · 消去後</option>
+          <option value="bounds">bounds · 抽出範囲</option>
+        </select></label>
+        <small>{gameSession.phase} · {gameSession.currentIndex + 1}/4 · {faceTracked ? "顔検出中" : "顔未検出"}</small>
+        <button type="button" disabled={status === "起動中" || cameraActive || gameSession.phase === "completed"} onClick={() => { void startCamera(); }}>カメラ確認</button>
+        {gameDebugMode === "parts-only" && gameSession.phase === "ready" && <button type="button" onClick={() => { void startBlinkDrop(); }}>ゲームスタート</button>}
+        <small>元映像・消去後・範囲表示は進行をリセットして確認</small>
+        <button type="button" onClick={() => setDebug(false)}>デバッグOFF</button>
+      </div>}
       {appMode === "camera" && <div className="camera-toolbar">
         <button className="primary-button" type="button" disabled={status === "起動中"} onClick={cameraActive ? () => { stopCamera(); setStatus("待機中"); setMessage("カメラを停止しました。"); } : startCamera}>
           {status === "起動中" ? "起動中…" : cameraActive ? "カメラ停止" : "カメラ起動"}
@@ -647,8 +707,10 @@ export default function App() {
             {appMode === "camera" && layout === "simple" && <button className="simple-random-button" type="button" aria-label="全パーツをランダム" onClick={randomizeFace}>
               <span aria-hidden="true">🎲</span> ランダム
             </button>}
-            {appMode === "blink-drop" && <BlinkDropHud session={gameSession} cameraActive={cameraActive} tracking={faceTracked}
-              start={startBlinkDrop} pause={pauseGame} resume={resumeGame} restart={startBlinkDrop} exit={exitBlinkDrop} save={takeScreenshot} />}
+            {appMode === "blink-drop" && (!(debug && gameDebugMode !== "normal") || gameSession.phase === "completed" ||
+              ((gameDebugMode === "parts-only") && gameSession.phase !== "ready")) &&
+              <BlinkDropHud session={gameSession} cameraActive={cameraActive} tracking={faceTracked} resultSnapshot={resultSnapshot}
+                start={startBlinkDrop} pause={pauseGame} resume={resumeGame} restart={startBlinkDrop} exit={exitBlinkDrop} save={takeScreenshot} />}
           </div>
         </section>
         <button className="settings-toggle" type="button" hidden={appMode === "blink-drop" || layout === "simple"} aria-expanded={settingsOpen} aria-controls="effect-settings"
