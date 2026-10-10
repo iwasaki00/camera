@@ -8,6 +8,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 import { createFeatureRenderer } from "./featureRenderer";
 import type { EffectState, Landmark, PartConfig, PartId } from "./featureRenderer";
+import BlinkDropHud from "./game/BlinkDropHud";
+import { BlinkDetector, advanceBlinkDrop, beginBlinkDrop, catchBlinkDropPart, createBlinkDropSession,
+  pauseBlinkDrop, resumeBlinkDrop, startBlinkDropCountdown } from "./game/blinkDropGame";
+import type { BlinkDropSession } from "./game/blinkDropGame";
+import { createBlinkDropRenderer } from "./game/blinkDropRenderer";
 
 import PartSliders from "./PartSliders";
 import { APP_VERSION, readLayout, readRandomStrength, readSettingsOpen, saveLayout, saveRandomStrength, saveSettingsOpen, randomizeParts } from "./uiSettings";
@@ -229,6 +234,7 @@ export default function App() {
   const frameRef = useRef<HTMLDivElement | null>(null);
   const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<ReturnType<typeof createFeatureRenderer> | null>(null);
+  const gameRendererRef = useRef<ReturnType<typeof createBlinkDropRenderer> | null>(null);
   const lastLandmarksRef = useRef<Landmark[] | undefined>(undefined);
   const streamRef = useRef<MediaStream | null>(null);
   const faceLandmarkerRef = useRef<FaceLandmarker | null>(null);
@@ -236,7 +242,13 @@ export default function App() {
   const timeoutRef = useRef<number | null>(null);
   const lastVideoTimeRef = useRef(-1);
   const lastRenderedStateRef = useRef<EffectState | null>(null);
+  const lastGameSessionRef = useRef<BlinkDropSession | null>(null);
+  const lastAppModeRef = useRef("");
   const effectStateRef = useRef<EffectState>(createDefaultState());
+  const appModeRef = useRef<"camera" | "blink-drop">("camera");
+  const gameSessionRef = useRef<BlinkDropSession>(createBlinkDropSession());
+  const blinkDetectorRef = useRef(new BlinkDetector());
+  const gameTimerRef = useRef<number | null>(null);
 
   const [category, setCategory] = useState<Category>("parts");
   const [faceEffects, setFaceEffects] = useState<FaceEffects>(emptyFaceEffects);
@@ -253,11 +265,14 @@ export default function App() {
   const debugRef = useRef(debug);
   const debugPanelRef = useRef<HTMLPreElement | null>(null);
   const [layout, setLayout] = useState<Layout>(readLayout);
+  const [appMode, setAppMode] = useState<"camera" | "blink-drop">("camera");
+  const [gameSession, setGameSession] = useState<BlinkDropSession>(createBlinkDropSession);
   const [settingsOpen, setSettingsOpen] = useState(readSettingsOpen);
   const [randomStrength, setRandomStrength] = useState<RandomStrength>(readRandomStrength);
   const trackingRef = useRef<boolean | null>(null);
   const lastDrawAtRef = useRef(0);
   const [cameraActive, setCameraActive] = useState(false);
+  const [faceTracked, setFaceTracked] = useState(false);
   const [status, setStatus] = useState("待機中");
   const [message, setMessage] = useState("前面カメラで起動して、顔のパーツをリアルタイムに変形できます。");
   const [error, setError] = useState("");
@@ -313,7 +328,10 @@ export default function App() {
     lastDrawAtRef.current = 0;
     lastLandmarksRef.current = undefined;
     lastRenderedStateRef.current = null;
+    lastGameSessionRef.current = null;
     rendererRef.current?.clearCache();
+    gameRendererRef.current?.clearCache();
+    blinkDetectorRef.current.reset();
 
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -326,6 +344,7 @@ export default function App() {
     }
 
     setCameraActive(false);
+    setFaceTracked(false);
   }
 
   function renderLoop(): void {
@@ -354,7 +373,9 @@ export default function App() {
     const level = qualityRef.current === "auto" ? metricsRef.current.autoLevel : qualityRef.current;
     const profile = QUALITY_PROFILES[level];
     const detectInterval = now < smootherRef.current.fastUntil ? Math.min(profile.detectInterval, 65) : profile.detectInterval;
-    const settingsChanged = lastRenderedStateRef.current !== effectStateRef.current || lastExtrasRef.current !== faceEffectsRef.current || lastQualityRef.current !== level;
+    const gameActive = appModeRef.current === "blink-drop";
+    const settingsChanged = lastRenderedStateRef.current !== effectStateRef.current || lastExtrasRef.current !== faceEffectsRef.current ||
+      lastQualityRef.current !== level || lastGameSessionRef.current !== gameSessionRef.current || lastAppModeRef.current !== appModeRef.current;
     if (!settingsChanged && now - lastDrawAtRef.current < 1000 / profile.fps - 1) {
       animationFrameRef.current = requestAnimationFrame(renderLoop); return;
     }
@@ -383,14 +404,21 @@ export default function App() {
       lastDetectionRef.current = now;
       lastLandmarksRef.current = result.faceLandmarks?.[0];
       smootherRef.current.update(lastLandmarksRef.current, now);
+      if (gameActive && gameSessionRef.current.phase === "playing" && blinkDetectorRef.current.update(lastLandmarksRef.current, now)) {
+        const next = catchBlinkDropPart(gameSessionRef.current, now);
+        gameSessionRef.current = next; setGameSession(next);
+      }
     }
     const landmarks = smootherRef.current.sample(now);
     if (!rendererRef.current) rendererRef.current = createFeatureRenderer();
-    rendererRef.current.renderFeatureEffects(sourceCanvas, ctx, landmarks, effectStateRef.current, undefined,
+    if (!gameRendererRef.current) gameRendererRef.current = createBlinkDropRenderer();
+    if (gameActive) gameRendererRef.current.render(sourceCanvas, ctx, landmarks, gameSessionRef.current, now);
+    else rendererRef.current.renderFeatureEffects(sourceCanvas, ctx, landmarks, effectStateRef.current, undefined,
       { effects: faceEffectsRef.current, quality: profile });
     lastRenderedStateRef.current = effectStateRef.current;
+    lastGameSessionRef.current = gameSessionRef.current; lastAppModeRef.current = appModeRef.current;
     lastExtrasRef.current = faceEffectsRef.current; lastQualityRef.current = level;
-    const timings = rendererRef.current.metrics;
+    const timings = gameActive ? gameRendererRef.current.metrics : rendererRef.current.metrics;
     if (metricsRef.current.record(now, detectMs, timings.warpMs, timings.compositeMs + captureMs, performance.now() - now)
       && debugRef.current && debugPanelRef.current) {
       const m = metricsRef.current.latest;
@@ -401,6 +429,7 @@ export default function App() {
     const tracking = !!landmarks;
     if (trackingRef.current !== tracking) {
       trackingRef.current = tracking;
+      setFaceTracked(tracking);
       setStatus(tracking ? "顔を検出中" : "待機中");
       setMessage(tracking ? "映像を見ながらパーツを調整できます。" : "顔を画面の中央に寄せてください。");
       setError("");
@@ -408,7 +437,7 @@ export default function App() {
     animationFrameRef.current = requestAnimationFrame(renderLoop);
   }
 
-  async function startCamera(): Promise<void> {
+  async function startCamera(): Promise<boolean> {
     stopCamera();
     setStatus("起動中");
     setMessage("カメラと顔認識モデルを起動しています。");
@@ -442,12 +471,14 @@ export default function App() {
       await video.play();
       setCameraActive(true);
       renderLoop();
+      return true;
     } catch (caught) {
       const detail = caught instanceof Error ? caught.message : String(caught);
       setStatus("エラー");
       setMessage("カメラの起動に失敗しました。");
       setError(detail);
       stopCamera();
+      return false;
     }
   }
 
@@ -522,9 +553,59 @@ export default function App() {
     }, 500);
   }
 
+  function updateGame(next: BlinkDropSession): void {
+    gameSessionRef.current = next;
+    setGameSession(next);
+  }
+
+  function enterBlinkDrop(): void {
+    blinkDetectorRef.current.reset();
+    updateGame(createBlinkDropSession());
+    appModeRef.current = "blink-drop";
+    setAppMode("blink-drop");
+  }
+
+  function exitBlinkDrop(): void {
+    if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current);
+    gameTimerRef.current = null;
+    blinkDetectorRef.current.reset();
+    updateGame(createBlinkDropSession());
+    appModeRef.current = "camera";
+    setAppMode("camera");
+  }
+
+  async function startBlinkDrop(): Promise<void> {
+    if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current);
+    blinkDetectorRef.current.reset();
+    const available = cameraActive || await startCamera();
+    if (!available) {
+      updateGame({ ...createBlinkDropSession("error"), error: "カメラを起動できませんでした。" });
+      return;
+    }
+    updateGame(startBlinkDropCountdown());
+  }
+
+  function pauseGame(): void { updateGame(pauseBlinkDrop(gameSessionRef.current, performance.now())); }
+  function resumeGame(): void { blinkDetectorRef.current.reset(); updateGame(resumeBlinkDrop(gameSessionRef.current, performance.now())); }
+
   useEffect(() => {
     effectStateRef.current = effectState;
   }, [effectState]);
+
+  useEffect(() => { appModeRef.current = appMode; }, [appMode]);
+  useEffect(() => {
+    gameSessionRef.current = gameSession;
+    if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current);
+    gameTimerRef.current = null;
+    if (gameSession.phase === "countdown") {
+      gameTimerRef.current = window.setTimeout(() => {
+        blinkDetectorRef.current.reset(); updateGame(beginBlinkDrop(gameSessionRef.current, performance.now()));
+      }, 3000);
+    } else if (gameSession.phase === "fixing") {
+      gameTimerRef.current = window.setTimeout(() => updateGame(advanceBlinkDrop(gameSessionRef.current, performance.now())), 450);
+    }
+    return () => { if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current); gameTimerRef.current = null; };
+  }, [gameSession]);
 
   useEffect(() => {
     return () => {
@@ -532,45 +613,49 @@ export default function App() {
       if (timeoutRef.current) {
         window.clearTimeout(timeoutRef.current);
       }
+      if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current);
       faceLandmarkerRef.current?.close();
       faceLandmarkerRef.current = null;
     };
   }, []);
 
   return (
-    <main className={"henface-app layout-" + layout} data-category={category} data-settings={settingsOpen ? "open" : "closed"}>
+    <main className={"henface-app layout-" + layout + " mode-" + appMode} data-category={category} data-settings={settingsOpen ? "open" : "closed"}>
       <header className="app-header">
-        <div><h1>変顔メーカー</h1><p className="app-subtitle">顔エフェクトカメラ</p></div>
-        <label className="layout-picker">レイアウト
+        <div><h1>{appMode === "blink-drop" ? "瞬きキャッチ" : "変顔メーカー"}</h1><p className="app-subtitle">{appMode === "blink-drop" ? "顔パーツ落下ゲーム" : "顔エフェクトカメラ"}</p></div>
+        {appMode === "blink-drop" ? <button className="minor-button game-header-exit" type="button" onClick={exitBlinkDrop}>通常へ戻る</button> : <label className="layout-picker">レイアウト
           <select aria-label="レイアウト" value={layout} onChange={event => setLayout(event.target.value as Layout)}>
             <option value="standard">standard</option><option value="compact">compact</option><option value="edge-controls">edge-controls</option><option value="simple">simple</option>
           </select>
-        </label>
+        </label>}
       </header>
-      <div className="camera-toolbar">
+      {appMode === "camera" && <div className="camera-toolbar">
         <button className="primary-button" type="button" disabled={status === "起動中"} onClick={cameraActive ? () => { stopCamera(); setStatus("待機中"); setMessage("カメラを停止しました。"); } : startCamera}>
           {status === "起動中" ? "起動中…" : cameraActive ? "カメラ停止" : "カメラ起動"}
         </button>
         <button className="secondary-button" type="button" disabled={!cameraActive} onClick={takeScreenshot}>写真を保存</button>
         <span className="camera-status" role="status">{status}</span>
-      </div>
+      </div>}
       <div className="camera-workspace">
         <section className="viewer-card" aria-label="カメラ映像">
           <div ref={frameRef} className="preview-frame">
             <canvas ref={canvasRef} aria-label="変顔メーカーのプレビュー" />
             <video ref={videoRef} playsInline muted />
-            {!cameraActive && <div className="placeholder">カメラを起動して遊ぼう</div>}
+            {!cameraActive && <div className="placeholder">{appMode === "blink-drop" ? "スタートでカメラを起動します" : "カメラを起動して遊ぼう"}</div>}
             {loadingOverlay && <div className="loading-overlay">{loadingOverlay}</div>}
-            {layout === "simple" && <button className="simple-random-button" type="button" aria-label="全パーツをランダム" onClick={randomizeFace}>
+            {appMode === "camera" && <button className="game-entry-button" type="button" onClick={enterBlinkDrop}><span aria-hidden="true">👁</span> 瞬きキャッチ</button>}
+            {appMode === "camera" && layout === "simple" && <button className="simple-random-button" type="button" aria-label="全パーツをランダム" onClick={randomizeFace}>
               <span aria-hidden="true">🎲</span> ランダム
             </button>}
+            {appMode === "blink-drop" && <BlinkDropHud session={gameSession} cameraActive={cameraActive} tracking={faceTracked}
+              start={startBlinkDrop} pause={pauseGame} resume={resumeGame} restart={startBlinkDrop} exit={exitBlinkDrop} save={takeScreenshot} />}
           </div>
         </section>
-        <button className="settings-toggle" type="button" hidden={layout === "simple"} aria-expanded={settingsOpen} aria-controls="effect-settings"
+        <button className="settings-toggle" type="button" hidden={appMode === "blink-drop" || layout === "simple"} aria-expanded={settingsOpen} aria-controls="effect-settings"
           onClick={() => setSettingsOpen(open => !open)}>
           <span aria-hidden="true">{settingsOpen ? "⌄" : "⌃"}</span>{settingsOpen ? "設定を閉じる" : "編集設定を開く"}
         </button>
-        <section id="effect-settings" className="controls-card" aria-label="顔パーツ調整" hidden={layout === "simple" || !settingsOpen}>
+        <section id="effect-settings" className="controls-card" aria-label="顔パーツ調整" hidden={appMode === "blink-drop" || layout === "simple" || !settingsOpen}>
           <CategoryTabs value={category} change={setCategory} />
           <div className="category-content">
           {category === "parts" ? <>
@@ -597,9 +682,9 @@ export default function App() {
           <p className="diagnosis" aria-live="polite">{diagnosis}</p>
         </section>
       </div>
-      {debug && layout !== "simple" && <pre ref={debugPanelRef} className="debug-panel" aria-label="処理時間計測">カメラ起動後に1秒間隔で計測します。</pre>}
+      {debug && appMode === "camera" && layout !== "simple" && <pre ref={debugPanelRef} className="debug-panel" aria-label="処理時間計測">カメラ起動後に1秒間隔で計測します。</pre>}
       {error && <p className="error-box" role="alert">{error}</p>}
-      <details className="extra-tools" hidden={layout === "simple"}><summary>品質・ランダム設定・その他</summary>
+      <details className="extra-tools" hidden={appMode === "blink-drop" || layout === "simple"}><summary>品質・ランダム設定・その他</summary>
         <p>{message}</p>
         <label className="strength-picker">品質<select aria-label="品質" value={quality} onChange={e => setQuality(e.target.value as Quality)}>
           <option value="auto">auto · 自動</option><option value="speed">speed · 速度</option><option value="balanced">balanced · 標準</option><option value="quality">quality · 高画質</option>

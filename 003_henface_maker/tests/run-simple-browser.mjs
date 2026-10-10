@@ -29,7 +29,8 @@ try {
     const key = ++id; pending.set(key, { resolve, reject }); socket.send(JSON.stringify({ id: key, method, params }));
   });
   await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
-  await call('Page.navigate', { url: (process.env.TEST_BASE_URL ?? 'http://127.0.0.1:4178') + '/tests/simple-layout.html' });
+  const testPath = process.env.TEST_PATH ?? '/tests/simple-layout.html';
+  await call('Page.navigate', { url: (process.env.TEST_BASE_URL ?? 'http://127.0.0.1:4178') + testPath });
   let result;
   for (let attempt = 0; attempt < 100; attempt++) {
     const response = await call('Runtime.evaluate', { expression: '({ status: document.documentElement.dataset.result, text: document.querySelector("#results")?.textContent, width: innerWidth, height: innerHeight })', returnByValue: true });
@@ -38,7 +39,8 @@ try {
     await delay(100);
   }
   console.log(result?.text ?? 'No test output');
-  if (result?.status !== 'pass' || result.width !== 390 || result.height !== 844) throw Error('Simple UI checks failed or viewport mismatch');
+  const requiresPhoneViewport = testPath === '/tests/simple-layout.html';
+  if (result?.status !== 'pass' || (requiresPhoneViewport && (result.width !== 390 || result.height !== 844))) throw Error('Browser checks failed or viewport mismatch');
 } finally {
   socket?.close(); browser.kill();
   await delay(500);

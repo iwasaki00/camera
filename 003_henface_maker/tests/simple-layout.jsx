@@ -76,6 +76,12 @@ try {
   await select('レイアウト', 'simple');
   frame.style.aspectRatio = '16 / 9';
   assert('縦横比変更後も右上位置維持', Math.abs(document.querySelector('.simple-random-button').getBoundingClientRect().right - b.right) < 1);
+  document.querySelector('.game-entry-button').click(); await tick();
+  assert('瞬きキャッチ開始画面へ切替', document.querySelector('.game-start-panel h2').textContent === '瞬きキャッチ');
+  assert('ゲーム中は通常編集UIを非表示', !visible(document.querySelector('.settings-toggle')) && !visible(document.querySelector('.extra-tools')));
+  assert('ゲーム画面を縦いっぱいに表示', document.querySelector('.preview-frame').clientHeight > 740);
+  document.querySelector('.game-header-exit').click(); await tick();
+  assert('通常モードへ戻れる', !document.querySelector('.game-start-panel') && visible(document.querySelector('.game-entry-button')));
   results.push('viewport ' + innerWidth + '×' + innerHeight);
   document.documentElement.dataset.result = 'pass';
 } catch (error) {
