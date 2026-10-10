@@ -1,11 +1,11 @@
 import type { Landmark } from "../featureRenderer";
 
-export const BLINK_DROP_PARTS = ["rightEye", "leftEye", "nose", "mouth"] as const;
+export const BLINK_DROP_PARTS = ["rightEyeSet", "leftEyeSet", "nose", "mouth"] as const;
 export type BlinkDropPart = typeof BLINK_DROP_PARTS[number];
 export type BlinkDropPhase = "ready" | "countdown" | "playing" | "fixing" | "paused" | "completed" | "error";
 
 export const BLINK_DROP_LABELS: Record<BlinkDropPart, string> = {
-  rightEye: "右目", leftEye: "左目", nose: "鼻", mouth: "口"
+  rightEyeSet: "右目セット", leftEyeSet: "左目セット", nose: "鼻", mouth: "口"
 };
 
 export type BlinkDropSession = {

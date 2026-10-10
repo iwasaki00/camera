@@ -18,8 +18,8 @@ export default function BlinkDropHud({ session, cameraActive, tracking, start, p
   const current = BLINK_DROP_PARTS[session.currentIndex];
   if (session.phase === "ready" || session.phase === "error") return <div className="game-panel game-start-panel">
     <h2>瞬きキャッチ</h2>
-    <p>目・鼻・口が上から落ちてきます。瞬きした位置で固定しよう！</p>
-    <p className="game-order">右目 → 左目 → 鼻 → 口</p>
+    <p>眉・眼鏡まわりを含む目セット、鼻、口が落ちてきます。瞬きした位置で固定しよう！</p>
+    <p className="game-order">右目セット → 左目セット → 鼻 → 口</p>
     {session.error && <p className="game-error">{session.error}</p>}
     <button className="primary-button" type="button" onClick={start}>ゲームスタート</button>
     <button className="minor-button" type="button" onClick={exit}>通常モードへ戻る</button>

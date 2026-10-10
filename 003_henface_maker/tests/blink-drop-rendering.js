@@ -10,9 +10,33 @@ try{
  const {base,landmarks}=createFixture(),source=pixels(base).slice();
  const out=document.createElement('canvas');out.width=base.width;out.height=base.height;const ctx=out.getContext('2d');
  const renderer=createBlinkDropRenderer();
+ const regions=renderer.getRegions(landmarks,base.width,base.height);
+ assert('目セットは右→左→鼻→口の新定義',regions.rightEyeSet.kind==='rightEyeSet'&&regions.leftEyeSet.kind==='leftEyeSet');
+ for(const [name,x] of [['leftEyeSet',175],['rightEyeSet',305]]){
+  const r=regions[name];
+  assert(name+'は眉・レンズ上下左右を含む',r.center.x-r.width/2<x-51&&r.center.x+r.width/2>x+51&&r.center.y-r.height/2<187&&r.center.y+r.height/2>264);
+ }
  const countdown={...createBlinkDropSession('countdown')};
  assert('のっぺらぼう描画成功',renderer.render(base,ctx,landmarks,countdown,0));
  const blank=pixels(out).slice();assert('目鼻口の領域を変更',!equal(blank,source));assert('元フレームは不変',equal(source,pixels(base)));
+ // Change only the removed content. The opaque core must be independent of it,
+ // unlike a semitransparent cover. Surrounding skin and landmarks stay identical.
+ const altered=document.createElement('canvas');altered.width=480;altered.height=640;
+ const alteredCtx=altered.getContext('2d');alteredCtx.drawImage(base,0,0);
+ alteredCtx.fillStyle='#ff00ff';
+ for(const x of [175,305]){alteredCtx.fillRect(x-41,187,82,10);alteredCtx.fillRect(x-51,209,102,56);}
+ alteredCtx.fillRect(217,277,46,75);alteredCtx.fillRect(186,390,108,40);
+ renderer.render(altered,ctx,landmarks,countdown,0);const changedBlank=pixels(out).slice();
+ const stableBox=box=>{let max=0;for(let y=box.y;y<box.y+box.h;y++)for(let x=box.x;x<box.x+box.w;x++)for(let c=0;c<3;c++){const i=(y*480+x)*4+c;max=Math.max(max,Math.abs(blank[i]-changedBlank[i]));}return max<=2;};
+ assert('消去内部は元の眉・眼鏡・目の色を透過しない',stableBox({x:137,y:190,w:76,h:67})&&stableBox({x:267,y:190,w:76,h:67}));
+ assert('消去内部は元の鼻・口の色を透過しない',stableBox({x:224,y:285,w:32,h:56})&&stableBox({x:190,y:396,w:100,h:25}));
+ renderer.render(base,ctx,landmarks,createBlinkDropSession(),0,'parts-only');
+ const sets=pixels(out);
+ for(const x of [175,305]){
+  for(const [label,px,py] of [['眉',x,191],['眼鏡',x-49,235],['目',x,235]]){
+   const i=(py*480+px)*4;assert('parts-onlyに'+label+'の元画素を含む',Math.abs(sets[i]-source[i])<=2&&Math.abs(sets[i+1]-source[i+1])<=2);
+  }
+ }
  const featureBoxes=[{name:'目',x:140,y:220,w:200,h:32},{name:'鼻帯',x:190,y:250,w:100,h:145},{name:'口帯',x:175,y:378,w:130,h:66}];
  for(const box of featureBoxes){const before=variance(source,box),after=variance(blank,box);results.push(box.name+' 輝度分散 '+before.toFixed(0)+' → '+after.toFixed(0));assert(box.name+'の輪郭・陰影を低減',after<before*.72);}
  const playing=beginBlinkDrop(createBlinkDropSession('countdown'),1000);

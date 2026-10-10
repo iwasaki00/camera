@@ -4,6 +4,7 @@ import ts from 'typescript';
 const source = await fs.readFile(new URL('../src/game/blinkDropGame.ts', import.meta.url), 'utf8');
 const js = ts.transpileModule(source, {compilerOptions:{module:ts.ModuleKind.ES2020}}).outputText;
 const game = await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+assert.deepEqual(game.BLINK_DROP_PARTS,['rightEyeSet','leftEyeSet','nose','mouth']);
 
 let session=game.startBlinkDropCountdown();
 assert.equal(session.phase,'countdown');
