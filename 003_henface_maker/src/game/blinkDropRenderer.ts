@@ -1,7 +1,7 @@
 import { buildFeatherMask, getFeatureRegion } from "../featureRenderer";
 import type { FeatureRegion, Landmark, Point } from "../featureRenderer";
-import { BLINK_DROP_PARTS, fallingOffsetAt } from "./blinkDropGame";
-import type { BlinkDropPart, BlinkDropSession } from "./blinkDropGame";
+import { BLINK_DROP_PARTS, fallingStateAt } from "./blinkDropGame";
+import type { BlinkDropPart, BlinkDropSession, FallingState } from "./blinkDropGame";
 import { convexHull, paintContourMask, pointInPolygon, roundedBand } from "./blinkDropMasks";
 
 type Surface = { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D };
@@ -294,11 +294,19 @@ export function createBlinkDropRenderer() {
       region.contour.map(p => ({ x: (p.x - box.x) / width, y: (p.y - box.y) / height })));
   }
 
-  function turnPosition(landmarks: readonly Landmark[], width: number, height: number, index: number, offset: number): Point | undefined {
+  function faceWidth(outline: Point[]): number {
+    let min = Infinity, max = -Infinity;
+    for (const p of outline) { min = Math.min(min, p.x); max = Math.max(max, p.x); }
+    return max - min;
+  }
+
+  function turnPosition(landmarks: readonly Landmark[], width: number, height: number, index: number, motion: number | FallingState): Point | undefined {
     const g = geometry(landmarks, width, height);
     if (!g) return undefined;
     const part = g.parts[BLINK_DROP_PARTS[index]];
-    return { x: (part.center.x - g.pose.center.x) / g.pose.scale,
+    const offset = typeof motion === "number" ? motion : motion.verticalOffset;
+    const horizontal = typeof motion === "number" ? 0 : motion.horizontalOffset * faceWidth(g.skinOutline);
+    return { x: (part.center.x - g.pose.center.x + horizontal) / g.pose.scale,
       y: (part.center.y - g.pose.center.y + offset * part.dropHeight) / g.pose.scale };
   }
 
@@ -310,10 +318,18 @@ export function createBlinkDropRenderer() {
   }
 
   function drawTurn(source: CanvasRenderingContext2D, dest: CanvasRenderingContext2D, parts: Record<RegionKind, PartRegion>,
-    pose: FacePose, index: number, offset: number, position?: Point | null, browOffset?: Point | null): void {
+    pose: FacePose, width: number, index: number, motion: Pick<FallingState, "verticalOffset" | "horizontalOffset" | "rotation" | "scale">,
+    position?: Point | null, browOffset?: Point | null): void {
     const kind = BLINK_DROP_PARTS[index];
     const shift = position ? { x: pose.center.x + position.x * pose.scale - parts[kind].center.x,
-      y: pose.center.y + position.y * pose.scale - parts[kind].center.y } : { x: 0, y: offset * parts[kind].dropHeight };
+      y: pose.center.y + position.y * pose.scale - parts[kind].center.y } : { x: motion.horizontalOffset * width, y: motion.verticalOffset * parts[kind].dropHeight };
+    // Rotate/scale the eye and brow together around the eye center. Translation-only
+    // modes keep the existing draw path, including NORMAL's exact coordinates.
+    const transformed = motion.rotation !== 0 || motion.scale !== 1;
+    if (transformed) {
+      const center = { x: parts[kind].center.x + shift.x, y: parts[kind].center.y + shift.y };
+      dest.save(); dest.translate(center.x, center.y); dest.rotate(motion.rotation); dest.scale(motion.scale, motion.scale); dest.translate(-center.x, -center.y);
+    }
     drawPart(source, dest, parts[kind], shift);
     if (index < 2) {
       const brow = parts[index === 0 ? "rightBrow" : "leftBrow"];
@@ -322,6 +338,7 @@ export function createBlinkDropRenderer() {
         y: pose.center.y + (position.y + browOffset.y) * pose.scale - brow.center.y } : shift;
       drawPart(source, dest, brow, browShift);
     }
+    if (transformed) dest.restore();
   }
 
   function render(base: HTMLCanvasElement, dest: CanvasRenderingContext2D, landmarks: readonly Landmark[] | undefined,
@@ -347,9 +364,14 @@ export function createBlinkDropRenderer() {
     if (debugMode !== "parts-only") output.drawImage(alignedSource.canvas, 0, 0);
     if (debugMode !== "parts-only" && debugMode !== "bounds") renderBlankFace(source, output, partRegions, g.skinOutline, g.eraseOutline, pose);
     const preview = debugMode === "blank-face" || debugMode === "bounds";
-    if (!preview) session.fixedOffsets.forEach((offset, index) => { if (offset !== null) drawTurn(source, output, partRegions, pose, index, offset, session.fixedPositions[index], session.fixedBrowOffsets[index]); });
+    const width = faceWidth(g.skinOutline);
+    if (!preview) session.fixedOffsets.forEach((offset, index) => {
+      if (offset !== null) drawTurn(source, output, partRegions, pose, width, index,
+        { verticalOffset: offset, horizontalOffset: 0, rotation: 0, scale: 1, ...session.fixedTransforms[index] },
+        session.fixedPositions[index], session.fixedBrowOffsets[index]);
+    });
     if (!preview && (session.phase === "playing" || (session.phase === "paused" && (!session.pausedPhase || session.pausedPhase === "playing")))) {
-      drawTurn(source, output, partRegions, pose, session.currentIndex, fallingOffsetAt(session, now));
+      drawTurn(source, output, partRegions, pose, width, session.currentIndex, fallingStateAt(session, now));
     }
     if (debugMode === "parts-only" && !activePhases.has(session.phase)) {
       for (const part of REGION_ORDER) drawPart(source, output, partRegions[part], { x: 0, y: 0 });

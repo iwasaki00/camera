@@ -2,6 +2,65 @@
 
 React + Vite + TypeScript + MediaPipe Face Landmarker を使った、iPhone Safari 向けの変顔アプリです。
 
+## v0.7.0-difficulty-modes — 瞬きキャッチの5段階難易度
+
+開始前の「難易度」でEASY / NORMAL / HARD / CHAOS / MONSTERを選択できます。
+初期値はNORMALです。通常モードのランダム強度monsterとは独立した設定です。
+選択値はスタート時にセッションへコピーし、プレイ中の変更UIは表示しません。
+選択はページを開いている間保持します。今回はlocalStorageへの保存は追加していません。
+プレイ中はターン数の上に現在の難易度を小さく表示します。
+
+| 難易度 | 1回の落下周期 | 動き |
+| --- | --- | --- |
+| EASY | 5.0秒 | ゆっくり垂直落下 |
+| NORMAL | 2.4秒 | v0.6.6の速度・距離・スコアを維持 |
+| HARD | 2.0秒 | 高速垂直落下 |
+| CHAOS | 2.5秒 | 垂直落下＋左右に顔幅の最大±10%揺れる |
+| MONSTER | 1.5秒 | 左右最大±16%、回転最大±25度、サイズ0.8〜1.2倍 |
+
+NORMALは既存周期が2.4秒だったため、この値を優先しています。
+CHAOSは指定された目安の2.5秒を採用し、NORMALとほぼ同じ周期に横揺れを追加します。
+振幅・周期などの調整値は `src/game/blinkDropGame.ts` の `DIFFICULTY_MODES` にまとめています。
+
+### 時間計算と固定情報
+
+`fallingStateAt` がprogress / verticalOffset / horizontalOffset / rotation / scale / elapsedTime / difficultyを返します。
+セッションの単調時計を使用し、`progress = (経過時間 % 落下周期) / 落下周期` で計算します。
+垂直オフセットは従来の-6〜2の範囲、左右は顔幅の割合、回転は顔基準のラジアンです。
+横揺れは1周期に2往復、回転と拡縮は1周期の滑らかな正弦・余弦曲線です。
+フレームごとの位置加算は行わず、下端を越えると何度でも再落下します。再落下で瞬き検出器はリセットしません。
+FIXINGでは確定時刻、PAUSEDでは停止時刻を参照し、再開時には停止時間を除外します。
+
+既存の `fixedPositions` に顔ローカルX/Y、`fixedBrowOffsets` に目と眉の相対位置を保持します。
+追加した `fixedTransforms` には種別・相対回転・相対倍率・左右オフセットを保存します。
+描画時には顔の中心・スケール・角度に合わせて再計算し、目と眉に同じ回転・倍率を適用します。
+落下中と固定後は同じ座標計算を使用します。完成後も保存位置へライブパーツが追従します。
+NORMALの描画・評価は従来どおりです。横ずれ・回転・拡縮がある場合だけ評価に小さな誤差項を加えています。
+
+### 検証と影響範囲
+
+- `npm run test:difficulty`：5段階、NORMALの旧式との一致、7/24/30/60/120fps相当での同時刻の一致、再落下、停止・再開、FIXING、固定情報、4ターン、スコアを確認。
+- `node tests/blink-drop.test.mjs`：関連する既存ゲーム進行・顔ローカル位置・瞬き固定・停止再開を確認。
+- Edge・390×844で `tests/blink-difficulty.html`：5段階のUI、NORMALの既存落下座標、6画像の回転・倍率・顔追従、目眉の同時落下・固定、瞬きとタップ、完成ライブ更新、保存を確認。
+- `npm run typecheck` / `npm run build`：成功。既存全件テスト・全画面開閉テストは実行していません。
+- 参考Canvas描画時間：PC・480×640・検出除外でNORMAL 4.76ms/frame、MONSTER 5.13ms/frame。iPhoneのFPS測定値ではありません。
+
+難易度の動きはCanvasにだけ反映し、毎フレームのReact state更新は追加していません。
+回転・拡縮は既存の切り出し画像にCanvas変換を適用します。難易度の動きのためにCanvasやImageData、マスクを毎フレーム生成する処理は追加していません。
+瞬き検出器・感度・10回デバッグ・カウントダウン更新・抽出マスク・のっぺらぼう・写真保存処理は維持しています。
+既存のHUDテストには追加propsを渡し、カウントダウンのブラウザテストは現在のAPP_VERSIONと照合するよう更新しました。
+iPhone Safari実機の瞬き・タッチ感覚、眼鏡ありの追従、画面端での見切れ、長時間動作時のFPS/発熱は未確認です。
+commit / push / deployは実施していません。
+
+ブラウザ検証（別ターミナルで `npm run dev -- --host 127.0.0.1 --port 4179 --strictPort` を起動）：
+
+```powershell
+$env:TEST_BASE_URL = 'http://127.0.0.1:4179'
+$env:TEST_PATH = '/tests/blink-difficulty.html'
+$env:TEST_WAIT_MS = '30000'
+node tests/run-simple-browser.mjs
+```
+
 ## v0.6.6-countdown-display-fix — カウントダウンのDOM更新と公開版の確認
 
 ### 確認できた原因

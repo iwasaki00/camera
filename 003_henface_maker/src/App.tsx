@@ -9,9 +9,9 @@ import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 import { createFeatureRenderer } from "./featureRenderer";
 import type { EffectState, Landmark, PartConfig, PartId } from "./featureRenderer";
 import BlinkDropHud from "./game/BlinkDropHud";
-import { BlinkDetector, advanceBlinkDrop, beginBlinkDrop, catchBlinkDropPart, createBlinkDropSession, fallingOffsetAt,
+import { BlinkDetector, advanceBlinkDrop, beginBlinkDrop, catchBlinkDropPart, createBlinkDropSession, fallingStateAt,
   countdownLabel, pauseBlinkDrop, resumeBlinkDrop, startBlinkDropCountdown } from "./game/blinkDropGame";
-import type { BlinkDropSession, BlinkSensitivity } from "./game/blinkDropGame";
+import type { BlinkDropSession, BlinkSensitivity, BlinkDropDifficulty } from "./game/blinkDropGame";
 import { createBlinkDropRenderer } from "./game/blinkDropRenderer";
 import type { BlinkDropDebugMode } from "./game/blinkDropRenderer";
 
@@ -282,6 +282,7 @@ export default function App() {
   const [layout, setLayout] = useState<Layout>(readLayout);
   const [appMode, setAppMode] = useState<"camera" | "blink-drop">("camera");
   const [gameSession, setGameSession] = useState<BlinkDropSession>(createBlinkDropSession);
+  const [difficulty, setDifficulty] = useState<BlinkDropDifficulty>("NORMAL");
   const [countdownText, setCountdownText] = useState("3");
   const [settingsOpen, setSettingsOpen] = useState(readSettingsOpen);
   const [randomStrength, setRandomStrength] = useState<RandomStrength>(readRandomStrength);
@@ -619,8 +620,8 @@ export default function App() {
     const landmarks = smootherRef.current.sample(now), source = sourceCanvasRef.current;
     if (appModeRef.current !== "blink-drop" || session.phase !== "playing" || !lastLandmarksRef.current || !landmarks || !source || !gameRendererRef.current) return;
     if (manual && now - lastManualCatchAtRef.current < 650) return;
-    const offset = fallingOffsetAt(session, now);
-    const position = gameRendererRef.current.turnPosition(landmarks, source.width, source.height, session.currentIndex, offset);
+    const motion = fallingStateAt(session, now);
+    const position = gameRendererRef.current.turnPosition(landmarks, source.width, source.height, session.currentIndex, motion);
     if (!position) return;
     if (manual) { lastManualCatchAtRef.current = now; blinkDetectorRef.current.requireReopen(); }
     const browOffset = gameRendererRef.current.turnBrowOffset(landmarks, source.width, source.height, session.currentIndex);
@@ -647,6 +648,7 @@ export default function App() {
   }
 
   async function startBlinkDrop(): Promise<void> {
+    const selectedDifficulty = difficulty;
     blinkTestRef.current.running = false; setBlinkTestRunning(false);
     if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current);
     blinkDetectorRef.current.reset();
@@ -657,7 +659,7 @@ export default function App() {
       updateGame({ ...createBlinkDropSession("error"), error: "カメラを起動できませんでした。" });
       return;
     }
-    updateGame(startBlinkDropCountdown());
+    updateGame(startBlinkDropCountdown(performance.now(), selectedDifficulty));
   }
 
   function pauseGame(): void { updateGame(pauseBlinkDrop(gameSessionRef.current, performance.now())); }
@@ -796,7 +798,7 @@ export default function App() {
             </button>}
             {appMode === "blink-drop" && (!(debug && gameDebugMode !== "normal") || gameSession.phase === "completed" ||
               ((gameDebugMode === "parts-only") && gameSession.phase !== "ready")) &&
-              <BlinkDropHud session={gameSession} countdownText={countdownText} cameraActive={cameraActive} tracking={faceTracked}
+              <BlinkDropHud session={gameSession} countdownText={countdownText} difficulty={difficulty} selectDifficulty={setDifficulty} cameraActive={cameraActive} tracking={faceTracked}
                 start={startBlinkDrop} pause={pauseGame} resume={resumeGame} restart={startBlinkDrop} exit={exitBlinkDrop} save={takeScreenshot} />}
           </div>
         </section>

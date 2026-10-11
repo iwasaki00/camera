@@ -17,6 +17,7 @@ const browser = spawn(process.env.BROWSER_PATH ?? 'C:/Program Files (x86)/Micros
 ], { windowsHide: true, stdio: 'ignore' });
 let socket;
 const report = { url: process.env.TEST_BASE_URL ?? 'http://127.0.0.1:4178/', cases: [] };
+const expectedVersion = /APP_VERSION = "([^"]+)"/.exec(await readFile(new URL('../src/uiSettings.ts', import.meta.url), 'utf8'))[1];
 try {
   let page;
   for (let i = 0; i < 100; i++) {
@@ -125,7 +126,7 @@ try {
     assert.deepEqual(initial.filter(s => s.phase === 'countdown').map(s => s.label), ['3']);
     console.log('REPRODUCED: published countdown remains 3 until playing.');
   } else {
-    assert.equal(report.version, '0.6.6-countdown-display-fix'); checkSequence(initial);
+    assert.equal(report.version, expectedVersion); checkSequence(initial);
     await evaluate('window.countdownChanges = []'); await click('リスタート');
     checkSequence(await collect('リスタート'));
 

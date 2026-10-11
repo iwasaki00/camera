@@ -1,9 +1,10 @@
 {
   "name": "henface-maker",
   "private": true,
-  "version": "0.6.6",
+  "version": "0.7.0",
   "type": "module",
   "scripts": {
+    "test:difficulty": "node tests/blink-difficulty.test.mjs",
     "dev": "node ./node_modules/vite/bin/vite.js",
     "build": "node ./node_modules/vite/bin/vite.js build",
     "preview": "node ./node_modules/vite/bin/vite.js preview",

@@ -2,6 +2,25 @@ import type { Landmark, Point } from "../featureRenderer";
 
 export const BLINK_DROP_PARTS = ["rightEye", "leftEye", "nose", "mouth"] as const;
 export type BlinkDropPart = typeof BLINK_DROP_PARTS[number];
+export const BLINK_DROP_DIFFICULTIES = ["EASY", "NORMAL", "HARD", "CHAOS", "MONSTER"] as const;
+export type BlinkDropDifficulty = typeof BLINK_DROP_DIFFICULTIES[number];
+export const DIFFICULTY_MODES = {
+  EASY: { durationMs: 5000, sway: 0, rotation: 0, scale: 0, description: "ゆっくり垂直落下" },
+  NORMAL: { durationMs: 2400, sway: 0, rotation: 0, scale: 0, description: "従来の垂直落下" },
+  HARD: { durationMs: 2000, sway: 0, rotation: 0, scale: 0, description: "高速垂直落下" },
+  CHAOS: { durationMs: 2500, sway: 0.10, rotation: 0, scale: 0, description: "高速落下＋左右に揺れる" },
+  MONSTER: { durationMs: 1500, sway: 0.16, rotation: Math.PI * 25 / 180, scale: 0.2, description: "高速落下＋左右移動・回転・サイズ変化" }
+} as const;
+export type FallingState = {
+  progress: number;
+  verticalOffset: number; // Existing per-part drop-height units.
+  horizontalOffset: number; // Fraction of the tracked face width.
+  rotation: number; // Radians relative to the face.
+  scale: number;
+  elapsedTime: number; // Active milliseconds, excluding pauses.
+  difficulty: BlinkDropDifficulty;
+};
+export type FixedPartTransform = Pick<FallingState, "horizontalOffset" | "rotation" | "scale"> & { partType: BlinkDropPart };
 export type BlinkDropPhase = "ready" | "countdown" | "playing" | "fixing" | "paused" | "completed" | "error";
 
 export const BLINK_DROP_LABELS: Record<BlinkDropPart, string> = {
@@ -10,10 +29,12 @@ export const BLINK_DROP_LABELS: Record<BlinkDropPart, string> = {
 
 export type BlinkDropSession = {
   phase: BlinkDropPhase;
+  difficulty: BlinkDropDifficulty;
   currentIndex: number;
   fixedOffsets: Array<number | null>;
   fixedPositions: Array<Point | null>; // Target center in face-local units (eye separation = 1).
   fixedBrowOffsets: Array<Point | null>;
+  fixedTransforms: Array<FixedPartTransform | null>;
   partStartedAt: number;
   pauseStartedAt: number;
   countdownStartedAt: number;
@@ -22,17 +43,17 @@ export type BlinkDropSession = {
   error?: string;
 };
 
-const DROP_DURATION_MS = 2400;
 const START_OFFSET = -6;
 const END_OFFSET = 2;
 
-export function createBlinkDropSession(phase: BlinkDropPhase = "ready"): BlinkDropSession {
-  return { phase, currentIndex: 0, fixedOffsets: [null, null, null, null], fixedPositions: [null, null, null, null],
+export function createBlinkDropSession(phase: BlinkDropPhase = "ready", difficulty: BlinkDropDifficulty = "NORMAL"): BlinkDropSession {
+  return { phase, difficulty, currentIndex: 0, fixedOffsets: [null, null, null, null], fixedPositions: [null, null, null, null],
+    fixedTransforms: [null, null, null, null],
     fixedBrowOffsets: [null, null, null, null], partStartedAt: 0, pauseStartedAt: 0, countdownStartedAt: 0, fixingStartedAt: 0 };
 }
 
-export function startBlinkDropCountdown(now = performance.now()): BlinkDropSession {
-  return { ...createBlinkDropSession("countdown"), countdownStartedAt: now };
+export function startBlinkDropCountdown(now = performance.now(), difficulty: BlinkDropDifficulty = "NORMAL"): BlinkDropSession {
+  return { ...createBlinkDropSession("countdown", difficulty), countdownStartedAt: now };
 }
 
 export function countdownLabel(session: BlinkDropSession, now: number): string {
@@ -45,21 +66,36 @@ export function beginBlinkDrop(session: BlinkDropSession, now: number): BlinkDro
   return { ...session, phase: "playing", partStartedAt: now, pauseStartedAt: 0 };
 }
 
-export function fallingOffsetAt(session: BlinkDropSession, now: number): number {
-  const sampleAt = session.phase === "paused" && session.pauseStartedAt ? session.pauseStartedAt : now;
+export function fallingStateAt(session: BlinkDropSession, now: number): FallingState {
+  const fixed = session.phase === "fixing" || session.phase === "completed" ||
+    (session.phase === "paused" && session.pausedPhase === "fixing");
+  const sampleAt = fixed ? session.fixingStartedAt : session.phase === "paused" ? session.pauseStartedAt : now;
   const elapsed = Math.max(0, sampleAt - session.partStartedAt);
-  const progress = (elapsed % DROP_DURATION_MS) / DROP_DURATION_MS;
-  return START_OFFSET + (END_OFFSET - START_OFFSET) * progress;
+  const mode = DIFFICULTY_MODES[session.difficulty];
+  const progress = (elapsed % mode.durationMs) / mode.durationMs;
+  const angle = progress * Math.PI * 2;
+  return { progress, verticalOffset: START_OFFSET + (END_OFFSET - START_OFFSET) * progress,
+    horizontalOffset: mode.sway ? mode.sway * Math.sin(angle * 2) : 0,
+    rotation: mode.rotation ? mode.rotation * Math.sin(angle) : 0,
+    scale: mode.scale ? 1 + mode.scale * Math.cos(angle) : 1, elapsedTime: elapsed, difficulty: session.difficulty };
+}
+
+export function fallingOffsetAt(session: BlinkDropSession, now: number): number {
+  return fallingStateAt(session, now).verticalOffset;
 }
 
 export function catchBlinkDropPart(session: BlinkDropSession, now: number, position?: Point, browOffset?: Point): BlinkDropSession {
   if (session.phase !== "playing") return session;
+  const motion = fallingStateAt(session, now);
   const fixedOffsets = session.fixedOffsets.slice();
-  fixedOffsets[session.currentIndex] = fallingOffsetAt(session, now);
+  fixedOffsets[session.currentIndex] = motion.verticalOffset;
   const fixedPositions = session.fixedPositions.slice();
   fixedPositions[session.currentIndex] = position ?? null;
   const fixedBrowOffsets = session.fixedBrowOffsets.slice(); fixedBrowOffsets[session.currentIndex] = browOffset ?? null;
-  return { ...session, phase: "fixing", fixingStartedAt: now, fixedOffsets, fixedPositions, fixedBrowOffsets };
+  const fixedTransforms = session.fixedTransforms.slice();
+  fixedTransforms[session.currentIndex] = { partType: BLINK_DROP_PARTS[session.currentIndex],
+    horizontalOffset: motion.horizontalOffset, rotation: motion.rotation, scale: motion.scale };
+  return { ...session, phase: "fixing", fixingStartedAt: now, fixedOffsets, fixedPositions, fixedBrowOffsets, fixedTransforms };
 }
 
 export function advanceBlinkDrop(session: BlinkDropSession, now: number): BlinkDropSession {
@@ -82,8 +118,14 @@ export function resumeBlinkDrop(session: BlinkDropSession, now: number): BlinkDr
 }
 
 export function blinkDropScore(session: BlinkDropSession): { accuracy: number; funny: number; title: string } {
-  const values = session.fixedOffsets.filter((value): value is number => value !== null);
-  const average = values.length ? values.reduce((sum, value) => sum + Math.abs(value), 0) / values.length : 0;
+  const values = session.fixedOffsets.flatMap((offset, index) => {
+    if (offset === null) return [];
+    const transform = session.fixedTransforms[index];
+    // Keep vertical-only scores exact; add bounded face-relative errors for the new modes.
+    if (!transform || (transform.horizontalOffset === 0 && transform.rotation === 0 && transform.scale === 1)) return [Math.abs(offset)];
+    return [Math.hypot(offset, transform.horizontalOffset * 6, transform.rotation / (Math.PI / 4), (transform.scale - 1) * 4)];
+  });
+  const average = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
   const accuracy = Math.max(0, Math.round(100 - average / 6 * 100));
   const funny = Math.min(100, Math.round(average / 5 * 100));
   const title = funny > 72 ? "顔面崩壊王！" : funny > 42 ? "変顔名人！" : accuracy > 75 ? "かなり惜しい！" : "すごい変顔！";

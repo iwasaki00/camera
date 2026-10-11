@@ -27,7 +27,7 @@ try {
  const ctx=canvas.getContext('2d');ctx.fillStyle='#ae8';ctx.fillRect(0,0,480,640);
  const calls=[];
  const session={...createBlinkDropSession('completed'),currentIndex:3,fixedOffsets:[-3,1,-2,1.5]};
-  root.render(<main className="henface-app layout-simple mode-blink-drop" data-game-phase="completed"><header className="app-header"><h1>瞬きキャッチ</h1></header><div className="camera-workspace"><section className="viewer-card"><div className="preview-frame"><canvas width="480" height="640"/><BlinkDropHud session={session} countdownText="START!" cameraActive={true} tracking={true} start={()=>{}} pause={()=>{}} resume={()=>{}} restart={()=>calls.push('restart')} save={()=>calls.push('save')} exit={()=>calls.push('exit')}/></div></section></div></main>);
+  root.render(<main className="henface-app layout-simple mode-blink-drop" data-game-phase="completed"><header className="app-header"><h1>瞬きキャッチ</h1></header><div className="camera-workspace"><section className="viewer-card"><div className="preview-frame"><canvas width="480" height="640"/><BlinkDropHud session={session} countdownText="START!" difficulty="NORMAL" selectDifficulty={()=>{}} cameraActive={true} tracking={true} start={()=>{}} pause={()=>{}} resume={()=>{}} restart={()=>calls.push('restart')} save={()=>calls.push('save')} exit={()=>calls.push('exit')}/></div></section></div></main>);
  await tick();
  const img=document.querySelector('canvas');
  const card=document.querySelector('.game-result-card'),a=img.getBoundingClientRect(),b=card.getBoundingClientRect();
