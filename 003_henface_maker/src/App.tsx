@@ -9,7 +9,7 @@ import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 import { createFeatureRenderer } from "./featureRenderer";
 import type { EffectState, Landmark, PartConfig, PartId } from "./featureRenderer";
 import BlinkDropHud from "./game/BlinkDropHud";
-import { BlinkDetector, advanceBlinkDrop, beginBlinkDrop, catchBlinkDropPart, createBlinkDropSession, fallingStateAt,
+import { BLINK_DROP_DIFFICULTIES, BlinkDetector, advanceBlinkDrop, beginBlinkDrop, catchBlinkDropPart, createBlinkDropSession, fallingStateAt,
   countdownLabel, pauseBlinkDrop, resumeBlinkDrop, startBlinkDropCountdown } from "./game/blinkDropGame";
 import type { BlinkDropSession, BlinkSensitivity, BlinkDropDifficulty } from "./game/blinkDropGame";
 import { createBlinkDropRenderer } from "./game/blinkDropRenderer";
@@ -755,6 +755,11 @@ export default function App() {
           <option value="bounds">bounds · 抽出範囲</option>
           <option value="blink-test">blink-test · 瞬き単独テスト</option>
         </select></label>
+        {gameDebugMode !== "normal" && gameSession.phase === "ready" && <label>難易度
+          <select aria-label="ゲーム難易度" value={difficulty} onChange={e => setDifficulty(e.target.value as BlinkDropDifficulty)}>
+            {BLINK_DROP_DIFFICULTIES.map(value => <option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>}
         <small>{gameSession.phase} · {gameSession.currentIndex + 1}/4 · {faceTracked ? "顔検出中" : "顔未検出"}</small>
         <button type="button" disabled={status === "起動中" || cameraActive || gameSession.phase === "completed"} onClick={() => { void startCamera(); }}>カメラ確認</button>
         {gameDebugMode === "parts-only" && gameSession.phase === "ready" && <button type="button" onClick={() => { void startBlinkDrop(); }}>ゲームスタート</button>}

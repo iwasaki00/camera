@@ -2,6 +2,18 @@
 
 React + Vite + TypeScript + MediaPipe Face Landmarker を使った、iPhone Safari 向けの変顔アプリです。
 
+## v0.7.1-debug-difficulty — デバッグ表示の難易度選択修正
+
+parts-onlyなどでは開始HUDを隠すため、HUD内にしかなかった難易度選択も消えていました。
+ゲーム開始前のデバッグ操作欄に同じ5段階のセレクトを追加しました。
+parts-only / original / blank-face / bounds / blink-testで選択でき、通常HUDへ戻っても選択を保持します。
+parts-onlyのゲーム開始・リスタートにも選択値を使用し、開始後は選択欄を非表示にします。
+ゲームロジック・瞬き判定・難易度の動きは変更していません。
+`tests/blink-debug-difficulty.html` をEdge・390×844で実行し、各表示の選択、通常HUDへの引き継ぎ、
+MONSTERでのparts-only開始・リスタート、横スクロールなしを確認しました。型チェック・本番ビルドも成功しています。
+ブラウザ検証は既存ランナーの `TEST_PATH` を `/tests/blink-debug-difficulty.html` に指定して実行できます。
+iPhone Safari実機は未確認です。commit / push / deployは実施していません。
+
 ## v0.7.0-difficulty-modes — 瞬きキャッチの5段階難易度
 
 開始前の「難易度」でEASY / NORMAL / HARD / CHAOS / MONSTERを選択できます。

@@ -1,7 +1,7 @@
 {
   "name": "henface-maker",
   "private": true,
-  "version": "0.7.0",
+  "version": "0.7.1",
   "type": "module",
   "scripts": {
     "test:difficulty": "node tests/blink-difficulty.test.mjs",
