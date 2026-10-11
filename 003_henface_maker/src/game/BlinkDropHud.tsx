@@ -1,8 +1,10 @@
+import { useEffect, useState } from "react";
 import { BLINK_DROP_LABELS, BLINK_DROP_PARTS, blinkDropScore } from "./blinkDropGame";
 import type { BlinkDropSession } from "./blinkDropGame";
 
 type Props = {
   session: BlinkDropSession;
+  countdownText: string;
   cameraActive: boolean;
   tracking: boolean;
   start: () => void;
@@ -13,7 +15,15 @@ type Props = {
   save: () => void;
 };
 
-export default function BlinkDropHud({ session, cameraActive, tracking, start, pause, resume, restart, exit, save }: Props) {
+export default function BlinkDropHud({ session, countdownText, cameraActive, tracking, start, pause, resume, restart, exit, save }: Props) {
+  const [now, setNow] = useState(() => performance.now());
+  useEffect(() => {
+    setNow(performance.now());
+    if (session.phase === "playing" && session.currentIndex === 0) {
+      const timer = window.setTimeout(() => setNow(performance.now()), Math.max(0, session.partStartedAt + 300 - performance.now()));
+      return () => window.clearTimeout(timer);
+    }
+  }, [session.phase, session.countdownStartedAt, session.partStartedAt, session.currentIndex]);
   const current = BLINK_DROP_PARTS[session.currentIndex];
   if (session.phase === "ready" || session.phase === "error") return <div className="game-panel game-start-panel">
     <h2>瞬きキャッチ</h2>
@@ -23,7 +33,10 @@ export default function BlinkDropHud({ session, cameraActive, tracking, start, p
     <button className="primary-button" type="button" onClick={start}>ゲームスタート</button>
     <button className="minor-button" type="button" onClick={exit}>通常モードへ戻る</button>
   </div>;
-  if (session.phase === "countdown") return <div className="game-panel game-countdown"><strong>3</strong><span>目を開いて顔を中央に合わせてね</span></div>;
+  if (session.phase === "countdown") return <div className="game-panel game-countdown"><strong>{countdownText}</strong><span>目を開いて顔を中央に合わせてね</span>
+    <button type="button" onClick={pause}>一時停止</button><button type="button" onClick={restart}>リスタート</button></div>;
+  if (session.phase === "paused" && session.pausedPhase === "countdown") return <div className="game-panel game-countdown"><strong>{countdownText}</strong><span>カウントダウン一時停止中</span>
+    <button type="button" onClick={resume}>再開</button><button type="button" onClick={restart}>リスタート</button></div>;
   if (session.phase === "completed") {
     const score = blinkDropScore(session);
     return <div className="game-panel game-result-panel">
@@ -37,6 +50,7 @@ export default function BlinkDropHud({ session, cameraActive, tracking, start, p
     </div>;
   }
   return <div className="game-hud">
+    {session.phase === "playing" && session.currentIndex === 0 && now - session.partStartedAt < 300 && <div className="game-start-cue">START!</div>}
     <div className="game-target"><strong>{session.phase === "fixing" ? "キャッチ！ 目を開けてね" : BLINK_DROP_LABELS[current] + "を止めて！"}</strong>
       <span>{session.currentIndex + 1} / 4</span></div>
     <div className={"blink-status " + (!tracking ? "is-waiting" : "")}>{tracking ? "まばたきで固定 · 難しければ映像をタップ" : "顔を探しています…"}</div>

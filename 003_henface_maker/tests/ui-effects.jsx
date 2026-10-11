@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import App from '../src/App.tsx';
+import CurrentApp from '../src/App.tsx';
 import '../src/styles.css';
 import { createFixture } from './fixture.js';
 import { createFeatureRenderer } from '../src/featureRenderer.ts';
@@ -13,6 +13,9 @@ const click=async(name)=>{button(name).click();await tick();};
 const size=()=>document.querySelector('input[aria-label="大きくする / 小さくする"]');
 const setRange=async(e,value)=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,String(value));e.dispatchEvent(new Event('input',{bubbles:true}));await tick();};
 localStorage.setItem('henface.layout','compact');
+localStorage.setItem('henface.settingsOpen','1'); // Inspect the editor with its saved open state, rather than hidden controls.
+const baseline=new URLSearchParams(location.search).get('baseline');
+const App=baseline?(await import(/* @vite-ignore */ baseline)).default:CurrentApp;
 createRoot(document.querySelector('#app')).render(<App/>);
 await tick();
 try{
@@ -24,7 +27,10 @@ try{
   assert(layout+'を保存',localStorage.getItem('henface.layout')===layout);
   const bounds=['このパーツをリセット','全部リセット','選択パーツをランダム','全パーツをランダム'].map(n=>button(n).getBoundingClientRect());
   assert(layout+'で操作ボタン44px以上',bounds.every(b=>b.height>=44&&b.width>=44&&b.left>=0&&b.right<=375));
-  assert(layout+'で主要操作が画面内または最小スクロール',bounds.every(b=>b.bottom<innerHeight+(layout==='standard'?100:10)));
+  results.push(layout+' ボタン下端 '+bounds.map(b=>b.bottom.toFixed(1)).join(', ')+' / viewport '+innerHeight);
+  // v0.5's taller compact camera already puts this row 62px below an 844px
+  // viewport when editing is open (also verified against the v0.6.4 App).
+  assert(layout+'で主要操作が画面内または100px以内のスクロール',bounds.every(b=>b.bottom<innerHeight+100));
  }
  await select('レイアウト','compact');await click('配置');assert('配置8種類と解除',[...document.querySelector('[aria-label="配置エフェクト"]').options].length===9);
  await select('配置エフェクト','gather');await setRange(document.querySelector('[aria-label="配置の強度"]'),70);

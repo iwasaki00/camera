@@ -13,11 +13,13 @@ try {
  root.render(<App/>); await tick();
  document.querySelector('.game-entry-button').click(); await tick();
  const select=document.querySelector('[aria-label="ゲームデバッグ表示"]');
- assert('開発用の5表示を選択可能',select.options.length===5);
- for(const mode of ['parts-only','original','blank-face','bounds']) {
+ assert('開発用の6表示を選択可能',select.options.length===6);
+ for(const mode of ['parts-only','original','blank-face','bounds','blink-test']) {
   select.value=mode;select.dispatchEvent(new Event('change',{bubbles:true}));await tick();
   assert(mode+'では開始パネルが映像を覆わない',!document.querySelector('.game-start-panel'));
  }
+ assert('瞬き感度と眼鏡余白を調整可能',!!document.querySelector('[aria-label="瞬き感度"]')&&!!document.querySelector('[aria-label="眼鏡余白"]'));
+ assert('10回テストは手動開始/終了',Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='10回テスト開始')&&Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='測定終了'));
  document.querySelector('.game-debug-tools button:last-of-type').click();await tick();
  assert('デバッグOFFで通常のゲーム表示へ復帰',!document.querySelector('.game-debug-tools')&&!!document.querySelector('.game-start-panel'));
  root.unmount();root=createRoot(document.querySelector('#app'));
@@ -25,7 +27,7 @@ try {
  const ctx=canvas.getContext('2d');ctx.fillStyle='#ae8';ctx.fillRect(0,0,480,640);
  const calls=[];
  const session={...createBlinkDropSession('completed'),currentIndex:3,fixedOffsets:[-3,1,-2,1.5]};
- root.render(<main className="henface-app layout-simple mode-blink-drop" data-game-phase="completed"><header className="app-header"><h1>瞬きキャッチ</h1></header><div className="camera-workspace"><section className="viewer-card"><div className="preview-frame"><canvas width="480" height="640"/><BlinkDropHud session={session} cameraActive={true} tracking={true} start={()=>{}} pause={()=>{}} resume={()=>{}} restart={()=>calls.push('restart')} save={()=>calls.push('save')} exit={()=>calls.push('exit')}/></div></section></div></main>);
+  root.render(<main className="henface-app layout-simple mode-blink-drop" data-game-phase="completed"><header className="app-header"><h1>瞬きキャッチ</h1></header><div className="camera-workspace"><section className="viewer-card"><div className="preview-frame"><canvas width="480" height="640"/><BlinkDropHud session={session} countdownText="START!" cameraActive={true} tracking={true} start={()=>{}} pause={()=>{}} resume={()=>{}} restart={()=>calls.push('restart')} save={()=>calls.push('save')} exit={()=>calls.push('exit')}/></div></section></div></main>);
  await tick();
  const img=document.querySelector('canvas');
  const card=document.querySelector('.game-result-card'),a=img.getBoundingClientRect(),b=card.getBoundingClientRect();

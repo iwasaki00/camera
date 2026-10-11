@@ -5,6 +5,11 @@ const source = await fs.readFile(new URL('../src/game/blinkDropGame.ts', import.
 const js = ts.transpileModule(source, {compilerOptions:{module:ts.ModuleKind.ES2020}}).outputText;
 const game = await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
 assert.deepEqual(game.BLINK_DROP_PARTS,['rightEye','leftEye','nose','mouth']);
+const countdown=game.startBlinkDropCountdown(1000);
+assert.deepEqual([1000,2000,3000,4000].map(t=>game.countdownLabel(countdown,t)),['3','2','1','START!']);
+const stopped=game.pauseBlinkDrop(countdown,2400),continued=game.resumeBlinkDrop(stopped,10000);
+assert.equal(game.countdownLabel(stopped,9000),'2');assert.equal(game.countdownLabel(continued,10000),'2');
+assert.equal(game.countdownLabel(game.startBlinkDropCountdown(20000),20000),'3');
 
 let session=game.startBlinkDropCountdown();
 assert.equal(session.phase,'countdown');
@@ -47,6 +52,9 @@ detector.reset();setEyes(landmarks,.001,.001);for(let i=0;i<20;i++)detector.upda
 assert(!detector.debug.calibrated,'cannot calibrate with closed eyes');
 const fixed=game.catchBlinkDropPart(game.beginBlinkDrop(game.createBlinkDropSession(),0),400,{x:0,y:-.4});
 assert.deepEqual(fixed.fixedPositions[0],{x:0,y:-.4});assert.equal(game.catchBlinkDropPart(fixed,401),fixed);
+const pausedFixing=game.pauseBlinkDrop(fixed,450),resumedFixing=game.resumeBlinkDrop(pausedFixing,1450);
+assert.equal(resumedFixing.phase,'fixing');assert.equal(resumedFixing.fixingStartedAt,1400);
+assert.deepEqual(resumedFixing.fixedPositions,fixed.fixedPositions);
 console.log('PASS: four turns/local positions, calibration/history/hysteresis, glasses-like traces, no-repeat/reopen, invalid/asymmetric/lost tracking, reset');
 setEyes(landmarks,.03,.03);detector.reset();for(let i=0;i<20;i++)detector.update(landmarks,i*40);
 const benchmarkStart=performance.now();for(let i=0;i<2000;i++)detector.update(landmarks,1000+i*40);

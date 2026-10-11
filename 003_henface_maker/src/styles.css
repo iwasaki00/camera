@@ -592,6 +592,7 @@ option {
 .game-countdown span {
   color: var(--muted)
 }
+.game-start-cue { position: absolute; inset: 40% 0 auto; text-align: center; font-size: 40px; font-weight: 800; color: var(--accent); text-shadow: 0 2px 8px #000 }
 .game-result-card>strong {
   font-size: 23px;
   color: var(--accent)
@@ -612,7 +613,12 @@ option {
   object-position: center
 }
 .blink-debug-details { width: 100% }
-.blink-debug-details pre { margin: 4px 0; font-size: 10px; white-space: pre-wrap }
+.blink-debug-details { min-width: 0; max-height: 280px; overflow: auto }
+.blink-debug-details pre { margin: 4px 0; font-size: 10px; white-space: pre-wrap; overflow-wrap: anywhere }
+.blink-debug-details label { flex-wrap: wrap }
+.blink-debug-details input { min-width: 0; flex: 1; max-width: 220px }
+.blink-test-actions { display: flex; flex-wrap: wrap; gap: 6px }
+.blink-test-actions p { flex-basis: 100%; line-height: 1.5 }
 .game-result-card {
   flex: none;
   width: 100%;

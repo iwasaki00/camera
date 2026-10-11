@@ -1,6 +1,7 @@
 import { createFixture } from './fixture.js';
 import { createBlinkDropRenderer } from '../src/game/blinkDropRenderer.ts';
 import { beginBlinkDrop, createBlinkDropSession } from '../src/game/blinkDropGame.ts';
+import { paintContourMask } from '../src/game/blinkDropMasks.ts';
 const results=[];
 const assert=(name,ok)=>{results.push((ok?'PASS ':'FAIL ')+name);if(!ok)throw Error(name);};
 const pixels=canvas=>canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
@@ -16,9 +17,24 @@ try{
   assert(eye+'は眉を含まないコンパクト領域',regions[eye].center.y-regions[eye].height/2>regions[brow].center.y);
   assert(eye+'と眉は共通落下量',regions[eye].dropHeight===regions[brow].dropHeight);
  }
+ for(const [kind,r] of Object.entries(regions)){
+  const mask=document.createElement('canvas');mask.width=160;mask.height=112;
+  const width=r.width*1.36,height=r.height*1.7,x=r.center.x-width/2,y=r.center.y-height/2;
+  paintContourMask(mask.getContext('2d'),160,112,r.contour.map(p=>({x:(p.x-x)/width,y:(p.y-y)/height})),8);
+  const data=pixels(mask),alpha=(px,py)=>data[(py*160+px)*4+3];
+  assert(kind+'のマスクは矩形の角を表示しない',alpha(0,0)===0&&alpha(159,0)===0&&alpha(0,111)===0&&alpha(159,111)===0);
+  assert(kind+'の内部は不透明',alpha(80,56)===255);
+  assert(kind+'の外周だけにフェザーがある',data.some((v,i)=>i%4===3&&v>0&&v<255));
+ }
+ renderer.setGlassesMargin(1.3);const wider=renderer.getRegions(landmarks,480,640);
+ assert('眼鏡余白を拡張しても眉は別領域',wider.rightEye.width>regions.rightEye.width&&wider.rightEye.center.y-wider.rightEye.height/2>wider.rightBrow.center.y);
+ renderer.setGlassesMargin(1);
  const countdown={...createBlinkDropSession('countdown')};
  assert('のっぺらぼう描画成功',renderer.render(base,ctx,landmarks,countdown,0));
  const blank=pixels(out).slice();assert('目鼻口の領域を変更',!equal(blank,source));assert('元フレームは不変',equal(source,pixels(base)));
+ window.testImages={original:base.toDataURL(),blank:out.toDataURL()};
+ renderer.render(base,ctx,landmarks,{...countdown,phase:'paused',pausedPhase:'countdown',pauseStartedAt:200},999);
+ assert('カウントダウン一時停止中は落下パーツを描画しない',equal(blank,pixels(out)));
  // Change only the removed content. The opaque core must be independent of it,
  // unlike a semitransparent cover. Surrounding skin and landmarks stay identical.
  const altered=document.createElement('canvas');altered.width=480;altered.height=640;
@@ -30,8 +46,13 @@ try{
  const stableBox=box=>{let max=0;for(let y=box.y;y<box.y+box.h;y++)for(let x=box.x;x<box.x+box.w;x++)for(let c=0;c<3;c++){const i=(y*480+x)*4+c;max=Math.max(max,Math.abs(blank[i]-changedBlank[i]));}return max<=2;};
  assert('消去内部は元の眉・眼鏡・目の色を透過しない',stableBox({x:137,y:190,w:76,h:67})&&stableBox({x:267,y:190,w:76,h:67}));
  assert('消去内部は元の鼻・口の色を透過しない',stableBox({x:224,y:285,w:32,h:56})&&stableBox({x:190,y:396,w:100,h:25}));
+ const wall=document.createElement('canvas');wall.width=480;wall.height=640;const wc=wall.getContext('2d');wc.drawImage(base,0,0);
+ wc.fillStyle='#00ffff';wc.beginPath();wc.rect(0,0,480,640);wc.ellipse(240,310,160,240,0,0,Math.PI*2);wc.fill('evenodd');
+ renderer.render(wall,ctx,landmarks,countdown,0);const wallBlank=pixels(out);
+ assert('顔外の壁色を変えても消去した肌へ写り込まない',[{x:175,y:235},{x:305,y:235},{x:240,y:310},{x:240,y:410}].every(({x,y})=>{const i=(y*480+x)*4;return [0,1,2].every(c=>Math.abs(wallBlank[i+c]-blank[i+c])<=2);}));
  renderer.render(base,ctx,landmarks,createBlinkDropSession(),0,'parts-only');
  const sets=pixels(out);
+ window.testImages.parts=out.toDataURL();
  for(const x of [175,305]){
   for(const [label,px,py] of [['眉',x,191],['眼鏡',x-49,235],['目',x,235]]){
    const i=(py*480+px)*4;assert('parts-onlyに'+label+'の元画素を含む',Math.abs(sets[i]-source[i])<=40&&Math.abs(sets[i+1]-source[i+1])<=40);
@@ -55,6 +76,9 @@ try{
  renderer.render(base,ctx,landmarks,playing,1300);const falling=pixels(out).slice();assert('落下中パーツを合成',!equal(falling,blank));
  const completed={...playing,phase:'completed',currentIndex:3,fixedOffsets:[-3,1,-2,1.5]};
  renderer.render(base,ctx,landmarks,completed,2000);const final=pixels(out).slice();assert('固定済み4パーツを合成',!equal(final,falling)&&!equal(final,source));
+ renderer.render(base,ctx,landmarks,{...completed,phase:'paused',pausedPhase:'fixing',pauseStartedAt:2100},9999);
+ assert('固定演出中の一時停止で同じパーツを二重描画しない',equal(final,pixels(out)));
+ window.testImages.completed=out.toDataURL();
  assert('完成後も元フレームは不変',equal(source,pixels(base)));
  renderer.render(base,ctx,landmarks,playing,2000,'original');
  assert('originalは元映像のみ',equal(source,pixels(out)));

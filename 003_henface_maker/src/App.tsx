@@ -10,8 +10,8 @@ import { createFeatureRenderer } from "./featureRenderer";
 import type { EffectState, Landmark, PartConfig, PartId } from "./featureRenderer";
 import BlinkDropHud from "./game/BlinkDropHud";
 import { BlinkDetector, advanceBlinkDrop, beginBlinkDrop, catchBlinkDropPart, createBlinkDropSession, fallingOffsetAt,
-  pauseBlinkDrop, resumeBlinkDrop, startBlinkDropCountdown } from "./game/blinkDropGame";
-import type { BlinkDropSession } from "./game/blinkDropGame";
+  countdownLabel, pauseBlinkDrop, resumeBlinkDrop, startBlinkDropCountdown } from "./game/blinkDropGame";
+import type { BlinkDropSession, BlinkSensitivity } from "./game/blinkDropGame";
 import { createBlinkDropRenderer } from "./game/blinkDropRenderer";
 import type { BlinkDropDebugMode } from "./game/blinkDropRenderer";
 
@@ -250,11 +250,20 @@ export default function App() {
   const gameSessionRef = useRef<BlinkDropSession>(createBlinkDropSession());
   const blinkDetectorRef = useRef(new BlinkDetector());
   const gameTimerRef = useRef<number | null>(null);
+  const countdownTextRef = useRef("3");
   const blinkDebugPanelRef = useRef<HTMLPreElement | null>(null);
   const lastBlinkDebugAtRef = useRef(0);
   const lastManualCatchAtRef = useRef(-Infinity);
   const gameDebugModeRef = useRef<BlinkDropDebugMode>("normal");
   const [gameDebugMode, setGameDebugMode] = useState<BlinkDropDebugMode>("normal");
+  const [blinkSensitivity, setBlinkSensitivity] = useState<BlinkSensitivity>("normal");
+  const [glassesMargin, setGlassesMargin] = useState(1);
+  const glassesMarginRef = useRef(1);
+  const [blinkTestRunning, setBlinkTestRunning] = useState(false);
+  const blinkTestRef = useRef({ running: false, startedAt: 0, events: [] as number[] });
+  const lastDetectionVideoTimeRef = useRef(-1);
+  const detectionStatsRef = useRef({ interval: 0, ms: 0 });
+  const pendingDetectMsRef = useRef<number | undefined>(undefined);
 
   const [category, setCategory] = useState<Category>("parts");
   const [faceEffects, setFaceEffects] = useState<FaceEffects>(emptyFaceEffects);
@@ -273,6 +282,7 @@ export default function App() {
   const [layout, setLayout] = useState<Layout>(readLayout);
   const [appMode, setAppMode] = useState<"camera" | "blink-drop">("camera");
   const [gameSession, setGameSession] = useState<BlinkDropSession>(createBlinkDropSession);
+  const [countdownText, setCountdownText] = useState("3");
   const [settingsOpen, setSettingsOpen] = useState(readSettingsOpen);
   const [randomStrength, setRandomStrength] = useState<RandomStrength>(readRandomStrength);
   const trackingRef = useRef<boolean | null>(null);
@@ -328,6 +338,9 @@ export default function App() {
     lastExtrasRef.current = null;
     lastQualityRef.current = "";
     lastDetectionRef.current = -Infinity;
+    lastDetectionVideoTimeRef.current = -1;
+    detectionStatsRef.current = { interval: 0, ms: 0 }; pendingDetectMsRef.current = undefined;
+    blinkTestRef.current.running = false; setBlinkTestRunning(false);
     smootherRef.current.reset(); metricsRef.current.reset();
     if (debugPanelRef.current) debugPanelRef.current.textContent = "カメラ起動後に1秒間隔で計測します。";
     trackingRef.current = null;
@@ -380,8 +393,31 @@ export default function App() {
     const gameActive = appModeRef.current === "blink-drop";
     const profile = gameActive && gameSessionRef.current.phase !== "completed"
       ? { ...QUALITY_PROFILES[level], fps: 30 } : QUALITY_PROFILES[level];
-    const detectInterval = gameActive && gameSessionRef.current.phase !== "completed" ? 32
+    const detectInterval = gameActive && gameSessionRef.current.phase !== "completed" ? 20
       : now < smootherRef.current.fastUntil ? Math.min(profile.detectInterval, 65) : profile.detectInterval;
+    // Sample each available camera frame independently of the canvas FPS gate.
+    // A 20ms minimum never duplicates a 30fps camera frame.
+    const detect = () => {
+      const detectStart = performance.now();
+      const result = landmarker.detectForVideo(video, now);
+      const ms = performance.now() - detectStart;
+      detectionStatsRef.current = { ms, interval: Number.isFinite(lastDetectionRef.current) ? now - lastDetectionRef.current : 0 };
+      pendingDetectMsRef.current = ms;
+      lastDetectionRef.current = now; lastDetectionVideoTimeRef.current = video.currentTime;
+      lastLandmarksRef.current = result.faceLandmarks?.[0];
+      smootherRef.current.update(lastLandmarksRef.current, now);
+      if (gameActive) {
+        const accepting = gameSessionRef.current.phase === "playing" &&
+          (gameDebugModeRef.current === "normal" || gameDebugModeRef.current === "parts-only");
+        const test = blinkTestRef.current;
+        const testing = debugRef.current && gameDebugModeRef.current === "blink-test" && test.running;
+        const blink = blinkDetectorRef.current.update(lastLandmarksRef.current, now, accepting || testing);
+        if (blink && testing) test.events.push(now - test.startedAt);
+        else if (blink && accepting) confirmGamePart(now);
+      }
+    };
+    if (gameActive && !document.hidden && video.currentTime !== lastDetectionVideoTimeRef.current &&
+      now - lastDetectionRef.current >= detectInterval) detect();
     const settingsChanged = lastRenderedStateRef.current !== effectStateRef.current || lastExtrasRef.current !== faceEffectsRef.current ||
       lastQualityRef.current !== level || lastGameSessionRef.current !== gameSessionRef.current || lastAppModeRef.current !== appModeRef.current;
     if (!settingsChanged && now - lastDrawAtRef.current < 1000 / profile.fps - 1) {
@@ -404,24 +440,11 @@ export default function App() {
       lastVideoTimeRef.current = video.currentTime;
     }
     const captureMs = performance.now() - captureStart;
-    let detectMs: number | undefined;
-    if (newFrame && (now - lastDetectionRef.current >= detectInterval)) {
-      const detectStart = performance.now();
-      const result = landmarker.detectForVideo(video, now);
-      detectMs = performance.now() - detectStart;
-      lastDetectionRef.current = now;
-      lastLandmarksRef.current = result.faceLandmarks?.[0];
-      smootherRef.current.update(lastLandmarksRef.current, now);
-      if (gameActive && (["countdown", "playing", "fixing", "paused"].includes(gameSessionRef.current.phase) ||
-        (gameSessionRef.current.phase === "completed" && debugRef.current))) {
-        const blink = blinkDetectorRef.current.update(lastLandmarksRef.current, now);
-        if (blink && gameSessionRef.current.phase === "playing" &&
-          (gameDebugModeRef.current === "normal" || gameDebugModeRef.current === "parts-only")) confirmGamePart(now);
-      }
-    }
+    if (!gameActive && newFrame && now - lastDetectionRef.current >= detectInterval) detect();
+    const detectMs = pendingDetectMsRef.current; pendingDetectMsRef.current = undefined;
     const landmarks = smootherRef.current.sample(now);
     if (!rendererRef.current) rendererRef.current = createFeatureRenderer();
-    if (!gameRendererRef.current) gameRendererRef.current = createBlinkDropRenderer();
+    if (!gameRendererRef.current) { gameRendererRef.current = createBlinkDropRenderer(); gameRendererRef.current.setGlassesMargin(glassesMarginRef.current); }
     if (gameActive) gameRendererRef.current.render(sourceCanvas, ctx, landmarks, gameSessionRef.current, now,
       gameSessionRef.current.phase === "completed" ? "normal" : gameDebugModeRef.current);
     else rendererRef.current.renderFeatureEffects(sourceCanvas, ctx, landmarks, effectStateRef.current, undefined,
@@ -429,7 +452,10 @@ export default function App() {
     if (gameActive && debugRef.current && blinkDebugPanelRef.current && now - lastBlinkDebugAtRef.current > 200) {
       lastBlinkDebugAtRef.current = now;
       const d = blinkDetectorRef.current.debug, m = metricsRef.current.latest;
-      blinkDebugPanelRef.current.textContent = `左/右 比率 ${d.left.toFixed(3)} / ${d.right.toFixed(3)}\n基準 ${d.baselineLeft.toFixed(3)} / ${d.baselineRight.toFixed(3)}\n閉眼 ${d.closeLeft.toFixed(3)} / ${d.closeRight.toFixed(3)} · 再開眼 ${d.reopenLeft.toFixed(3)} / ${d.reopenRight.toFixed(3)}\n${d.state} · ${d.result} · 検出 ${d.count}回 · 顔 ${d.face ? "有効" : "未検出/不安定"}\n判定 ${d.ms.toFixed(2)}ms · 顔検出 ${m.detectMs.toFixed(1)}ms · 描画 ${gameRendererRef.current.metrics.compositeMs.toFixed(1)}ms · FPS ${m.fps.toFixed(1)} · 更新間隔 ${detectInterval}ms`;
+      const nextTurn = gameSessionRef.current.phase === "playing" && d.armed &&
+        (gameDebugModeRef.current === "normal" || gameDebugModeRef.current === "parts-only");
+      const test = blinkTestRef.current, detection = detectionStatsRef.current;
+      blinkDebugPanelRef.current.textContent = `左/右 開眼値 ${d.left.toFixed(3)} / ${d.right.toFixed(3)} · 基準比 ${(d.left / (d.baselineLeft || 1)).toFixed(2)} / ${(d.right / (d.baselineRight || 1)).toFixed(2)}\n基準 ${d.baselineLeft.toFixed(3)} / ${d.baselineRight.toFixed(3)}\n閉眼 ${d.closeLeft.toFixed(3)} / ${d.closeRight.toFixed(3)} · 再開眼 ${d.reopenLeft.toFixed(3)} / ${d.reopenRight.toFixed(3)}\n${d.state} · 判定/拒否理由: ${d.result}\n再アーム ${d.armed ? "済" : "待機"} · 次ターン受付 ${nextTurn ? "可" : "不可"} · 成功 ${d.count}回\n最終検出 ${d.lastDetectedAt < 0 ? "なし" : (d.lastDetectedAt / 1000).toFixed(3) + "s"} · 顔 ${d.face ? "有効" : "未検出/不安定"}\n判定 ${d.ms.toFixed(3)}ms · 顔検出 ${detection.ms.toFixed(1)}ms · 実測検出間隔 ${detection.interval.toFixed(1)}ms（最小 ${detectInterval}ms）\n変形 ${gameRendererRef.current.metrics.warpMs.toFixed(1)}ms · 合成 ${gameRendererRef.current.metrics.compositeMs.toFixed(1)}ms · FPS ${m.fps.toFixed(1)}\n瞬き単独テスト ${test.running ? "測定中" : "停止"}: 検出 ${test.events.length}回 / 自分で10回\nイベント時刻(開始後秒): ${test.events.map(t => (t / 1000).toFixed(3)).join(", ") || "なし"}`;
     }
     lastRenderedStateRef.current = effectStateRef.current;
     lastGameSessionRef.current = gameSessionRef.current; lastAppModeRef.current = appModeRef.current;
@@ -570,15 +596,28 @@ export default function App() {
     }, 500);
   }
 
+  function publishCountdown(session: BlinkDropSession, now: number): void {
+    const text = countdownLabel(session, now);
+    // The same session clock drives both the start deadline and the HUD.
+    // Commit to React only when the displayed integer actually changes.
+    if (text !== countdownTextRef.current) {
+      countdownTextRef.current = text;
+      setCountdownText(text);
+    }
+  }
+
   function updateGame(next: BlinkDropSession): void {
     gameSessionRef.current = next;
+    if (next.phase === "countdown" || (next.phase === "paused" && next.pausedPhase === "countdown")) {
+      publishCountdown(next, performance.now());
+    }
     setGameSession(next);
   }
 
   function confirmGamePart(now = performance.now(), manual = false): void {
     const session = gameSessionRef.current;
     const landmarks = smootherRef.current.sample(now), source = sourceCanvasRef.current;
-    if (appModeRef.current !== "blink-drop" || session.phase !== "playing" || !landmarks || !source || !gameRendererRef.current) return;
+    if (appModeRef.current !== "blink-drop" || session.phase !== "playing" || !lastLandmarksRef.current || !landmarks || !source || !gameRendererRef.current) return;
     if (manual && now - lastManualCatchAtRef.current < 650) return;
     const offset = fallingOffsetAt(session, now);
     const position = gameRendererRef.current.turnPosition(landmarks, source.width, source.height, session.currentIndex, offset);
@@ -589,6 +628,7 @@ export default function App() {
   }
 
   function enterBlinkDrop(): void {
+    blinkTestRef.current.running = false; setBlinkTestRunning(false);
     blinkDetectorRef.current.reset();
     lastManualCatchAtRef.current = -Infinity;
     updateGame(createBlinkDropSession());
@@ -597,6 +637,7 @@ export default function App() {
   }
 
   function exitBlinkDrop(): void {
+    blinkTestRef.current.running = false; setBlinkTestRunning(false);
     if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current);
     gameTimerRef.current = null;
     blinkDetectorRef.current.reset();
@@ -606,6 +647,7 @@ export default function App() {
   }
 
   async function startBlinkDrop(): Promise<void> {
+    blinkTestRef.current.running = false; setBlinkTestRunning(false);
     if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current);
     blinkDetectorRef.current.reset();
     lastManualCatchAtRef.current = -Infinity;
@@ -620,6 +662,12 @@ export default function App() {
 
   function pauseGame(): void { updateGame(pauseBlinkDrop(gameSessionRef.current, performance.now())); }
   function resumeGame(): void { blinkDetectorRef.current.requireReopen(); updateGame(resumeBlinkDrop(gameSessionRef.current, performance.now())); }
+  async function startBlinkTest(): Promise<void> {
+    if (!(cameraActive || await startCamera())) return;
+    blinkDetectorRef.current.reset();
+    blinkTestRef.current = { running: true, startedAt: performance.now(), events: [] };
+    setBlinkTestRunning(true);
+  }
 
   useEffect(() => {
     effectStateRef.current = effectState;
@@ -631,9 +679,17 @@ export default function App() {
     if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current);
     gameTimerRef.current = null;
     if (gameSession.phase === "countdown") {
-      gameTimerRef.current = window.setTimeout(() => {
-        updateGame(beginBlinkDrop(gameSessionRef.current, performance.now()));
-      }, 3000);
+      const startWhenDue = () => {
+        const current = gameSessionRef.current;
+        if (current.phase !== "countdown") return;
+        if (document.hidden) { updateGame(pauseBlinkDrop(current, performance.now())); return; }
+        const now = performance.now(), remaining = current.countdownStartedAt + 3000 - now;
+        publishCountdown(current, now);
+        if (remaining > 0) { gameTimerRef.current = window.setTimeout(startWhenDue, Math.min(remaining, 80)); return; }
+        if (!blinkDetectorRef.current.ready) blinkDetectorRef.current.requireReopen();
+        updateGame(beginBlinkDrop(current, now));
+      };
+      startWhenDue();
     } else if (gameSession.phase === "fixing") {
       const advanceWhenOpen = () => {
         if (gameSessionRef.current.phase !== "fixing") return;
@@ -642,10 +698,21 @@ export default function App() {
         }
         updateGame(advanceBlinkDrop(gameSessionRef.current, performance.now()));
       };
-      gameTimerRef.current = window.setTimeout(advanceWhenOpen, 450);
+      gameTimerRef.current = window.setTimeout(advanceWhenOpen, Math.max(0, gameSession.fixingStartedAt + 450 - performance.now()));
     }
     return () => { if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current); gameTimerRef.current = null; };
   }, [gameSession]);
+
+  useEffect(() => {
+    const hide = () => {
+      if (document.hidden && appModeRef.current === "blink-drop") {
+        blinkDetectorRef.current.requireReopen();
+        updateGame(pauseBlinkDrop(gameSessionRef.current, performance.now()));
+      }
+    };
+    document.addEventListener("visibilitychange", hide);
+    return () => document.removeEventListener("visibilitychange", hide);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -660,7 +727,9 @@ export default function App() {
   }, []);
 
   return (
-    <main className={"henface-app layout-" + layout + " mode-" + appMode} data-game-phase={gameSession.phase} data-category={category} data-settings={settingsOpen ? "open" : "closed"}>
+    <main className={"henface-app layout-" + layout + " mode-" + appMode} data-app-version={APP_VERSION} data-game-phase={gameSession.phase} data-category={category} data-settings={settingsOpen ? "open" : "closed"}
+      data-countdown-label={debug ? countdownText : undefined}
+      data-countdown-start={debug ? gameSession.countdownStartedAt : undefined} data-pause-start={debug ? gameSession.pauseStartedAt : undefined} data-paused-phase={debug ? gameSession.pausedPhase : undefined}>
       <header className="app-header">
         <div><h1>{appMode === "blink-drop" ? "瞬きキャッチ" : "変顔メーカー"}</h1><p className="app-subtitle">{appMode === "blink-drop" ? "顔パーツ落下ゲーム" : "顔エフェクトカメラ"}</p></div>
         {appMode === "blink-drop" ? <button className="minor-button game-header-exit" type="button" onClick={exitBlinkDrop}>通常へ戻る</button> : <label className="layout-picker">レイアウト
@@ -672,7 +741,8 @@ export default function App() {
       {appMode === "blink-drop" && debug && <div className="game-debug-tools">
         <label>開発表示<select aria-label="ゲームデバッグ表示" value={gameDebugMode} onChange={e => {
           const mode = e.target.value as BlinkDropDebugMode; gameDebugModeRef.current = mode; setGameDebugMode(mode);
-          if (mode === "original" || mode === "blank-face" || mode === "bounds") {
+          blinkTestRef.current.running = false; setBlinkTestRunning(false);
+          if (mode === "original" || mode === "blank-face" || mode === "bounds" || mode === "blink-test") {
             if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current);
             gameTimerRef.current = null;
             blinkDetectorRef.current.reset(); updateGame(createBlinkDropSession());
@@ -681,13 +751,28 @@ export default function App() {
           <option value="normal">normal · ゲーム</option><option value="parts-only">parts-only · パーツのみ</option>
           <option value="original">original · 元映像</option><option value="blank-face">blank-face · 消去後</option>
           <option value="bounds">bounds · 抽出範囲</option>
+          <option value="blink-test">blink-test · 瞬き単独テスト</option>
         </select></label>
         <small>{gameSession.phase} · {gameSession.currentIndex + 1}/4 · {faceTracked ? "顔検出中" : "顔未検出"}</small>
         <button type="button" disabled={status === "起動中" || cameraActive || gameSession.phase === "completed"} onClick={() => { void startCamera(); }}>カメラ確認</button>
         {gameDebugMode === "parts-only" && gameSession.phase === "ready" && <button type="button" onClick={() => { void startBlinkDrop(); }}>ゲームスタート</button>}
         <small>元映像・消去後・範囲表示は進行をリセットして確認</small>
-        <button type="button" onClick={() => setDebug(false)}>デバッグOFF</button>
-        <details className="blink-debug-details"><summary>瞬き判定・処理時間</summary><pre ref={blinkDebugPanelRef}>開始時に目を開いて基準値を測定します。</pre></details>
+        <button type="button" onClick={() => { blinkTestRef.current.running = false; setBlinkTestRunning(false); setDebug(false); }}>デバッグOFF</button>
+        <details className="blink-debug-details"><summary>瞬き判定・処理時間</summary>
+          <label>瞬き感度：{ { low: "低", normal: "標準", high: "高" }[blinkSensitivity] }<input aria-label="瞬き感度" type="range" min="0" max="2" step="1" value={["low", "normal", "high"].indexOf(blinkSensitivity)} onChange={e => {
+            const value = (["low", "normal", "high"] as BlinkSensitivity[])[Number(e.target.value)];
+            blinkDetectorRef.current.setSensitivity(value); setBlinkSensitivity(value);
+          }} /></label>
+          <label>眼鏡余白 {glassesMargin.toFixed(1)}<input aria-label="眼鏡余白" type="range" min="0.8" max="1.3" step="0.1" value={glassesMargin} onChange={e => {
+            const value = Number(e.target.value); glassesMarginRef.current = value; setGlassesMargin(value); gameRendererRef.current?.setGlassesMargin(value);
+          }} /></label>
+          {gameDebugMode === "blink-test" && <div className="blink-test-actions">
+            <p>目を開いて準備した後、自分で10回瞬きし「測定終了」を押してください。検出数と10回を比較できます。</p>
+            <button type="button" disabled={blinkTestRunning || status === "起動中"} onClick={() => { void startBlinkTest(); }}>10回テスト開始</button>
+            <button type="button" disabled={!blinkTestRunning} onClick={() => { blinkTestRef.current.running = false; setBlinkTestRunning(false); }}>測定終了</button>
+          </div>}
+          <pre ref={blinkDebugPanelRef}>開始時に目を開いて基準値を測定します。</pre>
+        </details>
       </div>}
       {appMode === "camera" && <div className="camera-toolbar">
         <button className="primary-button" type="button" disabled={status === "起動中"} onClick={cameraActive ? () => { stopCamera(); setStatus("待機中"); setMessage("カメラを停止しました。"); } : startCamera}>
@@ -711,7 +796,7 @@ export default function App() {
             </button>}
             {appMode === "blink-drop" && (!(debug && gameDebugMode !== "normal") || gameSession.phase === "completed" ||
               ((gameDebugMode === "parts-only") && gameSession.phase !== "ready")) &&
-              <BlinkDropHud session={gameSession} cameraActive={cameraActive} tracking={faceTracked}
+              <BlinkDropHud session={gameSession} countdownText={countdownText} cameraActive={cameraActive} tracking={faceTracked}
                 start={startBlinkDrop} pause={pauseGame} resume={resumeGame} restart={startBlinkDrop} exit={exitBlinkDrop} save={takeScreenshot} />}
           </div>
         </section>
