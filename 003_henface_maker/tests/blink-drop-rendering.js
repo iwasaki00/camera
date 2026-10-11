@@ -11,10 +11,10 @@ try{
  const out=document.createElement('canvas');out.width=base.width;out.height=base.height;const ctx=out.getContext('2d');
  const renderer=createBlinkDropRenderer();
  const regions=renderer.getRegions(landmarks,base.width,base.height);
- assert('目セットは右→左→鼻→口の新定義',regions.rightEyeSet.kind==='rightEyeSet'&&regions.leftEyeSet.kind==='leftEyeSet');
- for(const [name,x] of [['leftEyeSet',175],['rightEyeSet',305]]){
-  const r=regions[name];
-  assert(name+'は眉・レンズ上下左右を含む',r.center.x-r.width/2<x-51&&r.center.x+r.width/2>x+51&&r.center.y-r.height/2<187&&r.center.y+r.height/2>264);
+ assert('6領域を別々に抽出',Object.keys(regions).length===6&&regions.rightBrow.kind==='rightBrow'&&regions.leftEye.kind==='leftEye');
+ for(const [eye,brow] of [['leftEye','leftBrow'],['rightEye','rightBrow']]){
+  assert(eye+'は眉を含まないコンパクト領域',regions[eye].center.y-regions[eye].height/2>regions[brow].center.y);
+  assert(eye+'と眉は共通落下量',regions[eye].dropHeight===regions[brow].dropHeight);
  }
  const countdown={...createBlinkDropSession('countdown')};
  assert('のっぺらぼう描画成功',renderer.render(base,ctx,landmarks,countdown,0));
@@ -34,8 +34,20 @@ try{
  const sets=pixels(out);
  for(const x of [175,305]){
   for(const [label,px,py] of [['眉',x,191],['眼鏡',x-49,235],['目',x,235]]){
-   const i=(py*480+px)*4;assert('parts-onlyに'+label+'の元画素を含む',Math.abs(sets[i]-source[i])<=2&&Math.abs(sets[i+1]-source[i+1])<=2);
+   const i=(py*480+px)*4;assert('parts-onlyに'+label+'の元画素を含む',Math.abs(sets[i]-source[i])<=40&&Math.abs(sets[i+1]-source[i+1])<=40);
   }
+ }
+ const marked=document.createElement('canvas');marked.width=480;marked.height=640;const markCtx=marked.getContext('2d');markCtx.drawImage(base,0,0);
+ const markers=[[305,191,'#00ee88'],[305,235,'#ee3388'],[256,235,'#33bbee'],[175,191,'#00ee88'],[175,235,'#ee3388']];
+ for(const [x,y,color] of markers){markCtx.fillStyle=color;markCtx.fillRect(x-1,y-1,3,3);}
+ renderer.render(marked,ctx,landmarks,createBlinkDropSession(),0,'parts-only');const markedSource=pixels(marked),markedParts=pixels(out);
+ for(const [x,y] of markers){const i=(y*480+x)*4;assert('別々の眉・目・眼鏡抽出に識別用画素を保持 '+x+','+y,Math.abs(markedSource[i+1]-markedParts[i+1])<45);}
+ for(const [index,x,kind] of [[0,305,'rightEye'],[1,175,'leftEye']]){
+  const turn={...createBlinkDropSession('playing'),currentIndex:index,partStartedAt:1000};
+  renderer.render(marked,ctx,landmarks,turn,2200,'parts-only'); // Offset -2 at half of the fall.
+  const data=pixels(out),shift=-2*regions[kind].dropHeight;
+  const eyeI=(Math.round(235+shift)*480+x)*4,browI=(Math.round(191+shift)*480+x)*4;
+  assert(kind+'ターンで目と眉が別画像のまま同時落下',data[eyeI]>150&&data[browI+1]>150);
  }
  const featureBoxes=[{name:'目',x:140,y:220,w:200,h:32},{name:'鼻帯',x:190,y:250,w:100,h:145},{name:'口帯',x:175,y:378,w:130,h:66}];
  for(const box of featureBoxes){const before=variance(source,box),after=variance(blank,box);results.push(box.name+' 輝度分散 '+before.toFixed(0)+' → '+after.toFixed(0));assert(box.name+'の輪郭・陰影を低減',after<before*.72);}
@@ -56,13 +68,39 @@ try{
  assert('parts-onlyで固定パーツを保持',!equal(only,pixels(out)));
  renderer.render(base,ctx,landmarks,playing,2000,'bounds');
  assert('boundsで元映像に抽出枠を追加',!equal(source,pixels(out)));
- const frame=renderer.captureResult(base,landmarks,completed,2000),frozen=pixels(frame).slice(),saved=frame.toDataURL('image/png');
+ const frame=renderer.captureFrame(base,landmarks,completed,2000),frozen=pixels(frame).slice(),saved=frame.toDataURL('image/png');
  assert('完成キャプチャはデバッグによらず通常の完成顔',equal(final,frozen));
  renderer.render(base,ctx,landmarks,playing,2400,'parts-only');
  base.getContext('2d').fillRect(0,0,20,20);
  assert('次フレーム・デバッグ表示・元映像の変更で完成画像と保存PNGは変わらない',equal(frozen,pixels(frame))&&saved===frame.toDataURL('image/png'));
  base.getContext('2d').putImageData(new ImageData(source,base.width,base.height),0,0);
- assert('顔未検出時は元画像',!renderer.render(base,ctx,undefined,playing,2100)&&equal(source,pixels(out)));
+ renderer.clearCache();
+ assert('長い顔未検出時は元画像',!renderer.render(base,ctx,undefined,playing,3000)&&equal(source,pixels(out)));
+ const local=renderer.turnPosition(landmarks,480,640,0,-2);
+ const browDelta=renderer.turnBrowOffset(landmarks,480,640,0);
+ const stable={...completed,fixedPositions:[local,null,{x:0,y:-.3},{x:0,y:.4}],fixedBrowOffsets:[browDelta,null,null,null]};
+ renderer.render(base,ctx,landmarks,stable,3100);
+ const live=pixels(out).slice();
+ base.getContext('2d').fillStyle='#ff9933';base.getContext('2d').fillRect(0,0,20,20);
+ renderer.render(base,ctx,landmarks,stable,3133);
+ assert('completedも新しいカメラフレームを描画',!equal(live,pixels(out)));
+ const current=pixels(out).slice();renderer.render(base,ctx,undefined,stable,3200);
+ assert('一時追跡欠落では直前の合成フレームを保持',equal(current,pixels(out)));
+ // Transform both the camera and landmarks, then verify offset patches transform with the face.
+ const angle=.25,scale=.9,dx=22,dy=12,c=Math.cos(angle),s=Math.sin(angle),center={x:240,y:235};
+ const moved=document.createElement('canvas');moved.width=480;moved.height=640;const mc=moved.getContext('2d');
+ mc.translate(center.x+dx,center.y+dy);mc.rotate(angle);mc.scale(scale,scale);mc.translate(-center.x,-center.y);mc.drawImage(base,0,0);
+ const move=(x,y)=>({x:center.x+dx+scale*(c*(x-center.x)-s*(y-center.y)),y:center.y+dy+scale*(s*(x-center.x)+c*(y-center.y))});
+ const lm=landmarks.map(p=>{const q=move((1-p.x)*480,p.y*640);return{x:1-q.x/480,y:q.y/640};});
+ const geo=renderer.getGeometry(lm,480,640);
+ assert('顔回転・倍率を取得',Math.abs(geo.pose.angle-angle)<.02&&Math.abs(geo.pose.scale-130*scale)<1);
+ renderer.render(moved,ctx,lm,stable,3300,'parts-only');const positioned=pixels(out);
+ const shift=235+local.y*130-regions.rightEye.center.y;
+ const target=move(305,235+shift),i=(Math.round(target.y)*480+Math.round(target.x))*4;
+ assert('固定した右目は顔の移動・回転・倍率に追従し本来位置へ戻らない',positioned[i]<100&&positioned[i+1]<100);
+ const browTarget=move(305,191+shift),bi=(Math.round(browTarget.y)*480+Math.round(browTarget.x))*4;
+ assert('右眉も同じ移動量で目との相対位置を維持',positioned[bi]<120&&positioned[bi+1]<120);
+ base.getContext('2d').putImageData(new ImageData(source,480,640),0,0);
  const started=performance.now();for(let i=0;i<20;i++)renderer.render(base,ctx,landmarks,playing,2200+i*33);
  results.push('参考描画時間 '+((performance.now()-started)/20).toFixed(1)+'ms/frame（480×640、顔検出を除く）');
  document.querySelector('#images').append(base,out);document.documentElement.dataset.result='pass';

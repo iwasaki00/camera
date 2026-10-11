@@ -4,7 +4,7 @@ import ts from 'typescript';
 const source = await fs.readFile(new URL('../src/game/blinkDropGame.ts', import.meta.url), 'utf8');
 const js = ts.transpileModule(source, {compilerOptions:{module:ts.ModuleKind.ES2020}}).outputText;
 const game = await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
-assert.deepEqual(game.BLINK_DROP_PARTS,['rightEyeSet','leftEyeSet','nose','mouth']);
+assert.deepEqual(game.BLINK_DROP_PARTS,['rightEye','leftEye','nose','mouth']);
 
 let session=game.startBlinkDropCountdown();
 assert.equal(session.phase,'countdown');
@@ -26,11 +26,28 @@ function setEyes(landmarks,leftGap,rightGap){
  set(33,133,[[159,145,-.015],[158,153,.015]],.35,rightGap);
 }
 const detector=new game.BlinkDetector(),landmarks=points();setEyes(landmarks,.03,.03);
-for(let i=0;i<4;i++)assert.equal(detector.update(landmarks,i*60),false,'開眼で基準値を学習');
-setEyes(landmarks,.005,.005);assert.equal(detector.update(landmarks,300),true,'両目を閉じると1回検知');
-assert.equal(detector.update(landmarks,400),false,'閉じたまま連続検知しない');
-setEyes(landmarks,.03,.03);assert.equal(detector.update(landmarks,700),false,'開眼で再アーム');
-setEyes(landmarks,.005,.03);assert.equal(detector.update(landmarks,900),false,'片目だけでは検知しない');
-setEyes(landmarks,.005,.005);assert.equal(detector.update(landmarks,950),true,'クールダウン後の次の両目瞬き');
-detector.reset();assert.equal(detector.update(undefined,1200),false,'顔未検出時は判定しない');
-console.log('PASS: blink-drop state sequence, falling/pause/four catches, score bounds, bilateral blink/rearm/cooldown/no-face');
+for(let i=0;i<14;i++)assert(!detector.update(landmarks,i*40),'calibrate open eyes');
+assert(detector.ready);assert(detector.debug.closeLeft<detector.debug.reopenLeft);
+setEyes(landmarks,.005,.005);assert(detector.update(landmarks,560),'single short bilateral blink');
+for(let t=600;t<=1400;t+=40)assert(!detector.update(landmarks,t),'no repeat while closed');
+setEyes(landmarks,.03,.03);detector.update(landmarks,1440);assert(!detector.ready);detector.update(landmarks,1480);assert(detector.ready);
+setEyes(landmarks,.005,.03);assert(!detector.update(landmarks,1520),'one eye alone cannot catch');
+setEyes(landmarks,.005,.005);assert(detector.update(landmarks,1560));assert.equal(detector.debug.count,2);
+detector.reset();assert(!detector.update(undefined,1600));assert.equal(detector.debug.count,0);assert(!detector.debug.calibrated);
+for(let i=0;i<14;i++){setEyes(landmarks,.016+(i%3-1)*.0005,.021+(i%2)*.0004);assert(!detector.update(landmarks,i*40));}
+assert(detector.ready);assert(detector.debug.baselineLeft<detector.debug.baselineRight);
+setEyes(landmarks,.010,.013);assert(!detector.update(landmarks,560),'moderate closing needs confirmation');assert(detector.update(landmarks,600),'glasses-like shallow closure detected');
+setEyes(landmarks,.016,.021);detector.update(landmarks,1160);detector.update(landmarks,1200);
+landmarks[386]={x:NaN,y:.4};assert(!detector.update(landmarks,1240));assert(!detector.ready);
+setEyes(landmarks,.003,.003);assert(!detector.update(landmarks,1280),'lost tracking cannot trigger a close');
+setEyes(landmarks,.016,.021);detector.update(landmarks,1320);detector.update(landmarks,1360);
+detector.requireReopen();assert(!detector.ready);
+setEyes(landmarks,.05,.021);assert(!detector.update(landmarks,1400),'unstable unilateral spike ignored');
+detector.reset();setEyes(landmarks,.001,.001);for(let i=0;i<20;i++)detector.update(landmarks,i*40);
+assert(!detector.debug.calibrated,'cannot calibrate with closed eyes');
+const fixed=game.catchBlinkDropPart(game.beginBlinkDrop(game.createBlinkDropSession(),0),400,{x:0,y:-.4});
+assert.deepEqual(fixed.fixedPositions[0],{x:0,y:-.4});assert.equal(game.catchBlinkDropPart(fixed,401),fixed);
+console.log('PASS: four turns/local positions, calibration/history/hysteresis, glasses-like traces, no-repeat/reopen, invalid/asymmetric/lost tracking, reset');
+setEyes(landmarks,.03,.03);detector.reset();for(let i=0;i<20;i++)detector.update(landmarks,i*40);
+const benchmarkStart=performance.now();for(let i=0;i<2000;i++)detector.update(landmarks,1000+i*40);
+console.log('Blink decision reference '+((performance.now()-benchmarkStart)/2000).toFixed(3)+' ms/update (PC Node, excludes landmark detection)');

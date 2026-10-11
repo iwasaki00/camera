@@ -597,20 +597,22 @@ option {
   color: var(--accent)
 }
 .game-panel.game-result-panel {
+  top: auto;
+  height: 250px;
   padding: 10px;
   gap: 10px;
   justify-content: flex-start;
-  background: #060912;
+  background: transparent;
   backdrop-filter: none;
   overflow: auto
 }
-.game-result-image {
-  display: block;
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-  object-fit: contain
+.mode-blink-drop[data-game-phase="completed"] .preview-frame canvas {
+  height: calc(100% - 260px);
+  object-fit: contain;
+  object-position: center
 }
+.blink-debug-details { width: 100% }
+.blink-debug-details pre { margin: 4px 0; font-size: 10px; white-space: pre-wrap }
 .game-result-card {
   flex: none;
   width: 100%;

@@ -32,7 +32,7 @@ try {
   const testPath = process.env.TEST_PATH ?? '/tests/simple-layout.html';
   await call('Page.navigate', { url: (process.env.TEST_BASE_URL ?? 'http://127.0.0.1:4178') + testPath });
   let result;
-  for (let attempt = 0; attempt < 100; attempt++) {
+  for (let attempt = 0; attempt < Number(process.env.TEST_WAIT_MS ?? 10000) / 100; attempt++) {
     const response = await call('Runtime.evaluate', { expression: '({ status: document.documentElement.dataset.result, text: document.querySelector("#results")?.textContent, width: innerWidth, height: innerHeight })', returnByValue: true });
     result = response.result.value;
     if (result?.status) break;

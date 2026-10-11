@@ -1,5 +1,5 @@
 import type { EffectState, FeatureType, PartConfig } from "./featureRenderer";
-export const APP_VERSION = "0.6.3-eye-sets-opaque";
+export const APP_VERSION = "0.6.4-blink-live-result";
 export const LAYOUTS = ["standard", "compact", "edge-controls", "simple"] as const;
 export type Layout = typeof LAYOUTS[number];
 export const RANDOM_STRENGTHS = ["weak", "normal", "wild", "chaos", "monster"] as const;
