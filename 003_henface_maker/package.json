@@ -4,6 +4,7 @@
   "version": "0.7.1",
   "type": "module",
   "scripts": {
+    "test:triggers": "node tests/face-triggers.test.mjs",
     "test:difficulty": "node tests/blink-difficulty.test.mjs",
     "dev": "node ./node_modules/vite/bin/vite.js",
     "build": "node ./node_modules/vite/bin/vite.js build",

@@ -64,8 +64,9 @@ try{
  lost=false;closed=false;await wait(()=>document.querySelector('.blink-debug-details pre').textContent.includes('次ターン受付 可'));
  closed=true;await wait(()=>document.querySelector('main').dataset.gamePhase==='fixing');
  assert('瞬きで右目と眉を1回固定',document.querySelector('.game-target span').textContent.includes('1'));
- await sleep(900);assert('閉じたまま次パーツへ進まない',document.querySelector('main').dataset.gamePhase==='fixing');
+ await sleep(900);assert('閉じたまま次パーツを固定しない・顔操作は復帰待ち',document.querySelector('main').dataset.gamePhase==='playing'&&document.querySelector('.game-target span').textContent.includes('2 / 4')&&document.querySelector('.blink-debug-details pre').textContent.includes('次ターン受付 不可'));
  closed=false;await wait(()=>document.querySelector('main').dataset.gamePhase==='playing');
+ await wait(()=>document.querySelector('.blink-debug-details pre').textContent.includes('次ターン受付 可'));
  const canvas=document.querySelector('canvas');
  for(let turn=2;turn<=4;turn++){
   closed=true;
@@ -114,7 +115,7 @@ try{
  Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='測定終了').click();await sleep(250);
  const measurement=document.querySelector('.blink-debug-details pre').textContent;
  results.push('単独測定:\n'+measurement);
- assert('単独10回テストの検出数と各イベント時刻を表示',measurement.includes('停止: 検出 10回')&&measurement.split('イベント時刻(開始後秒): ')[1].split(', ').length===10);
+ assert('単独10回テストの検出数と各イベント時刻を表示',measurement.includes('停止: 検出 10回')&&measurement.split('イベント時刻(開始後秒): ')[1].split('\n')[0].split(', ').length===10);
  assert('瞬き単独テストでゲームは進行しない',document.querySelector('main').dataset.gamePhase==='ready');
  document.querySelector('.game-header-exit').click();await sleep(100);
  assert('通常simpleとランダムへ復帰',!!document.querySelector('.simple-random-button')&&document.querySelector('main').classList.contains('mode-camera'));
