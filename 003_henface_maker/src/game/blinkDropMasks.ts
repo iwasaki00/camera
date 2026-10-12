@@ -13,17 +13,17 @@ export function convexHull(points: Point[]): Point[] {
 }
 
 /** Curved lens/band outline. There are no straight, visible crop edges. */
-export function roundedBand(center: Point, width: number, height: number): Point[] {
+export function roundedBand(center: Point, width: number, height: number, roundness = .5): Point[] {
   return Array.from({ length: 24 }, (_, i) => {
     const angle = i * Math.PI / 12, c = Math.cos(angle), s = Math.sin(angle);
-    return { x: center.x + Math.sign(c) * Math.sqrt(Math.abs(c)) * width / 2,
-      y: center.y + Math.sign(s) * Math.sqrt(Math.abs(s)) * height / 2 };
+    return { x: center.x + Math.sign(c) * Math.pow(Math.abs(c), roundness) * width / 2,
+      y: center.y + Math.sign(s) * Math.pow(Math.abs(s), roundness) * height / 2 };
   });
 }
 
 /** Opaque landmark core, feathered outward only. Never fades the feature itself. */
 export function paintContourMask(ctx: CanvasRenderingContext2D, width: number, height: number,
-  contour: Point[], feather: number): void {
+  contour: Point[], feather: number, smoothFeather = false): void {
   ctx.clearRect(0, 0, width, height);
   if (contour.length < 3) return;
   const points = contour.map(p => ({ x: p.x * width, y: p.y * height }));
@@ -36,7 +36,14 @@ export function paintContourMask(ctx: CanvasRenderingContext2D, width: number, h
   });
   path.closePath();
   ctx.save(); ctx.lineJoin = "round"; ctx.strokeStyle = "white";
-  for (const [radius, alpha] of [[1, 0.08], [0.75, 0.18], [0.5, 0.32], [0.25, 0.55]]) {
+  if (smoothFeather) {
+    let accumulated = 0;
+    for (let i = 11; i >= 1; i--) {
+      const radius = i / 12, coverage = 1 - radius;
+      ctx.globalAlpha = (coverage - accumulated) / (1 - accumulated);
+      ctx.lineWidth = feather * radius * 2; ctx.stroke(path); accumulated = coverage;
+    }
+  } else for (const [radius, alpha] of [[1, 0.08], [0.75, 0.18], [0.5, 0.32], [0.25, 0.55]]) {
     ctx.globalAlpha = alpha; ctx.lineWidth = Math.max(1, feather * radius * 2); ctx.stroke(path);
   }
   ctx.globalAlpha = 1; ctx.fillStyle = "white"; ctx.fill(path); ctx.restore();

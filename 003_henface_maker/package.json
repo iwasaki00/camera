@@ -1,9 +1,10 @@
 {
   "name": "henface-maker",
   "private": true,
-  "version": "0.9.0",
+  "version": "0.9.1",
   "type": "module",
   "scripts": {
+    "test:skin": "node tests/skin-reconstruction.test.mjs",
     "test:challenge": "node tests/face-challenge.test.mjs",
     "test:triggers": "node tests/face-triggers.test.mjs",
     "test:difficulty": "node tests/blink-difficulty.test.mjs",

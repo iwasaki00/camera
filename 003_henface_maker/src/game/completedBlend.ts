@@ -2,8 +2,8 @@ import type { Point } from "../featureRenderer";
 import { pointInPolygon } from "./blinkDropMasks";
 
 export const COMPLETED_BLEND = {
-  minFeather: 3, maxFeather: 8, innerRing: 2, ringBlend: .28, downsample: .5,
-  colorStrength: .22, maxColorDelta: 12, saturationBlend: .10,
+  minFeather: 1.5, maxFeather: 22, ringBlend: .28, downsample: .5,
+  colorStrength: .28, maxColorDelta: 12, saturationBlend: .08,
   colorIntervalMs: 120, colorSmoothing: .25, maxCache: 24
 } as const;
 export type BlendRegion = { kind: string; center: Point; width: number; height: number; contour: Point[] };
@@ -14,10 +14,9 @@ const surface = (width: number, height: number): Surface => {
   return { canvas, ctx };
 };
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-export function completedFeather(region: BlendRegion): number {
-  const extra = region.kind.includes("Brow") ? 1.35 : region.kind.includes("Eye") ? 1.2 : 1.3;
-  const previous = Math.min(region.width * 1.36, region.height * 1.7) * .085;
-  return clamp(previous * extra, COMPLETED_BLEND.minFeather, COMPLETED_BLEND.maxFeather);
+export function completedFeather(region: BlendRegion, faceScale = region.width): number {
+  const fraction = region.kind.includes("Brow") ? .038 : region.kind.includes("Eye") ? .055 : region.kind === "nose" ? .05 : .045;
+  return clamp(faceScale * fraction, COMPLETED_BLEND.minFeather, COMPLETED_BLEND.maxFeather);
 }
 const pathFor = (width: number, height: number, contour: Point[]): Path2D => {
   const points = contour.map(p => ({ x: p.x * width, y: p.y * height }));
@@ -45,8 +44,8 @@ export function paintCompletedMasks(mask: CanvasRenderingContext2D, ring: Canvas
   mask.globalAlpha = 1; mask.fillStyle = "white"; mask.fill(path); mask.restore();
   ring.drawImage(mask.canvas, 0, 0);
   core.fillStyle = "white"; core.fill(path);
-  core.globalCompositeOperation = "destination-out"; core.strokeStyle = "white";
-  core.lineWidth = COMPLETED_BLEND.innerRing * 2; core.stroke(path); core.globalCompositeOperation = "source-over";
+  // Keep the entire landmark contour intact: color/low-pass treatment acts
+  // only outside it, including the opaque glasses/brow/lip edge pixels.
   ring.globalCompositeOperation = "destination-out"; ring.drawImage(core.canvas, 0, 0); ring.globalCompositeOperation = "source-over";
 }
 
@@ -58,13 +57,15 @@ export function createCompletedBlender() {
   const masks = new Map<string, { mask: Surface; ring: Surface }>();
   const colors = new Map<string, { delta: number[]; source: number[]; target: number[] }>();
   let foundation: Surface | undefined, samples: Surface | undefined;
-  let outline: Point[] = [], regions: BlendRegion[] = [], refreshColors = false, lastColorAt = -Infinity;
+  let outline: Point[] = [], regions: BlendRegion[] = [], refreshColors = false, lastColorAt = -Infinity, faceScale = 1;
   const metrics = { ms: 0, parts: 0, colorReads: 0, colorCorrectedParts: 0 };
   const trimCache = <T,>(cache: Map<string, T>) => { if (cache.size >= COMPLETED_BLEND.maxCache) cache.delete(cache.keys().next().value!); };
-  function beginFrame(dest: CanvasRenderingContext2D, faceOutline: Point[], parts: BlendRegion[], now: number): void {
+  function beginFrame(dest: CanvasRenderingContext2D, faceOutline: Point[], parts: BlendRegion[], now: number, scale?: number): void {
     metrics.ms = 0; metrics.parts = 0; metrics.colorReads = 0; metrics.colorCorrectedParts = 0;
     const started = performance.now(); outline = faceOutline; regions = parts;
-    refreshColors = now - lastColorAt >= COMPLETED_BLEND.colorIntervalMs;
+    faceScale = scale ?? Math.max(1, ...parts.map(p => p.width));
+    if (now < lastColorAt || now - lastColorAt > 450) colors.clear();
+    refreshColors = now < lastColorAt || now - lastColorAt >= COMPLETED_BLEND.colorIntervalMs;
     if (!foundation || foundation.canvas.width !== dest.canvas.width || foundation.canvas.height !== dest.canvas.height) {
       foundation = surface(dest.canvas.width, dest.canvas.height); refreshColors = true; colors.clear();
     }
@@ -112,7 +113,7 @@ export function createCompletedBlender() {
   function draw(source: CanvasRenderingContext2D, dest: CanvasRenderingContext2D, region: BlendRegion,
     shift: Point, mapPoint: (p: Point) => Point): void {
     if (region.contour.length < 3) return;
-    const started = performance.now(), feather = Math.round(completedFeather(region) * 10) / 10, guard = feather + 2;
+    const started = performance.now(), feather = Math.round(completedFeather(region, faceScale) * 2) / 2, guard = feather + 2;
     const x = Math.min(region.center.x - region.width * .68, ...region.contour.map(p => p.x - guard));
     const y = Math.min(region.center.y - region.height * .85, ...region.contour.map(p => p.y - guard));
     const right = Math.max(region.center.x + region.width * .68, ...region.contour.map(p => p.x + guard));

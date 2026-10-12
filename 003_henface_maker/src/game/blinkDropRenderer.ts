@@ -4,6 +4,7 @@ import { BLINK_DROP_PARTS, fallingStateAt } from "./blinkDropGame";
 import type { BlinkDropPart, BlinkDropSession, FallingState } from "./blinkDropGame";
 import { convexHull, paintContourMask, pointInPolygon, roundedBand } from "./blinkDropMasks";
 import { createCompletedBlender } from "./completedBlend";
+import { createSkinReconstruction } from "./skinReconstruction";
 
 type Surface = { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D };
 export type RegionKind = BlinkDropPart | "rightBrow" | "leftBrow";
@@ -32,16 +33,18 @@ function createSurface(): Surface {
   return { canvas, ctx };
 }
 
-export function createBlinkDropRenderer(options: { completedPolish?: boolean } = {}) {
+export function createBlinkDropRenderer(options: { completedPolish?: boolean; naturalSkin?: boolean; naturalEdges?: boolean } = {}) {
   const patches = new Map<string, Surface>();
   const masks = new Map<string, HTMLCanvasElement>();
   const smoothSmall = createSurface(), smoothLarge = createSurface();
   const alignedSource = createSurface(), alignedOutput = createSurface();
   const skinField = createSurface(), skinLayer = createSurface(), skinBlend = createSurface();
   const completedBlender = createCompletedBlender();
+  const skinReconstruction = createSkinReconstruction();
+  let erasureMask: Surface | undefined, erasureLayer: Surface | undefined;
   let glassesMargin = 1;
   let lastTrackedAt = -Infinity;
-  const metrics = { warpMs: 0, compositeMs: 0, transformedParts: 0, polishMs: 0, polishedParts: 0, colorReads: 0, polishColorParts: 0 };
+  const metrics = { warpMs: 0, compositeMs: 0, transformedParts: 0, polishMs: 0, polishedParts: 0, colorReads: 0, polishColorParts: 0, skinReads: 0, skinSamples: 0, skinUpdates: 0 };
 
   function getSurface(width: number, height: number): Surface {
     const w = Math.max(24, Math.ceil(width / 8) * 8), h = Math.max(24, Math.ceil(height / 8) * 8), key = w + ":" + h;
@@ -62,19 +65,19 @@ export function createBlinkDropRenderer(options: { completedPolish?: boolean } =
     if (masks.size >= 48) masks.delete(masks.keys().next().value!);
     masks.set(key, item.canvas); return item.canvas;
   }
-  function contourMask(width: number, height: number, contour: Point[]): HTMLCanvasElement {
+  function contourMask(width: number, height: number, contour: Point[], featherRadius = Math.max(2, Math.min(width, height) * .085)): HTMLCanvasElement {
     // Quantize geometry as well as size; the cached pixels and key describe the same mask.
     const points = contour.map(p => ({ x: Math.round(p.x * 40) / 40, y: Math.round(p.y * 40) / 40 }));
-    const key = `contour:${width}:${height}:` + points.map(p => `${p.x},${p.y}`).join(";");
+    const key = `contour:${width}:${height}:${featherRadius.toFixed(1)}:` + points.map(p => `${p.x},${p.y}`).join(";");
     const cached = masks.get(key); if (cached) return cached;
     const mask = createSurface(); mask.canvas.width = width; mask.canvas.height = height;
-    paintContourMask(mask.ctx, width, height, points, Math.max(2, Math.min(width, height) * 0.085));
+    paintContourMask(mask.ctx, width, height, points, featherRadius);
     if (masks.size >= 48) masks.delete(masks.keys().next().value!);
     masks.set(key, mask.canvas); return mask.canvas;
   }
 
   function featherCopy(source: CanvasRenderingContext2D, dest: CanvasRenderingContext2D,
-    sourceBox: Box, target: Target, contour: Point[]): void {
+    sourceBox: Box, target: Target, contour: Point[], feather?: number): void {
     const sx = Math.max(0, sourceBox.x), sy = Math.max(0, sourceBox.y);
     const sw = Math.min(source.canvas.width, sourceBox.x + sourceBox.width) - sx;
     const sh = Math.min(source.canvas.height, sourceBox.y + sourceBox.height) - sy;
@@ -85,7 +88,8 @@ export function createBlinkDropRenderer(options: { completedPolish?: boolean } =
     ctx.drawImage(source.canvas, sx, sy, sw, sh, (sx - sourceBox.x) / sourceBox.width * surface.canvas.width,
       (sy - sourceBox.y) / sourceBox.height * surface.canvas.height, sw / sourceBox.width * surface.canvas.width, sh / sourceBox.height * surface.canvas.height);
     ctx.globalCompositeOperation = "destination-in";
-    ctx.drawImage(contourMask(surface.canvas.width, surface.canvas.height, contour), 0, 0);
+    ctx.drawImage(contourMask(surface.canvas.width, surface.canvas.height, contour,
+      feather === undefined ? undefined : feather * Math.max(surface.canvas.width / target.width, surface.canvas.height / target.height)), 0, 0);
     ctx.globalCompositeOperation = "source-over";
     dest.save(); dest.globalAlpha = 1;
     dest.drawImage(surface.canvas, target.center.x - target.width / 2, target.center.y - target.height / 2, target.width, target.height);
@@ -273,7 +277,8 @@ export function createBlinkDropRenderer(options: { completedPolish?: boolean } =
   }
 
   function renderBlankFace(source: CanvasRenderingContext2D, dest: CanvasRenderingContext2D,
-    parts: Record<RegionKind, PartRegion>, outline: Point[], eraseOutline: Point[] | null, pose: FacePose): void {
+    parts: Record<RegionKind, PartRegion>, outline: Point[], eraseOutline: Point[] | null, pose: FacePose, now: number): void {
+    if (options.naturalSkin !== false && renderNaturalBlankFace(source, dest, parts, outline, eraseOutline, pose, now)) return;
     if (!buildSkinField(source, parts, outline, pose)) return;
     dest.save();
     if (eraseOutline) {
@@ -287,6 +292,59 @@ export function createBlinkDropRenderer(options: { completedPolish?: boolean } =
     dest.restore();
   }
 
+  function renderNaturalBlankFace(source: CanvasRenderingContext2D, dest: CanvasRenderingContext2D,
+    parts: Record<RegionKind, PartRegion>, outline: Point[], eraseOutline: Point[] | null, pose: FacePose, now: number): boolean {
+    const inset = pose.scale * .12;
+    const left = Math.min(...outline.map(p => p.x)) - inset, top = Math.min(...outline.map(p => p.y)) - inset;
+    const box = { x: left, y: top, width: Math.max(...outline.map(p => p.x)) + inset - left, height: Math.max(...outline.map(p => p.y)) + inset - top };
+    if (!skinReconstruction.build(source, skinField.ctx, box, parts, outline, pose, now)) return false;
+    const s = skinReconstruction.metrics; metrics.skinReads = s.readbacks; metrics.skinSamples = s.samples; metrics.skinUpdates = s.updates;
+    // Work only around the face, rather than clearing/masking two full video
+    // frames. Quantized dimensions reuse the same bounded pair of canvases.
+    const origin = { x: Math.max(0, Math.floor(box.x)), y: Math.max(0, Math.floor(box.y)) };
+    const layerWidth = Math.max(1, Math.ceil((Math.min(source.canvas.width, box.x + box.width) - origin.x) / 8) * 8);
+    const layerHeight = Math.max(1, Math.ceil((Math.min(source.canvas.height, box.y + box.height) - origin.y) / 8) * 8);
+    erasureMask ??= createSurface(); erasureLayer ??= createSurface();
+    for (const layer of [erasureMask, erasureLayer]) {
+      if (layer.canvas.width !== layerWidth || layer.canvas.height !== layerHeight) { layer.canvas.width = layerWidth; layer.canvas.height = layerHeight; }
+      layer.ctx.setTransform(1, 0, 0, 1, 0, 0); layer.ctx.globalAlpha = 1; layer.ctx.globalCompositeOperation = "source-over"; layer.ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
+    }
+    erasureMask.ctx.translate(-origin.x, -origin.y);
+    const targets: Target[] = [];
+    for (const kind of ["leftEye", "rightEye", "leftBrow", "rightBrow"] as const) {
+      const p = parts[kind], eye = kind.includes("Eye"); targets.push({ center: p.center, width: p.width * (eye ? 1.24 : 1.3), height: p.height * (eye ? 1.42 : 1.6) });
+    }
+    const nose = parts.nose, mouth = parts.mouth;
+    const noseTop = (parts.leftEye.center.y + parts.rightEye.center.y) / 2 - (parts.leftEye.height + parts.rightEye.height) * .4;
+    const noseBottom = mouth.center.y - mouth.height * .2;
+    targets.push({ center: { x: nose.center.x, y: (noseTop + noseBottom) / 2 }, width: Math.max(nose.width * BLANK_FACE.noseWidth, (parts.rightEye.center.x - parts.leftEye.center.x) * BLANK_FACE.noseEyeGapWidth), height: Math.max(nose.height * 1.8, noseBottom - noseTop) });
+    targets.push({ center: mouth.center, width: mouth.width * BLANK_FACE.mouthWidth, height: mouth.height * BLANK_FACE.mouthHeight });
+    const feather = Math.round(Math.max(1.5, Math.min(22, pose.scale * .07)) * 2) / 2;
+    for (const target of targets) {
+      const width = target.width + feather * 2, height = target.height + feather * 2;
+      const w = Math.ceil(width / 8) * 8, h = Math.ceil(height / 8) * 8;
+      const ratioX = Math.round(target.width / width * 80) / 80, ratioY = Math.round(target.height / height * 80) / 80;
+      const key = `erase:${w}:${h}:${feather}:${ratioX}:${ratioY}`;
+      let mask = masks.get(key);
+      if (!mask) {
+        const item = createSurface(); item.canvas.width = w; item.canvas.height = h;
+        const contour = roundedBand({ x: .5, y: .5 }, ratioX * .84, ratioY * .84, .6);
+        paintContourMask(item.ctx, w, h, contour, feather * Math.max(w / width, h / height), true);
+        if (masks.size >= 48) masks.delete(masks.keys().next().value!); masks.set(key, item.canvas); mask = item.canvas;
+      }
+      erasureMask.ctx.drawImage(mask, target.center.x - width / 2, target.center.y - height / 2, width, height);
+    }
+    erasureLayer.ctx.drawImage(skinField.canvas, box.x - origin.x, box.y - origin.y, box.width, box.height);
+    erasureLayer.ctx.globalCompositeOperation = "destination-in"; erasureLayer.ctx.drawImage(erasureMask.canvas, 0, 0); erasureLayer.ctx.globalCompositeOperation = "source-over";
+    dest.save();
+    // The conservative fallback oval is useful for donor selection, but can
+    // exclude eyebrow corners. Only a measured face outline clips erasure.
+    if (eraseOutline) {
+      dest.beginPath(); eraseOutline.forEach((p, i) => i ? dest.lineTo(p.x, p.y) : dest.moveTo(p.x, p.y)); dest.closePath(); dest.clip();
+    }
+    dest.drawImage(erasureLayer.canvas, origin.x, origin.y); dest.restore(); return true;
+  }
+
   function drawPart(source: CanvasRenderingContext2D, dest: CanvasRenderingContext2D, region: PartRegion, shift: Point,
     polishTransform?: { pivot: Point; rotation: number; scale: number }): void {
     if (polishTransform) {
@@ -298,11 +356,18 @@ export function createBlinkDropRenderer(options: { completedPolish?: boolean } =
       return;
     }
     const padX = region.width * 0.18, padY = region.height * 0.35;
-    const width = region.width + padX * 2, height = region.height + padY * 2;
-    const box = { x: region.center.x - width / 2, y: region.center.y - height / 2, width, height };
+    let width = region.width + padX * 2, height = region.height + padY * 2;
+    const feather = Math.max(2, Math.min(width, height) * .085);
+    let box = { x: region.center.x - width / 2, y: region.center.y - height / 2, width, height };
+    if (options.naturalEdges !== false) {
+      const guard = feather + 2 + Math.max(width, height) / 80;
+      const x = Math.min(box.x, ...region.contour.map(p => p.x - guard)), y = Math.min(box.y, ...region.contour.map(p => p.y - guard));
+      const right = Math.max(box.x + width, ...region.contour.map(p => p.x + guard)), bottom = Math.max(box.y + height, ...region.contour.map(p => p.y + guard));
+      width = right - x; height = bottom - y; box = { x, y, width, height };
+    }
     featherCopy(source, dest,
       box, { center: { x: region.center.x + shift.x, y: region.center.y + shift.y }, width, height },
-      region.contour.map(p => ({ x: (p.x - box.x) / width, y: (p.y - box.y) / height })));
+      region.contour.map(p => ({ x: (p.x - box.x) / width, y: (p.y - box.y) / height })), options.naturalEdges === false ? undefined : feather);
   }
 
   function faceWidth(outline: Point[]): number {
@@ -356,7 +421,7 @@ export function createBlinkDropRenderer(options: { completedPolish?: boolean } =
   function render(base: HTMLCanvasElement, dest: CanvasRenderingContext2D, landmarks: readonly Landmark[] | undefined,
     session: BlinkDropSession, now: number, debugMode: BlinkDropDebugMode = "normal"): boolean {
     const started = performance.now(); metrics.warpMs = 0; metrics.transformedParts = 0;
-    metrics.polishMs = 0; metrics.polishedParts = 0; metrics.colorReads = 0; metrics.polishColorParts = 0;
+    metrics.polishMs = 0; metrics.polishedParts = 0; metrics.colorReads = 0; metrics.polishColorParts = 0; metrics.skinReads = 0; metrics.skinUpdates = 0;
     const g = landmarks ? geometry(landmarks, base.width, base.height) : null;
     if (!g && activePhases.has(session.phase) && now - lastTrackedAt < 180) { metrics.compositeMs = performance.now() - started; return false; }
     dest.save(); dest.setTransform(1, 0, 0, 1, 0, 0); dest.globalAlpha = 1; dest.globalCompositeOperation = "source-over";
@@ -375,10 +440,10 @@ export function createBlinkDropRenderer(options: { completedPolish?: boolean } =
     source.translate(pose.center.x, pose.center.y); source.rotate(-pose.angle); source.translate(-pose.center.x, -pose.center.y);
     source.drawImage(base, 0, 0); source.setTransform(1, 0, 0, 1, 0, 0);
     if (debugMode !== "parts-only") output.drawImage(alignedSource.canvas, 0, 0);
-    if (debugMode !== "parts-only" && debugMode !== "bounds") renderBlankFace(source, output, partRegions, g.skinOutline, g.eraseOutline, pose);
+    if (debugMode !== "parts-only" && debugMode !== "bounds") renderBlankFace(source, output, partRegions, g.skinOutline, g.eraseOutline, pose, now);
     const preview = debugMode === "blank-face" || debugMode === "bounds";
     const polished = session.phase === "completed" && debugMode === "normal" && options.completedPolish !== false;
-    if (polished) completedBlender.beginFrame(output, g.skinOutline, REGION_ORDER.map(kind => partRegions[kind]), now);
+    if (polished) completedBlender.beginFrame(output, g.skinOutline, REGION_ORDER.map(kind => partRegions[kind]), now, pose.scale);
     const width = faceWidth(g.skinOutline);
     if (!preview) session.fixedOffsets.forEach((offset, index) => {
       if (offset !== null) drawTurn(source, output, partRegions, pose, width, index,
@@ -410,6 +475,7 @@ export function createBlinkDropRenderer(options: { completedPolish?: boolean } =
   }
 
   return { render, getRegions: regions, getGeometry: geometry, turnPosition, turnBrowOffset, metrics,
-    setGlassesMargin: (value: number) => { glassesMargin = Math.max(0.8, Math.min(1.3, value)); masks.clear(); completedBlender.clearCache(); },
-    clearCache: () => { patches.clear(); masks.clear(); completedBlender.clearCache(); lastTrackedAt = -Infinity; } };
+    getSkinSamples: skinReconstruction.getSamples,
+    setGlassesMargin: (value: number) => { glassesMargin = Math.max(0.8, Math.min(1.3, value)); masks.clear(); completedBlender.clearCache(); skinReconstruction.clear(); },
+    clearCache: () => { patches.clear(); masks.clear(); completedBlender.clearCache(); skinReconstruction.clear(); lastTrackedAt = -Infinity; } };
 }

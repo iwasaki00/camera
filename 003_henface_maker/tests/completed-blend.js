@@ -18,6 +18,7 @@ try{
   const alpha=(data,x,y)=>data[(y*160+x)*4+3];
   assert('completedマスクは内部不透明・四隅透明',alpha(b,80,56)===255&&[0,159,160*111,160*112-1].every(i=>b[i*4+3]===0));
   assert('境界リングは中心に作用しない',alpha(r,80,56)===0&&r.some((v,i)=>i%4===3&&v>0));
+  const corePixels=pixels(core);assert('輪郭内の不透明画素に色補正・平滑化リングが入らない',corePixels.every((v,i)=>i%4!==3||v!==255||r[i]===0));
   const maxJump=data=>{let n=0;for(let y=3;y<32;y++)n=Math.max(n,Math.abs(alpha(data,80,y)-alpha(data,80,y-1)));return n;};
   results.push('マスク外周の最大アルファ段差 旧 '+maxJump(a)+' → 新 '+maxJump(b));
   assert('外周のアルファ段差が減る',maxJump(b)<maxJump(a));
@@ -41,7 +42,7 @@ try{
   for(const [kind,x,y,color] of marks){const p=positionFor(kind,x,y),offset=(Math.round(p.y)*480+Math.round(p.x))*4;const difference=color.reduce((s,c,i)=>s+Math.abs(c-data[offset+i]),0);assert(kind+'の中心色・細部を保持（誤差 '+difference+'）',difference<24);}
   for(const phase of ['countdown','playing','fixing','paused']){
     const s={...session,phase,pausedPhase:phase==='paused'?'fixing':undefined,partStartedAt:0,fixingStartedAt:1000,pauseStartedAt:1100};
-    render(old,before,s);render(current,after,s);assert(phase+'は旧描画とピクセル一致・追加処理なし',equal(pixels(before),pixels(after))&&current.metrics.polishedParts===0&&current.metrics.colorReads===0);
+    render(old,before,s);render(current,after,s);assert(phase+'はcompleted補正OFFとピクセル一致・追加処理なし',equal(pixels(before),pixels(after))&&current.metrics.polishedParts===0&&current.metrics.colorReads===0);
   }
   render(old,before,session,1000,landmarks,base,'parts-only');render(current,after,session,1000,landmarks,base,'parts-only');assert('parts-onlyの抽出デバッグは変更なし',equal(pixels(before),pixels(after)));
   render(current,after,session,1000);assert('同一フレームの再描画では色サンプルを再利用',current.metrics.colorReads===0);
@@ -50,13 +51,13 @@ try{
   let reads=0,largest=0;const read=CanvasRenderingContext2D.prototype.getImageData;
   CanvasRenderingContext2D.prototype.getImageData=function(x,y,w,h,...args){reads++;largest=Math.max(largest,w*h);return read.call(this,x,y,w,h,...args);};
   for(let i=0;i<12;i++)render(current,after,session,1100+i*33);
-  CanvasRenderingContext2D.prototype.getImageData=read;assert('readbackは16画素だけ・120ms間隔で間引き',largest===16&&reads<=24);
+  CanvasRenderingContext2D.prototype.getImageData=read;assert('readbackは最大176画素・肌90ms／色120ms間隔で間引き',largest<=176&&reads<=28);
   let allocations=0;const create=document.createElement.bind(document);
   document.createElement=function(tag,...args){if(tag==='canvas')allocations++;return create(tag,...args);};
   for(let i=0;i<8;i++)render(current,after,session,1600+i*33);
   document.createElement=create;assert('安定した連続フレームでCanvasを再生成しない',allocations===0);
   render(old,before,session,2100);render(current,after,session,2100);
-  window.testImages={before:before.toDataURL(),after:after.toDataURL(),source:base.toDataURL()};image('v0.8.1 相当',before);image('v0.9.0 completed',after);
+  window.testImages={before:before.toDataURL(),after:after.toDataURL(),source:base.toDataURL()};image('軽量合成（completed補正なし）',before);image('v0.9.1 completed',after);
   const kinds=['rightEye','leftEye','nose','mouth'],rotations=[.22,-.18,.14,-.1],scales=[1.1,.9,1.15,.85];
   const monster={...session,difficulty:'MONSTER',fixedPositions:[],fixedTransforms:[],fixedBrowOffsets:[]};
   for(let i=0;i<4;i++){
