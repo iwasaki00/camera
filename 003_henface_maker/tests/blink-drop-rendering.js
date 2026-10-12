@@ -1,4 +1,5 @@
 import { createFixture } from './fixture.js';
+import { renderGameFrame } from './render-game-frame.js';
 import { createBlinkDropRenderer } from '../src/game/blinkDropRenderer.ts';
 import { beginBlinkDrop, createBlinkDropSession } from '../src/game/blinkDropGame.ts';
 import { paintContourMask } from '../src/game/blinkDropMasks.ts';
@@ -92,11 +93,11 @@ try{
  assert('parts-onlyで固定パーツを保持',!equal(only,pixels(out)));
  renderer.render(base,ctx,landmarks,playing,2000,'bounds');
  assert('boundsで元映像に抽出枠を追加',!equal(source,pixels(out)));
- const frame=renderer.captureFrame(base,landmarks,completed,2000),frozen=pixels(frame).slice(),saved=frame.toDataURL('image/png');
- assert('完成キャプチャはデバッグによらず通常の完成顔',equal(final,frozen));
+ const frame=renderGameFrame(renderer,base,landmarks,completed,2000),frozen=pixels(frame).slice();
+ assert('検証バッファはデバッグによらず通常の完成顔',equal(final,frozen));
  renderer.render(base,ctx,landmarks,playing,2400,'parts-only');
  base.getContext('2d').fillRect(0,0,20,20);
- assert('次フレーム・デバッグ表示・元映像の変更で完成画像と保存PNGは変わらない',equal(frozen,pixels(frame))&&saved===frame.toDataURL('image/png'));
+ assert('次フレーム・デバッグ表示・元映像の変更で検証バッファは変わらない',equal(frozen,pixels(frame)));
  base.getContext('2d').putImageData(new ImageData(source,base.width,base.height),0,0);
  renderer.clearCache();
  assert('長い顔未検出時は元画像',!renderer.render(base,ctx,undefined,playing,3000)&&equal(source,pixels(out)));

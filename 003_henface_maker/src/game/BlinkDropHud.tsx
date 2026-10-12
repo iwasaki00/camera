@@ -48,17 +48,15 @@ type Props = {
   triggerSettings: FaceTriggerSettings;
   selectTriggers: (settings: FaceTriggerSettings) => void;
   settingsDisabled: boolean;
-  cameraActive: boolean;
   tracking: boolean;
   start: () => void;
   pause: () => void;
   resume: () => void;
   restart: () => void;
   exit: () => void;
-  save: () => void;
 };
 
-export default function BlinkDropHud({ session, countdownText, difficulty, selectDifficulty, gameMode, selectMode, challengeId, selectChallenge, setup, triggerSettings, selectTriggers, settingsDisabled, cameraActive, tracking, start, pause, resume, restart, exit, save }: Props) {
+export default function BlinkDropHud({ session, countdownText, difficulty, selectDifficulty, gameMode, selectMode, challengeId, selectChallenge, setup, triggerSettings, selectTriggers, settingsDisabled, tracking, start, pause, resume, restart, exit }: Props) {
   const [now, setNow] = useState(() => performance.now());
   useEffect(() => {
     setNow(performance.now());
@@ -100,9 +98,7 @@ export default function BlinkDropHud({ session, countdownText, difficulty, selec
       <h2>{GAME_TITLE} 完成！</h2><strong>{result ? `総合 ${result.score}点 · ${result.rank}` : score.title}</strong>
       {session.challenge ? <p className="challenge-result-name">{challengeDefinition(session.challenge.id).name}<small>パーツ得点：{session.challenge.scores.map(value => value ?? 0).join(" / ")}</small></p> : <p>正解度 {score.accuracy}　変顔度 {score.funny}</p>}
       <div className="game-result-actions"><button className="primary-button" type="button" onClick={restart}>もう一回</button>
-        <button className="secondary-button" type="button" disabled={!cameraActive} onClick={save}>写真を保存</button></div>
-      <div className="game-result-actions"><button className="minor-button" type="button" onClick={setup}>モード選択へ戻る</button>
-        <button className="minor-button" type="button" onClick={exit}>通常モードへ戻る</button></div>
+        <button className="minor-button" type="button" onClick={setup}>モード選択へ戻る</button></div>
       </div>
     </div>;
   }

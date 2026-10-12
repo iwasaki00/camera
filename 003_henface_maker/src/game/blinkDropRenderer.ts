@@ -393,15 +393,7 @@ export function createBlinkDropRenderer() {
     dest.restore(); metrics.transformedParts = 6; metrics.compositeMs = performance.now() - compositeStart; return true;
   }
 
-  // One-off capture for export/verification; the live renderer never retains it.
-  function captureFrame(base: HTMLCanvasElement, landmarks: readonly Landmark[], session: BlinkDropSession, now: number): HTMLCanvasElement {
-    const frame = createSurface();
-    frame.canvas.width = base.width; frame.canvas.height = base.height;
-    render(base, frame.ctx, landmarks, session, now, "normal");
-    return frame.canvas;
-  }
-
-  return { render, captureFrame, getRegions: regions, getGeometry: geometry, turnPosition, turnBrowOffset, metrics,
+  return { render, getRegions: regions, getGeometry: geometry, turnPosition, turnBrowOffset, metrics,
     setGlassesMargin: (value: number) => { glassesMargin = Math.max(0.8, Math.min(1.3, value)); masks.clear(); },
     clearCache: () => { patches.clear(); masks.clear(); lastTrackedAt = -Infinity; } };
 }

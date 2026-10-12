@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import {FaceLandmarker,FilesetResolver} from '@mediapipe/tasks-vision';
 import App from '../src/App.tsx';
 import {createFixture} from './fixture.js';
+import {renderGameFrame} from './render-game-frame.js';
 import {createBlinkDropRenderer} from '../src/game/blinkDropRenderer.ts';
 import {createBlinkDropSession,beginBlinkDrop,catchBlinkDropPart,advanceBlinkDrop,DIFFICULTY_MODES} from '../src/game/blinkDropGame.ts';
 import {createChallengeRun,challengeTargetPosition,renderChallengeGuide,recordChallengeCatch,CHALLENGES} from '../src/game/faceChallenge.ts';
@@ -41,12 +42,12 @@ function testGuide(){
     session=recordChallengeCatch(catchBlinkDropPart(session,at,challengeTargetPosition(g,i,target),renderer.turnBrowOffset(landmarks,480,640,i)),g);
     session=advanceBlinkDrop(session,at+450);
   }
-  const photo=renderer.captureFrame(base,landmarks,session,10000).toDataURL();renderChallengeGuide(ctx,g,session);
-  assert('完成ガイドなし・採点情報は合成画像に入らない',bounds(guide).left===Infinity&&renderer.captureFrame(base,landmarks,{...session,gameMode:'free',challenge:undefined},10000).toDataURL()===photo);
+  const photo=renderGameFrame(renderer,base,landmarks,session,10000).toDataURL();renderChallengeGuide(ctx,g,session);
+  assert('完成ガイドなし・採点情報は合成画像に入らない',bounds(guide).left===Infinity&&renderGameFrame(renderer,base,landmarks,{...session,gameMode:'free',challenge:undefined},10000).toDataURL()===photo);
 }
-let root,stream,timer,feeds=0,tick=0,saved,eyes=1,mouth=.1;
+let root,stream,timer,feeds=0,tick=0,eyes=1,mouth=.1;
 const drawImage=CanvasRenderingContext2D.prototype.drawImage,videoTime=Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype,'currentTime');
-const raf=window.requestAnimationFrame,cancelRaf=window.cancelAnimationFrame,anchorClick=HTMLAnchorElement.prototype.click;
+const raf=window.requestAnimationFrame,cancelRaf=window.cancelAnimationFrame;
 try{
   testGuide();
   // Input camera/model are synthetic; React, Canvas and the elapsed clock run in the browser.
@@ -66,7 +67,7 @@ try{
   Object.defineProperty(navigator.mediaDevices,'getUserMedia',{value:async()=>{
     stream=base.captureStream(0);timer=setInterval(()=>{base.getContext('2d').fillStyle=`rgb(${++tick%256},60,200)`;base.getContext('2d').fillRect(0,0,7,7);stream.getVideoTracks()[0].requestFrame();},33);return stream;
   }});
-  HTMLAnchorElement.prototype.click=function(){saved=this.href;};Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});
+  Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});
   history.replaceState(null,'','?');localStorage.setItem('henface.face-triggers',JSON.stringify({blink:false,eyesWide:true,mouthOpen:false}));
   root=createRoot(document.querySelector('#app'));root.render(<App/>);await sleep(80);
   assert('入口の正式名称',document.querySelector('.game-entry-button').textContent.includes('カオストップ！'));
@@ -96,7 +97,7 @@ try{
   await wait(()=>phase()==='completed');const card=document.querySelector('.game-result-card');
   const score=Number(card.querySelector('strong').textContent.match(/\d+/)[0]);assert('4パーツの総合スコア・ランク・お題・個別得点',score>=95&&card.textContent.includes('PERFECT')&&card.textContent.includes('ぴったり顔')&&card.textContent.includes('パーツ得点'));
   assert('完成時はガイドを消去',bounds(guide).left===Infinity);
-  const feed=feeds,photo=canvas.toDataURL();click('写真を保存');assert('保存は既存の合成Canvasのみ',saved===photo);await sleep(220);assert('完成後・保存後もライブ更新',feeds>feed&&canvas.toDataURL()!==photo);
+  const feed=feeds,photo=canvas.toDataURL();assert('CHALLENGE結果画面に保存ボタンなし',!card.textContent.includes('写真を保存'));await sleep(220);assert('完成後もライブ更新',feeds>feed&&canvas.toDataURL()!==photo);
   const imageBox=canvas.getBoundingClientRect(),cardBox=card.getBoundingClientRect();results.push('結果実測 顔高さ '+imageBox.height+' 顔下端 '+imageBox.bottom+' カード上端 '+cardBox.top+' 下端 '+cardBox.bottom+' / 総合 '+score+'点');assert('完成顔と結果が重ならず390×844内',imageBox.bottom<=cardBox.top+1&&cardBox.bottom<=844&&imageBox.height>300);
   click('もう一回');await wait(()=>phase()==='countdown');assert('リスタートで同じお題・得点初期化',document.querySelector('.game-countdown').textContent.includes('ぴったり顔に挑戦！')&&!document.querySelector('.game-result-card'));
   await wait(()=>phase()==='playing');eyes=.25;await wait(()=>phase()==='fixing');assert('CHALLENGEでも瞬きで固定',!!document.querySelector('.challenge-feedback'));eyes=1;await wait(()=>phase()==='playing');await sleep(250);
@@ -109,5 +110,5 @@ try{
   click('通常へ戻る');await sleep(50);assert('通常のsimple・ランダム設定は維持',document.querySelector('[aria-label="ランダム強度"]').value==='monster'&&!!document.querySelector('.simple-random-button'));
   document.documentElement.dataset.result='pass';
 }catch(error){results.push(error.stack);document.documentElement.dataset.result='fail';}
-finally{root?.unmount();clearInterval(timer);stream?.getTracks().forEach(t=>t.stop());CanvasRenderingContext2D.prototype.drawImage=drawImage;Object.defineProperty(HTMLMediaElement.prototype,'currentTime',videoTime);window.requestAnimationFrame=raf;window.cancelAnimationFrame=cancelRaf;HTMLAnchorElement.prototype.click=anchorClick;}
+finally{root?.unmount();clearInterval(timer);stream?.getTracks().forEach(t=>t.stop());CanvasRenderingContext2D.prototype.drawImage=drawImage;Object.defineProperty(HTMLMediaElement.prototype,'currentTime',videoTime);window.requestAnimationFrame=raf;window.cancelAnimationFrame=cancelRaf;}
 document.querySelector('#results').textContent=results.join('\n');

@@ -15,11 +15,10 @@ const clickText=text=>[...document.querySelectorAll('button')].find(b=>b.textCon
 const choose=(selector,value)=>{const el=document.querySelector(selector);el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));};
 const checkbox=label=>document.querySelector('[aria-label="'+label+'で固定"]');
 const {base,landmarks}=createFixture();
-let eyes=1,mouth=.1,found=true,feeds=0,stream,timer,root,tick=0,saved;
+let eyes=1,mouth=.1,found=true,feeds=0,stream,timer,root,tick=0;
 const drawImage=CanvasRenderingContext2D.prototype.drawImage;
 const currentTime=Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype,'currentTime');
 const raf=window.requestAnimationFrame,cancelRaf=window.cancelAnimationFrame;
-const anchorClick=HTMLAnchorElement.prototype.click;
 try {
   // Real React/DOM/Canvas and real elapsed time; camera/model inputs are synthetic.
   CanvasRenderingContext2D.prototype.drawImage=function(image,...args){return drawImage.call(this,image instanceof HTMLVideoElement?base:image,...args);};
@@ -42,7 +41,6 @@ try {
       stream.getVideoTracks()[0].requestFrame();
     },33);return stream;
   }});
-  HTMLAnchorElement.prototype.click=function(){saved=this.href;};
   Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});
   history.replaceState(null,'','?debug=1');localStorage.clear();
   root=createRoot(document.querySelector('#app'));root.render(<App/>);await sleep(80);
@@ -74,7 +72,7 @@ try {
   assert('ニュートラル待機中でもTAPで救済、連打で二重固定なし',document.querySelector('.game-target span').textContent.includes('4 / 4'));
   await wait(()=>phase()==='completed');assert('4ターンで完成',!!document.querySelector('.game-result-card'));
   const previous=feeds;await sleep(250);assert('完成後もライブ処理・結果表示を継続',feeds>previous&&phase()==='completed');
-  const live=canvas.toDataURL();clickText('写真を保存');assert('写真保存は現在の合成Canvas、デバッグは含まない',saved===live);
+  assert('FREE結果画面に保存ボタンなし',!document.querySelector('.game-result-card').textContent.includes('写真を保存'));
   clickText('もう一回');mouth=.1;eyes=1;await wait(()=>phase()==='countdown');
   await wait(()=>debug().includes('表情検出数 瞬き 0 / 見開き 0 / 開口 0'));assert('リスタートで全検出数を初期化',true);
   await wait(()=>phase()==='playing');found=false;await sleep(300);canvas.click();await sleep(100);assert('顔未検出時はタップでも誤固定しない',phase()==='playing'&&document.querySelector('.game-target span').textContent.includes('1 / 4'));found=true;
@@ -95,6 +93,6 @@ try {
 finally {
   root?.unmount();clearInterval(timer);stream?.getTracks().forEach(t=>t.stop());
   CanvasRenderingContext2D.prototype.drawImage=drawImage;Object.defineProperty(HTMLMediaElement.prototype,'currentTime',currentTime);
-  window.requestAnimationFrame=raf;window.cancelAnimationFrame=cancelRaf;HTMLAnchorElement.prototype.click=anchorClick;
+  window.requestAnimationFrame=raf;window.cancelAnimationFrame=cancelRaf;
 }
 document.querySelector('#results').textContent=results.join('\n');

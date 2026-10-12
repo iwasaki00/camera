@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import {FaceLandmarker,FilesetResolver} from '@mediapipe/tasks-vision';
 import App from '../src/App.tsx';
 import {createFixture} from './fixture.js';
+import {renderGameFrame} from './render-game-frame.js';
 import {createBlinkDropRenderer} from '../src/game/blinkDropRenderer.ts';
 import {createBlinkDropSession,beginBlinkDrop,fallingStateAt,catchBlinkDropPart,advanceBlinkDrop,pauseBlinkDrop} from '../src/game/blinkDropGame.ts';
 import '../src/styles.css';
@@ -74,11 +75,11 @@ function testRenderer(){
  renderer.render(moved,dest,lm,session,10033,'parts-only');
  for(const marker of markers)assert(marker.kind+'は完成後も顔の移動・傾き・倍率に追従',colorNear(out,toTarget(session,marker,pose),marker.rgb));
  renderer.render(moved,dest,lm,session,10066);const live=pixels(out).slice();
- const saved=renderer.captureFrame(moved,lm,session,10066);
- assert('保存フレームは現在のMONSTER合成画像',equal(live,pixels(saved))&&saved.toDataURL().startsWith('data:image/png'));
+ const saved=renderGameFrame(renderer,moved,lm,session,10066);
+ assert('検証フレームは現在のMONSTER合成画像',equal(live,pixels(saved)));
  mc.setTransform(1,0,0,1,0,0);mc.fillStyle='#f04466';mc.fillRect(0,0,20,20);
  renderer.render(moved,dest,lm,session,10100);assert('完成後もライブフレーム更新を継続',!equal(live,pixels(out)));
- assert('保存済みキャプチャは次フレームの変更を受けない',equal(live,pixels(saved)));
+ assert('検証バッファは次フレームの変更を受けない',equal(live,pixels(saved)));
  for(const difficulty of ['NORMAL','MONSTER']){
   const test=beginBlinkDrop(createBlinkDropSession('countdown',difficulty),1000);
   for(let i=0;i<10;i++)renderer.render(base,dest,landmarks,test,1000+i*33);
@@ -92,8 +93,6 @@ let closed=false,feeds=0,stream,frameTimer,root,frameTick=0;
 const drawImage=CanvasRenderingContext2D.prototype.drawImage;
 const videoTime=Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype,'currentTime');
 const raf=window.requestAnimationFrame,cancelRaf=window.cancelAnimationFrame;
-let saved;
-const anchorClick=HTMLAnchorElement.prototype.click;
 try{
  testRenderer();
  // A deterministic camera fixture for interaction checks; Canvas measurements above
@@ -116,7 +115,6 @@ try{
    stream.getVideoTracks()[0].requestFrame();
   },33);return stream;
  }});
- HTMLAnchorElement.prototype.click=function(){saved=this.href;};
  Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});
  history.replaceState(null,'','?debug=1');localStorage.clear();
  root=createRoot(document.querySelector('#app'));root.render(<App/>);await sleep(80);
@@ -140,14 +138,14 @@ try{
   await sleep(660);
  }
  const count=feeds;await sleep(180);assert('MONSTER完成後もライブ処理を継続',feeds>count&&!!document.querySelector('.game-result-card'));
- const current=canvas.toDataURL();document.querySelector('.game-result-card .secondary-button').click();assert('写真保存は押した瞬間の合成Canvas',saved===current);
- [...document.querySelectorAll('.game-result-card .minor-button')].find(button=>button.textContent==='通常モードへ戻る').click();await sleep(60);
+ assert('ゲームの結果画面に保存ボタンなし',!document.querySelector('.game-result-card').textContent.includes('写真を保存'));
+ document.querySelector('.game-header-exit').click();await sleep(60);
  assert('ゲーム難易度と通常ランダム強度monsterは別設定',document.querySelector('[aria-label="ランダム強度"]')?.value==='monster');
  document.documentElement.dataset.result='pass';
 }catch(error){results.push(error.stack);document.documentElement.dataset.result='fail';}
 finally{
  root?.unmount();clearInterval(frameTimer);stream?.getTracks().forEach(t=>t.stop());
  CanvasRenderingContext2D.prototype.drawImage=drawImage;Object.defineProperty(HTMLMediaElement.prototype,'currentTime',videoTime);
- window.requestAnimationFrame=raf;window.cancelAnimationFrame=cancelRaf;HTMLAnchorElement.prototype.click=anchorClick;
+ window.requestAnimationFrame=raf;window.cancelAnimationFrame=cancelRaf;
 }
 document.querySelector('#results').textContent=results.join('\n');

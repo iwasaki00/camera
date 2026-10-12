@@ -877,10 +877,10 @@ export default function App() {
             </button>}
             {appMode === "blink-drop" && (!(debug && gameDebugMode !== "normal") || gameSession.phase === "completed" ||
               ((gameDebugMode === "parts-only") && gameSession.phase !== "ready")) &&
-              <BlinkDropHud session={gameSession} countdownText={countdownText} difficulty={difficulty} selectDifficulty={setDifficulty} cameraActive={cameraActive} tracking={faceTracked}
+              <BlinkDropHud session={gameSession} countdownText={countdownText} difficulty={difficulty} selectDifficulty={setDifficulty} tracking={faceTracked}
                 gameMode={gameMode} selectMode={setGameMode} challengeId={challengeId} selectChallenge={setChallengeId} setup={returnToGameSetup}
                 triggerSettings={triggerSettings} selectTriggers={selectTriggers} settingsDisabled={status === "起動中"}
-                start={startBlinkDrop} pause={pauseGame} resume={resumeGame} restart={startBlinkDrop} exit={exitBlinkDrop} save={takeScreenshot} />}
+                start={startBlinkDrop} pause={pauseGame} resume={resumeGame} restart={startBlinkDrop} exit={exitBlinkDrop} />}
           </div>
         </section>
         <button className="settings-toggle" type="button" hidden={appMode === "blink-drop" || layout === "simple"} aria-expanded={settingsOpen} aria-controls="effect-settings"

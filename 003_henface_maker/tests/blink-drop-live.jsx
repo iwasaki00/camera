@@ -40,8 +40,6 @@ Object.defineProperty(navigator.mediaDevices,'getUserMedia',{value:async()=>{
  return stream;
 }});
 const root=createRoot(document.querySelector('#app'));
-let saved;
-HTMLAnchorElement.prototype.click=function(){saved=this.href;};
 try{
  Object.defineProperty(document,'hidden',{configurable:true,get:()=>false}); // Visibility is explicitly controlled below for the background test.
  history.replaceState(null,'','?debug=1');localStorage.setItem('henface.layout','simple');
@@ -84,9 +82,7 @@ try{
  const card=document.querySelector('.game-result-card'),a=canvas.getBoundingClientRect(),b=card.getBoundingClientRect();
  results.push('結果レイアウト実測 canvas='+JSON.stringify({height:a.height,bottom:a.bottom})+' card='+JSON.stringify({top:b.top,bottom:b.bottom})+' scrollWidth='+document.documentElement.scrollWidth);
  assert('390×844で顔とカードが重ならず横スクロールなし',a.height>300&&a.bottom<=b.top+1&&b.bottom<=844&&document.documentElement.scrollWidth<=390);
- const live=canvas.toDataURL();card.querySelector('.secondary-button').click();
- assert('保存は押した瞬間の合成ライブCanvasのみ',saved===live);
- const savedCount=feeds;await sleep(300);assert('保存後もライブ処理を継続',feeds>savedCount);
+ assert('FREE結果画面に保存ボタンなし',!card.textContent.includes('写真を保存'));
  closed=true;await sleep(400);assert('completed後の瞬きで状態を変更しない',document.querySelector('main').dataset.gamePhase==='completed');
  closed=false;card.querySelector('.primary-button').click();await wait(()=>document.querySelector('main').dataset.gamePhase==='countdown');
  assert('リスタートで再キャリブレーション・結果解除',!document.querySelector('.game-result-card'));
