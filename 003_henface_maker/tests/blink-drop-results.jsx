@@ -21,14 +21,14 @@ try {
  }
  assert('瞬き感度と眼鏡余白を調整可能',!!document.querySelector('[aria-label="瞬き感度"]')&&!!document.querySelector('[aria-label="眼鏡余白"]'));
  assert('10回テストは手動開始/終了',Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='10回テスト開始')&&Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='測定終了'));
- document.querySelector('.game-debug-tools button:last-of-type').click();await tick();
+ [...document.querySelectorAll('.game-debug-tools button')].find(button=>button.textContent==='デバッグOFF').click();await tick();
  assert('デバッグOFFで通常のゲーム表示へ復帰',!document.querySelector('.game-debug-tools')&&!!document.querySelector('.game-start-panel'));
  root.unmount();root=createRoot(document.querySelector('#app'));
  const canvas=document.createElement('canvas');canvas.width=480;canvas.height=640;
  const ctx=canvas.getContext('2d');ctx.fillStyle='#ae8';ctx.fillRect(0,0,480,640);
  const calls=[];
  const session={...createBlinkDropSession('completed'),currentIndex:3,fixedOffsets:[-3,1,-2,1.5]};
-  root.render(<main className="henface-app layout-simple mode-blink-drop" data-game-phase="completed"><header className="app-header"><h1>瞬きキャッチ</h1></header><div className="camera-workspace"><section className="viewer-card"><div className="preview-frame"><canvas width="480" height="640"/><BlinkDropHud session={session} countdownText="START!" difficulty="NORMAL" selectDifficulty={()=>{}} triggerSettings={defaultFaceTriggers()} selectTriggers={()=>{}} settingsDisabled={false} cameraActive={true} tracking={true} start={()=>{}} pause={()=>{}} resume={()=>{}} restart={()=>calls.push('restart')} save={()=>calls.push('save')} exit={()=>calls.push('exit')}/></div></section></div></main>);
+  root.render(<main className="henface-app layout-simple mode-blink-drop" data-game-phase="completed"><header className="app-header"><h1>カオストップ！</h1></header><div className="camera-workspace"><section className="viewer-card"><div className="preview-frame"><canvas width="480" height="640"/><BlinkDropHud session={session} countdownText="START!" difficulty="NORMAL" selectDifficulty={()=>{}} gameMode="free" selectMode={()=>{}} challengeId="perfect" selectChallenge={()=>{}} setup={()=>calls.push('setup')} triggerSettings={defaultFaceTriggers()} selectTriggers={()=>{}} settingsDisabled={false} cameraActive={true} tracking={true} start={()=>{}} pause={()=>{}} resume={()=>{}} restart={()=>calls.push('restart')} save={()=>calls.push('save')} exit={()=>calls.push('exit')}/></div></section></div></main>);
  await tick();
  const img=document.querySelector('canvas');
  const card=document.querySelector('.game-result-card'),a=img.getBoundingClientRect(),b=card.getBoundingClientRect();
@@ -36,7 +36,7 @@ try {
  assert('画像と結果カードが重ならず画面内に表示',a.bottom<=b.top+1&&b.bottom<=844&&document.documentElement.scrollWidth<=390);
  assert('完成・評価・2つのスコアが見える',card.textContent.includes('完成！')&&card.textContent.includes('正解度')&&card.textContent.includes('変顔度')&&card.querySelector('strong').textContent.length>0);
  for(const button of card.querySelectorAll('button')){assert(button.textContent+'はタッチ可能',button.getBoundingClientRect().height>=44&&!button.disabled);button.click();}
- assert('再挑戦・保存・通常へ戻るの各処理を実行',calls.join(',')==='restart,save,exit');
+ assert('再挑戦・保存・モード選択・通常へ戻るの各処理を実行',calls.join(',')==='restart,save,setup,exit');
  document.documentElement.dataset.result='pass';
 }catch(error){results.push(error.stack);document.documentElement.dataset.result='fail';}
 document.querySelector('#results').textContent=results.join('\n');

@@ -1,4 +1,5 @@
 import type { Landmark, Point } from "../featureRenderer";
+import type { GameMode, ChallengeRun } from "./faceChallenge";
 
 export const BLINK_DROP_PARTS = ["rightEye", "leftEye", "nose", "mouth"] as const;
 export type BlinkDropPart = typeof BLINK_DROP_PARTS[number];
@@ -28,6 +29,8 @@ export const BLINK_DROP_LABELS: Record<BlinkDropPart, string> = {
 };
 
 export type BlinkDropSession = {
+  gameMode: GameMode;
+  challenge?: ChallengeRun;
   phase: BlinkDropPhase;
   difficulty: BlinkDropDifficulty;
   currentIndex: number;
@@ -47,7 +50,7 @@ const START_OFFSET = -6;
 const END_OFFSET = 2;
 
 export function createBlinkDropSession(phase: BlinkDropPhase = "ready", difficulty: BlinkDropDifficulty = "NORMAL"): BlinkDropSession {
-  return { phase, difficulty, currentIndex: 0, fixedOffsets: [null, null, null, null], fixedPositions: [null, null, null, null],
+  return { phase, difficulty, gameMode: "free", currentIndex: 0, fixedOffsets: [null, null, null, null], fixedPositions: [null, null, null, null],
     fixedTransforms: [null, null, null, null],
     fixedBrowOffsets: [null, null, null, null], partStartedAt: 0, pauseStartedAt: 0, countdownStartedAt: 0, fixingStartedAt: 0 };
 }

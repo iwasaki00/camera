@@ -8,9 +8,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 import { createFeatureRenderer } from "./featureRenderer";
 import type { EffectState, Landmark, PartConfig, PartId } from "./featureRenderer";
-import BlinkDropHud, { FaceTriggerControls } from "./game/BlinkDropHud";
+import BlinkDropHud, { FaceTriggerControls, GameModeControls } from "./game/BlinkDropHud";
 import { FaceTriggerManager, readFaceTriggers, saveFaceTriggers } from "./game/faceTriggers";
 import type { FaceTrigger, FaceTriggerSettings } from "./game/faceTriggers";
+import { GAME_TITLE, GAME_SUBTITLE, createChallengeRun, recordChallengeCatch, renderChallengeGuide } from "./game/faceChallenge";
+import type { GameMode, ChallengeId } from "./game/faceChallenge";
 import { BLINK_DROP_DIFFICULTIES, BlinkDetector, advanceBlinkDrop, beginBlinkDrop, catchBlinkDropPart, createBlinkDropSession, fallingStateAt,
   countdownLabel, pauseBlinkDrop, resumeBlinkDrop, startBlinkDropCountdown } from "./game/blinkDropGame";
 import type { BlinkDropSession, BlinkSensitivity, BlinkDropDifficulty } from "./game/blinkDropGame";
@@ -234,6 +236,8 @@ const PRESET_DIAGNOSIS: Record<keyof typeof PRESETS, string> = {
 export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const challengeGuideRef = useRef<HTMLCanvasElement | null>(null);
+  const guideWasVisibleRef = useRef(false);
   const frameRef = useRef<HTMLDivElement | null>(null);
   const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<ReturnType<typeof createFeatureRenderer> | null>(null);
@@ -293,6 +297,8 @@ export default function App() {
   const [appMode, setAppMode] = useState<"camera" | "blink-drop">("camera");
   const [gameSession, setGameSession] = useState<BlinkDropSession>(createBlinkDropSession);
   const [difficulty, setDifficulty] = useState<BlinkDropDifficulty>("NORMAL");
+  const [gameMode, setGameMode] = useState<GameMode>("free");
+  const [challengeId, setChallengeId] = useState<ChallengeId>("perfect");
   const [countdownText, setCountdownText] = useState("3");
   const [settingsOpen, setSettingsOpen] = useState(readSettingsOpen);
   const [randomStrength, setRandomStrength] = useState<RandomStrength>(readRandomStrength);
@@ -322,6 +328,12 @@ export default function App() {
     return sourceCanvasRef.current;
   }
 
+  function clearChallengeGuide(): void {
+    const guide = challengeGuideRef.current;
+    guide?.getContext("2d")?.clearRect(0, 0, guide.width, guide.height);
+    guideWasVisibleRef.current = false;
+  }
+
   async function ensureLandmarker(): Promise<FaceLandmarker> {
     if (faceLandmarkerRef.current) {
       return faceLandmarkerRef.current;
@@ -343,6 +355,7 @@ export default function App() {
   }
 
   function stopCamera(): void {
+    clearChallengeGuide();
     cancelAnimationFrame(animationFrameRef.current);
     animationFrameRef.current = 0;
     lastVideoTimeRef.current = -1;
@@ -463,6 +476,17 @@ export default function App() {
       gameSessionRef.current.phase === "completed" ? "normal" : gameDebugModeRef.current);
     else rendererRef.current.renderFeatureEffects(sourceCanvas, ctx, landmarks, effectStateRef.current, undefined,
       { effects: faceEffectsRef.current, quality: profile });
+    const guide = challengeGuideRef.current;
+    const showGuide = gameActive && gameSessionRef.current.gameMode === "challenge" &&
+      ["countdown", "playing", "fixing", "paused"].includes(gameSessionRef.current.phase);
+    if (guide && showGuide) {
+      if (guide.width !== canvas.width || guide.height !== canvas.height) { guide.width = canvas.width; guide.height = canvas.height; }
+      const guideCtx = guide.getContext("2d");
+      if (guideCtx) renderChallengeGuide(guideCtx, landmarks ? gameRendererRef.current.getGeometry(landmarks, canvas.width, canvas.height) : null, gameSessionRef.current);
+      guideWasVisibleRef.current = true;
+    } else if (guide && guideWasVisibleRef.current) {
+      clearChallengeGuide();
+    }
     if (gameActive && debugRef.current && blinkDebugPanelRef.current && now - lastBlinkDebugAtRef.current > 200) {
       lastBlinkDebugAtRef.current = now;
       const d = blinkDetectorRef.current.debug, m = metricsRef.current.latest;
@@ -624,6 +648,7 @@ export default function App() {
 
   function updateGame(next: BlinkDropSession): void {
     gameSessionRef.current = next;
+    if (next.phase === "ready" || next.phase === "completed" || next.phase === "error") clearChallengeGuide();
     if (next.phase === "countdown" || (next.phase === "paused" && next.pausedPhase === "countdown")) {
       publishCountdown(next, performance.now());
     }
@@ -642,7 +667,12 @@ export default function App() {
     const position = gameRendererRef.current.turnPosition(landmarks, source.width, source.height, session.currentIndex, motion);
     if (!position) { manager.debug.rejection = "顔ローカル座標未取得"; return; }
     const browOffset = gameRendererRef.current.turnBrowOffset(landmarks, source.width, source.height, session.currentIndex);
-    updateGame(catchBlinkDropPart(session, now, position, browOffset));
+    let caught = catchBlinkDropPart(session, now, position, browOffset);
+    if (session.gameMode === "challenge") {
+      const geometry = gameRendererRef.current.getGeometry(landmarks, source.width, source.height);
+      if (geometry) caught = recordChallengeCatch(caught, geometry);
+    }
+    updateGame(caught);
     manager.accept(trigger, now);
   }
 
@@ -666,6 +696,7 @@ export default function App() {
 
   async function startBlinkDrop(): Promise<void> {
     const selectedDifficulty = difficulty;
+    const selectedMode = gameMode, selectedChallenge = challengeId;
     const selectedTriggers = { ...triggerSettings };
     blinkTestRef.current.running = false; setBlinkTestRunning(false);
     if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current);
@@ -676,7 +707,16 @@ export default function App() {
       updateGame({ ...createBlinkDropSession("error"), error: "カメラを起動できませんでした。" });
       return;
     }
-    updateGame(startBlinkDropCountdown(performance.now(), selectedDifficulty));
+    updateGame({ ...startBlinkDropCountdown(performance.now(), selectedDifficulty), gameMode: selectedMode,
+      challenge: selectedMode === "challenge" ? createChallengeRun(selectedChallenge, selectedDifficulty) : undefined });
+  }
+
+  function returnToGameSetup(): void {
+    if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current);
+    gameTimerRef.current = null;
+    blinkTestRef.current.running = false; setBlinkTestRunning(false);
+    triggerManagerRef.current!.reset(triggerSettings);
+    updateGame(createBlinkDropSession());
   }
 
   function pauseGame(): void { updateGame(pauseBlinkDrop(gameSessionRef.current, performance.now())); }
@@ -754,7 +794,7 @@ export default function App() {
       data-countdown-label={debug ? countdownText : undefined}
       data-countdown-start={debug ? gameSession.countdownStartedAt : undefined} data-pause-start={debug ? gameSession.pauseStartedAt : undefined} data-paused-phase={debug ? gameSession.pausedPhase : undefined}>
       <header className="app-header">
-        <div><h1>{appMode === "blink-drop" ? "瞬きキャッチ" : "変顔メーカー"}</h1><p className="app-subtitle">{appMode === "blink-drop" ? "顔パーツ落下ゲーム" : "顔エフェクトカメラ"}</p></div>
+        <div><h1>{appMode === "blink-drop" ? GAME_TITLE : "変顔メーカー"}</h1><p className="app-subtitle">{appMode === "blink-drop" ? GAME_SUBTITLE : "顔エフェクトカメラ"}</p></div>
         {appMode === "blink-drop" ? <button className="minor-button game-header-exit" type="button" onClick={exitBlinkDrop}>通常へ戻る</button> : <label className="layout-picker">レイアウト
           <select aria-label="レイアウト" value={layout} onChange={event => setLayout(event.target.value as Layout)}>
             <option value="standard">standard</option><option value="compact">compact</option><option value="edge-controls">edge-controls</option><option value="simple">simple</option>
@@ -776,6 +816,8 @@ export default function App() {
           <option value="bounds">bounds · 抽出範囲</option>
           <option value="blink-test">blink-test · 表情単独テスト</option>
         </select></label>
+        {gameDebugMode !== "normal" && gameSession.phase === "ready" && <GameModeControls mode={gameMode} selectMode={setGameMode}
+          challengeId={challengeId} selectChallenge={setChallengeId} difficulty={difficulty} disabled={status === "起動中" || blinkTestRunning} />}
         {gameDebugMode !== "normal" && gameSession.phase === "ready" && <label>難易度
           <select aria-label="ゲーム難易度" value={difficulty} onChange={e => setDifficulty(e.target.value as BlinkDropDifficulty)}>
             {BLINK_DROP_DIFFICULTIES.map(value => <option key={value} value={value}>{value}</option>)}
@@ -826,15 +868,17 @@ export default function App() {
           }}>
             <canvas ref={canvasRef} aria-label="変顔メーカーのプレビュー" />
             <video ref={videoRef} playsInline muted />
+            <canvas ref={challengeGuideRef} className="challenge-guide" aria-label="チャレンジ目標ガイド" aria-hidden="true" />
             {!cameraActive && <div className="placeholder">{appMode === "blink-drop" ? "スタートでカメラを起動します" : "カメラを起動して遊ぼう"}</div>}
             {loadingOverlay && <div className="loading-overlay">{loadingOverlay}</div>}
-            {appMode === "camera" && <button className="game-entry-button" type="button" onClick={enterBlinkDrop}><span aria-hidden="true">👁</span> 瞬きキャッチ</button>}
+            {appMode === "camera" && <button className="game-entry-button" type="button" onClick={enterBlinkDrop}><span aria-hidden="true">👁</span> {GAME_TITLE}</button>}
             {appMode === "camera" && layout === "simple" && <button className="simple-random-button" type="button" aria-label="全パーツをランダム" onClick={randomizeFace}>
               <span aria-hidden="true">🎲</span> ランダム
             </button>}
             {appMode === "blink-drop" && (!(debug && gameDebugMode !== "normal") || gameSession.phase === "completed" ||
               ((gameDebugMode === "parts-only") && gameSession.phase !== "ready")) &&
               <BlinkDropHud session={gameSession} countdownText={countdownText} difficulty={difficulty} selectDifficulty={setDifficulty} cameraActive={cameraActive} tracking={faceTracked}
+                gameMode={gameMode} selectMode={setGameMode} challengeId={challengeId} selectChallenge={setChallengeId} setup={returnToGameSetup}
                 triggerSettings={triggerSettings} selectTriggers={selectTriggers} settingsDisabled={status === "起動中"}
                 start={startBlinkDrop} pause={pauseGame} resume={resumeGame} restart={startBlinkDrop} exit={exitBlinkDrop} save={takeScreenshot} />}
           </div>

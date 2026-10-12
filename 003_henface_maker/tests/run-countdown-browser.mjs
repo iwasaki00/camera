@@ -90,7 +90,7 @@ try {
   ` });
   const url = new URL(report.url); url.searchParams.set('debug', '1');
   await call('Page.navigate', { url: url.href }); await call('Page.bringToFront');
-  await wait(s => s.text.includes('瞬きキャッチ'));
+  await wait(s => s.text.includes('カオストップ！'));
   report.version = await evaluate(`document.querySelector('main')?.dataset.appVersion ?? [...document.querySelectorAll('small')].find(s => s.textContent.startsWith('バージョン '))?.textContent.replace('バージョン ', '')`);
   report.scripts = await evaluate(`[...document.scripts].map(s => s.src).filter(Boolean)`);
   report.serviceWorkers = await evaluate(`navigator.serviceWorker.getRegistrations().then(items => items.length)`);

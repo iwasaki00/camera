@@ -1,9 +1,10 @@
 {
   "name": "henface-maker",
   "private": true,
-  "version": "0.7.1",
+  "version": "0.8.0",
   "type": "module",
   "scripts": {
+    "test:challenge": "node tests/face-challenge.test.mjs",
     "test:triggers": "node tests/face-triggers.test.mjs",
     "test:difficulty": "node tests/blink-difficulty.test.mjs",
     "dev": "node ./node_modules/vite/bin/vite.js",

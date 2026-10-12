@@ -77,7 +77,7 @@ try {
   frame.style.aspectRatio = '16 / 9';
   assert('縦横比変更後も右上位置維持', Math.abs(document.querySelector('.simple-random-button').getBoundingClientRect().right - b.right) < 1);
   document.querySelector('.game-entry-button').click(); await tick();
-  assert('瞬きキャッチ開始画面へ切替', document.querySelector('.game-start-panel h2').textContent === '瞬きキャッチ');
+  assert('カオストップ！開始画面へ切替', document.querySelector('.game-start-panel h2').textContent === 'カオストップ！');
   assert('ゲーム中は通常編集UIを非表示', !visible(document.querySelector('.settings-toggle')) && !visible(document.querySelector('.extra-tools')));
   assert('ゲーム画面を縦いっぱいに表示', document.querySelector('.preview-frame').clientHeight > 740);
   document.querySelector('.game-header-exit').click(); await tick();

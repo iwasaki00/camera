@@ -141,7 +141,7 @@ try{
  }
  const count=feeds;await sleep(180);assert('MONSTER完成後もライブ処理を継続',feeds>count&&!!document.querySelector('.game-result-card'));
  const current=canvas.toDataURL();document.querySelector('.game-result-card .secondary-button').click();assert('写真保存は押した瞬間の合成Canvas',saved===current);
- document.querySelector('.game-result-card .minor-button').click();await sleep(60);
+ [...document.querySelectorAll('.game-result-card .minor-button')].find(button=>button.textContent==='通常モードへ戻る').click();await sleep(60);
  assert('ゲーム難易度と通常ランダム強度monsterは別設定',document.querySelector('[aria-label="ランダム強度"]')?.value==='monster');
  document.documentElement.dataset.result='pass';
 }catch(error){results.push(error.stack);document.documentElement.dataset.result='fail';}

@@ -46,13 +46,13 @@ try {
   Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});
   history.replaceState(null,'','?debug=1');localStorage.clear();
   root=createRoot(document.querySelector('#app'));root.render(<App/>);await sleep(80);
-  clickText('👁 瞬きキャッチ');await sleep(80);
+  clickText('👁 カオストップ！');await sleep(80);
   assert('初期3操作ON、NORMALは独立',checkbox('瞬き').checked&&checkbox('目を大きく開ける').checked&&checkbox('口を大きく開ける').checked&&document.querySelector('[aria-label="ゲーム難易度"]').value==='NORMAL');
   const start=document.querySelector('.game-start-panel .primary-button').getBoundingClientRect();
   assert('390×844で開始・操作設定が画面内、横スクロールなし',start.top>=0&&start.bottom<=844&&checkbox('口を大きく開ける').getBoundingClientRect().bottom<=844&&document.documentElement.scrollWidth===390);
   checkbox('目を大きく開ける').click();checkbox('口を大きく開ける').click();await sleep(60);
   // Remount verifies actual localStorage restoration into React and detector config.
-  root.unmount();root=createRoot(document.querySelector('#app'));root.render(<App/>);await sleep(80);clickText('👁 瞬きキャッチ');await sleep(60);
+  root.unmount();root=createRoot(document.querySelector('#app'));root.render(<App/>);await sleep(80);clickText('👁 カオストップ！');await sleep(60);
   assert('保存した操作ON/OFFを再起動で復元',checkbox('瞬き').checked&&!checkbox('目を大きく開ける').checked&&!checkbox('口を大きく開ける').checked);
   choose('[aria-label="ゲームデバッグ表示"]','parts-only');await sleep(60);
   assert('デバッグでも難易度・3操作を重複なく設定可能',document.querySelectorAll('[aria-label="ゲーム難易度"]').length===1&&document.querySelectorAll('.game-trigger-settings').length===1);
