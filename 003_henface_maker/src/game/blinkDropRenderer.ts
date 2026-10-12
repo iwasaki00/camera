@@ -3,6 +3,7 @@ import type { FeatureRegion, Landmark, Point } from "../featureRenderer";
 import { BLINK_DROP_PARTS, fallingStateAt } from "./blinkDropGame";
 import type { BlinkDropPart, BlinkDropSession, FallingState } from "./blinkDropGame";
 import { convexHull, paintContourMask, pointInPolygon, roundedBand } from "./blinkDropMasks";
+import { createCompletedBlender } from "./completedBlend";
 
 type Surface = { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D };
 export type RegionKind = BlinkDropPart | "rightBrow" | "leftBrow";
@@ -31,15 +32,16 @@ function createSurface(): Surface {
   return { canvas, ctx };
 }
 
-export function createBlinkDropRenderer() {
+export function createBlinkDropRenderer(options: { completedPolish?: boolean } = {}) {
   const patches = new Map<string, Surface>();
   const masks = new Map<string, HTMLCanvasElement>();
   const smoothSmall = createSurface(), smoothLarge = createSurface();
   const alignedSource = createSurface(), alignedOutput = createSurface();
   const skinField = createSurface(), skinLayer = createSurface(), skinBlend = createSurface();
+  const completedBlender = createCompletedBlender();
   let glassesMargin = 1;
   let lastTrackedAt = -Infinity;
-  const metrics = { warpMs: 0, compositeMs: 0, transformedParts: 0 };
+  const metrics = { warpMs: 0, compositeMs: 0, transformedParts: 0, polishMs: 0, polishedParts: 0, colorReads: 0, polishColorParts: 0 };
 
   function getSurface(width: number, height: number): Surface {
     const w = Math.max(24, Math.ceil(width / 8) * 8), h = Math.max(24, Math.ceil(height / 8) * 8), key = w + ":" + h;
@@ -285,7 +287,16 @@ export function createBlinkDropRenderer() {
     dest.restore();
   }
 
-  function drawPart(source: CanvasRenderingContext2D, dest: CanvasRenderingContext2D, region: PartRegion, shift: Point): void {
+  function drawPart(source: CanvasRenderingContext2D, dest: CanvasRenderingContext2D, region: PartRegion, shift: Point,
+    polishTransform?: { pivot: Point; rotation: number; scale: number }): void {
+    if (polishTransform) {
+      const { pivot, rotation, scale } = polishTransform, c = Math.cos(rotation), s = Math.sin(rotation);
+      completedBlender.draw(source, dest, region, shift, p => {
+        const x = (p.x + shift.x - pivot.x) * scale, y = (p.y + shift.y - pivot.y) * scale;
+        return { x: pivot.x + c * x - s * y, y: pivot.y + s * x + c * y };
+      });
+      return;
+    }
     const padX = region.width * 0.18, padY = region.height * 0.35;
     const width = region.width + padX * 2, height = region.height + padY * 2;
     const box = { x: region.center.x - width / 2, y: region.center.y - height / 2, width, height };
@@ -319,7 +330,7 @@ export function createBlinkDropRenderer() {
 
   function drawTurn(source: CanvasRenderingContext2D, dest: CanvasRenderingContext2D, parts: Record<RegionKind, PartRegion>,
     pose: FacePose, width: number, index: number, motion: Pick<FallingState, "verticalOffset" | "horizontalOffset" | "rotation" | "scale">,
-    position?: Point | null, browOffset?: Point | null): void {
+    position?: Point | null, browOffset?: Point | null, polished = false): void {
     const kind = BLINK_DROP_PARTS[index];
     const shift = position ? { x: pose.center.x + position.x * pose.scale - parts[kind].center.x,
       y: pose.center.y + position.y * pose.scale - parts[kind].center.y } : { x: motion.horizontalOffset * width, y: motion.verticalOffset * parts[kind].dropHeight };
@@ -330,13 +341,14 @@ export function createBlinkDropRenderer() {
       const center = { x: parts[kind].center.x + shift.x, y: parts[kind].center.y + shift.y };
       dest.save(); dest.translate(center.x, center.y); dest.rotate(motion.rotation); dest.scale(motion.scale, motion.scale); dest.translate(-center.x, -center.y);
     }
-    drawPart(source, dest, parts[kind], shift);
+    const polishTransform = polished ? { pivot: { x: parts[kind].center.x + shift.x, y: parts[kind].center.y + shift.y }, rotation: motion.rotation, scale: motion.scale } : undefined;
+    drawPart(source, dest, parts[kind], shift, polishTransform);
     if (index < 2) {
       const brow = parts[index === 0 ? "rightBrow" : "leftBrow"];
       const browShift = position && browOffset ? {
         x: pose.center.x + (position.x + browOffset.x) * pose.scale - brow.center.x,
         y: pose.center.y + (position.y + browOffset.y) * pose.scale - brow.center.y } : shift;
-      drawPart(source, dest, brow, browShift);
+      drawPart(source, dest, brow, browShift, polishTransform);
     }
     if (transformed) dest.restore();
   }
@@ -344,6 +356,7 @@ export function createBlinkDropRenderer() {
   function render(base: HTMLCanvasElement, dest: CanvasRenderingContext2D, landmarks: readonly Landmark[] | undefined,
     session: BlinkDropSession, now: number, debugMode: BlinkDropDebugMode = "normal"): boolean {
     const started = performance.now(); metrics.warpMs = 0; metrics.transformedParts = 0;
+    metrics.polishMs = 0; metrics.polishedParts = 0; metrics.colorReads = 0; metrics.polishColorParts = 0;
     const g = landmarks ? geometry(landmarks, base.width, base.height) : null;
     if (!g && activePhases.has(session.phase) && now - lastTrackedAt < 180) { metrics.compositeMs = performance.now() - started; return false; }
     dest.save(); dest.setTransform(1, 0, 0, 1, 0, 0); dest.globalAlpha = 1; dest.globalCompositeOperation = "source-over";
@@ -364,11 +377,13 @@ export function createBlinkDropRenderer() {
     if (debugMode !== "parts-only") output.drawImage(alignedSource.canvas, 0, 0);
     if (debugMode !== "parts-only" && debugMode !== "bounds") renderBlankFace(source, output, partRegions, g.skinOutline, g.eraseOutline, pose);
     const preview = debugMode === "blank-face" || debugMode === "bounds";
+    const polished = session.phase === "completed" && debugMode === "normal" && options.completedPolish !== false;
+    if (polished) completedBlender.beginFrame(output, g.skinOutline, REGION_ORDER.map(kind => partRegions[kind]), now);
     const width = faceWidth(g.skinOutline);
     if (!preview) session.fixedOffsets.forEach((offset, index) => {
       if (offset !== null) drawTurn(source, output, partRegions, pose, width, index,
         { verticalOffset: offset, horizontalOffset: 0, rotation: 0, scale: 1, ...session.fixedTransforms[index] },
-        session.fixedPositions[index], session.fixedBrowOffsets[index]);
+        session.fixedPositions[index], session.fixedBrowOffsets[index], polished);
     });
     if (!preview && (session.phase === "playing" || (session.phase === "paused" && (!session.pausedPhase || session.pausedPhase === "playing")))) {
       drawTurn(source, output, partRegions, pose, width, session.currentIndex, fallingStateAt(session, now));
@@ -387,6 +402,7 @@ export function createBlinkDropRenderer() {
       }
     }
     metrics.warpMs = performance.now() - started;
+    if (polished) { metrics.polishMs = completedBlender.metrics.ms; metrics.polishedParts = completedBlender.metrics.parts; metrics.colorReads = completedBlender.metrics.colorReads; metrics.polishColorParts = completedBlender.metrics.colorCorrectedParts; }
     const compositeStart = performance.now();
     dest.translate(pose.center.x, pose.center.y); dest.rotate(pose.angle); dest.translate(-pose.center.x, -pose.center.y);
     dest.drawImage(alignedOutput.canvas, 0, 0);
@@ -394,6 +410,6 @@ export function createBlinkDropRenderer() {
   }
 
   return { render, getRegions: regions, getGeometry: geometry, turnPosition, turnBrowOffset, metrics,
-    setGlassesMargin: (value: number) => { glassesMargin = Math.max(0.8, Math.min(1.3, value)); masks.clear(); },
-    clearCache: () => { patches.clear(); masks.clear(); lastTrackedAt = -Infinity; } };
+    setGlassesMargin: (value: number) => { glassesMargin = Math.max(0.8, Math.min(1.3, value)); masks.clear(); completedBlender.clearCache(); },
+    clearCache: () => { patches.clear(); masks.clear(); completedBlender.clearCache(); lastTrackedAt = -Infinity; } };
 }

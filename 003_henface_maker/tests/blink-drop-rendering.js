@@ -77,8 +77,10 @@ try{
  renderer.render(base,ctx,landmarks,playing,1300);const falling=pixels(out).slice();assert('落下中パーツを合成',!equal(falling,blank));
  const completed={...playing,phase:'completed',currentIndex:3,fixedOffsets:[-3,1,-2,1.5]};
  renderer.render(base,ctx,landmarks,completed,2000);const final=pixels(out).slice();assert('固定済み4パーツを合成',!equal(final,falling)&&!equal(final,source));
+ renderer.render(base,ctx,landmarks,{...completed,phase:'fixing'},2000);const fixed=pixels(out).slice();
  renderer.render(base,ctx,landmarks,{...completed,phase:'paused',pausedPhase:'fixing',pauseStartedAt:2100},9999);
- assert('固定演出中の一時停止で同じパーツを二重描画しない',equal(final,pixels(out)));
+ assert('固定演出中の一時停止は軽量描画を維持し二重描画しない',equal(fixed,pixels(out)));
+ renderer.render(base,ctx,landmarks,completed,2000);
  window.testImages.completed=out.toDataURL();
  assert('完成後も元フレームは不変',equal(source,pixels(base)));
  renderer.render(base,ctx,landmarks,playing,2000,'original');
