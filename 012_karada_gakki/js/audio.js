@@ -20,6 +20,7 @@ export const SOUND_LABELS = {
 
 export class AudioEngine {
   constructor() {
+    this.enabled = false;
     this.context = null;
     this.master = null;
     this.volume = 0.8;
@@ -30,19 +31,26 @@ export class AudioEngine {
   async unlock() {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) throw new Error("Web Audio APIに対応していません。");
-    if (!this.context) {
+    if (!this.context || this.context.state === "closed") {
+      this.buffers.clear();
       this.context = new AudioContext();
       this.master = this.context.createGain();
       this.master.gain.value = this.volume;
       this.master.connect(this.context.destination);
     }
-    if (this.context.state === "suspended") await this.context.resume();
+    if (this.context.state !== "running") await this.context.resume();
+    if (this.context.state !== "running") throw new Error("AudioContextを開始できませんでした。再試行してください。");
     const silent = this.context.createBuffer(1, 1, this.context.sampleRate);
     const source = this.context.createBufferSource();
     source.buffer = silent;
     source.connect(this.master);
     source.start();
     this.preload();
+  }
+
+  setEnabled(enabled) {
+    // 新規発音のみを止め、再生中の短い音は自然に減衰させる。
+    this.enabled = enabled;
   }
 
   setVolume(value) {
@@ -65,7 +73,7 @@ export class AudioEngine {
   }
 
   play(name, intensity = 1) {
-    if (!this.context || this.context.state !== "running") return;
+    if (!this.enabled || !this.context || this.context.state !== "running") return;
     const output = this.context.createGain();
     output.gain.value = Math.max(0, Math.min(1, intensity));
     output.connect(this.master);

@@ -7,11 +7,17 @@ let modulePromise;
 let filesetPromise;
 
 export async function getVision() {
-  modulePromise ||= import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${VISION_VERSION}/+esm`);
+  modulePromise ||= import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${VISION_VERSION}/+esm`).catch((error) => {
+    modulePromise = null;
+    throw error;
+  });
   return modulePromise;
 }
 
 export async function getFileset() {
-  filesetPromise ||= getVision().then(({ FilesetResolver }) => FilesetResolver.forVisionTasks(WASM_ROOT));
+  filesetPromise ||= getVision().then(({ FilesetResolver }) => FilesetResolver.forVisionTasks(WASM_ROOT)).catch((error) => {
+    filesetPromise = null;
+    throw error;
+  });
   return filesetPromise;
 }

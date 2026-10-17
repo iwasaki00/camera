@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#07110f">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -34,7 +34,7 @@
         <button data-mode="right">右側面</button>
       </div>
 
-      <div class="status-pill" id="statusPill"><span></span><b id="statusText">カメラ未起動</b></div>
+      <div class="status-pill" id="statusPill"><span></span><b id="statusText" role="status">カメラ未起動</b></div>
       <div class="guide" id="guide"><div class="guide-head"></div><div class="guide-body"></div><p>全身が枠内に入る位置に立ってください</p></div>
 
       <div class="empty-state" id="emptyState">
@@ -73,16 +73,16 @@
   <dialog id="resultDialog" class="sheet">
     <article>
       <header><div><small>ANALYSIS COMPLETE</small><h2>解析結果</h2></div><button data-close="result" aria-label="閉じる">×</button></header>
-      <div class="score"><div><span id="scoreValue">—</span><small>/ 100</small></div><p id="scoreComment"></p></div>
-      <div class="result-list" id="resultList"></div>
-      <footer><button class="secondary wide" id="saveButton">結果を保存</button><button class="primary wide" data-close="result">カメラに戻る</button></footer>
+      <p class="score-note">参考スコア（100点満点）</p><div class="score"><div><span id="scoreValue">—</span><small>/ 100</small></div><p id="scoreComment"></p></div>
+      <p class="result-notice">カメラの角度・距離・衣服・照明によって結果は変動します。医療診断や健康状態の確定評価ではありません。</p><div class="result-list" id="resultList"></div>
+      <footer><button class="secondary wide" id="saveButton" aria-live="polite">結果を保存</button><button class="primary wide" data-close="result">カメラに戻る</button></footer>
     </article>
   </dialog>
 
   <dialog id="historyDialog" class="sheet">
     <article>
       <header><div><small>LOCAL HISTORY</small><h2>保存した解析</h2></div><button data-close="history" aria-label="閉じる">×</button></header>
-      <div id="historyList" class="history-list"></div>
+      <p id="historyMessage" role="status" aria-live="polite"></p><div id="historyList" class="history-list"></div>
       <section class="compare" id="comparePanel" hidden><h3>Before / After</h3><div id="compareTable"></div></section>
     </article>
   </dialog>

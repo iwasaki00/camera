@@ -28,6 +28,9 @@ let settings = loadSettings();
 let mode = "face";
 let recognizer = null;
 let running = false;
+let starting = false;
+let appGeneration = 0;
+let pendingMode = null;
 let animationId = 0;
 let lastVideoTime = -1;
 let lastInferenceAt = 0;
@@ -99,6 +102,7 @@ function renderDebug(scores = {}, thresholds = {}, motion = {}) {
 }
 
 function triggerSound(actionKey, motion = null) {
+  if (!running) return;
   const sound = settings.assignments[mode][actionKey];
   const speed = mode === "body" ? motion?.speed || 0 : 0;
   const intensity = mode === "body" ? motion?.volume ?? 0.25 : 1;
@@ -123,7 +127,7 @@ function triggerSound(actionKey, motion = null) {
 }
 
 async function switchMode(nextMode) {
-  if (!running || (nextMode === mode && recognizer)) return;
+  if (!running || (nextMode === mode && (recognizer || pendingMode))) return;
   const generation = ++modeGeneration;
   mode = nextMode;
   recognizer?.close();
@@ -137,16 +141,23 @@ async function switchMode(nextMode) {
   renderGestureStrip();
   renderAssignments();
   setTracking(`${mode === "face" ? "顔" : "体"}モデルを準備中…`);
+  const next = nextMode === "face" ? new FaceMode() : new BodyMode();
+  pendingMode = generation;
   try {
-    const next = mode === "face" ? new FaceMode() : new BodyMode();
     await next.init();
     if (!running || generation !== modeGeneration) { next.close(); return; }
     recognizer = next;
     lastVideoTime = -1;
+    lastInferenceAt = -Infinity;
     setTracking("認識を待っています", "ready");
   } catch (error) {
     console.error(error);
-    setTracking("モデルを読み込めません", "error");
+    next.close();
+    if (running && generation === modeGeneration) {
+      setTracking(`${nextMode === "face" ? "Face" : "Pose"} Landmarker読込失敗。同じモードを押して再試行`, "error");
+    }
+  } finally {
+    if (pendingMode === generation) pendingMode = null;
   }
 }
 
@@ -178,9 +189,9 @@ function processResult(result, now) {
   if (!ui.debugPanel.hidden) renderDebug(scores, thresholds, result.motion);
 }
 
-function renderFrame(now) {
-  if (!running) return;
-  animationId = requestAnimationFrame(renderFrame);
+function renderFrame(now, generation) {
+  if (!running || generation !== appGeneration) return;
+  animationId = requestAnimationFrame((time) => renderFrame(time, generation));
   // iPhoneでの発熱を抑えるため、推論は最大24fpsに制限する。
   if (!recognizer || ui.video.readyState < 2 || ui.video.currentTime === lastVideoTime || now - lastInferenceAt < 41) return;
   lastInferenceAt = now;
@@ -212,39 +223,66 @@ function renderFrame(now) {
 }
 
 async function startApp() {
+  if (starting || running || document.hidden) return;
+  const generation = ++appGeneration;
+  starting = true;
+  const current = () => generation === appGeneration && !document.hidden;
   ui.startButton.disabled = true;
   ui.startStatus.classList.remove("error");
   ui.startStatus.textContent = "カメラと音を準備しています…";
   mode = $("input[name='startMode']:checked").value;
+  let stage = "audio";
   try {
     // 音声アンロックを最初のユーザー操作の同期チェーン内で実行する。
     await audio.unlock();
+    if (!current()) return;
     audio.setVolume(settings.volume / 100);
+    stage = "camera";
     await camera.start();
+    if (!current()) return;
     running = true;
+    audio.setEnabled(true);
+    lastVideoTime = -1;
+    lastInferenceAt = -Infinity;
+    fpsFrames = 0; currentFps = 0; fpsStartedAt = performance.now();
     ui.start.classList.remove("active");
     ui.play.classList.add("active");
     renderGestureStrip();
     renderSettings();
-    requestAnimationFrame(renderFrame);
+    animationId = requestAnimationFrame((time) => renderFrame(time, generation));
     await switchMode(mode);
   } catch (error) {
     console.error(error);
-    camera.stop();
-    running = false;
-    ui.startStatus.textContent = error.name === "NotAllowedError" ? "カメラが許可されていません。Safariの設定を確認してください。" : `開始できません: ${error.message}`;
+    if (!current()) return;
+    stopApp();
+    ui.startStatus.textContent = stage === "audio" ? `音声を利用できません: ${error.message}` : error.name === "NotAllowedError" ? "カメラの利用が許可されませんでした。ブラウザや端末の権限設定を確認してください。" : `カメラを開始できません: ${error.message}`;
     ui.startStatus.classList.add("error");
   } finally {
-    ui.startButton.disabled = false;
+    if (generation === appGeneration) {
+      starting = false;
+      ui.startButton.disabled = false;
+    }
   }
 }
 
 function stopApp() {
+  ++appGeneration;
+  starting = false;
   running = false;
+  audio.setEnabled(false);
+  pendingMode = null;
+  ui.startButton.disabled = false;
   ++modeGeneration;
   cancelAnimationFrame(animationId);
+  animationId = 0;
+  lastVideoTime = -1; lastInferenceAt = -Infinity;
   recognizer?.close(); recognizer = null;
   camera.stop(); detector.reset();
+  actionStates = {};
+  ui.canvas.getContext("2d").clearRect(0, 0, ui.canvas.width, ui.canvas.height);
+  renderGestureStrip();
+  setTracking("停止中");
+  if (ui.settings.open) ui.settings.close();
   ui.play.classList.remove("active");
   ui.start.classList.add("active");
   ui.startStatus.textContent = "もう一度タップすると再開できます";
@@ -261,7 +299,7 @@ function renderAssignments() {
     select.value = settings.assignments[mode][key];
     select.addEventListener("change", () => { settings.assignments[mode][key] = select.value; settings.preset = "custom"; saveSettings(settings); });
     const preview = document.createElement("button"); preview.type = "button"; preview.textContent = "♪"; preview.setAttribute("aria-label", `${label}の音を試聴`);
-    preview.addEventListener("click", () => audio.play(select.value));
+    preview.addEventListener("click", () => { if (running) audio.play(select.value); });
     row.append(name, select, preview);
     return row;
   }));
@@ -338,5 +376,8 @@ ui.cooldown.addEventListener("input", () => { settings.cooldown = Number(ui.cool
 ui.volume.addEventListener("input", () => { settings.volume = Number(ui.volume.value); ui.volumeValue.textContent = `${settings.volume}%`; audio.setVolume(settings.volume / 100); saveSettings(settings); });
 
 window.addEventListener("resize", resizeCanvas);
-window.addEventListener("pagehide", () => { if (running) stopApp(); });
+window.addEventListener("pagehide", stopApp);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopApp();
+});
 renderSettings();

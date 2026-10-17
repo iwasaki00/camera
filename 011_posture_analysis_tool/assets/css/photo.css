@@ -65,3 +65,69 @@ video,
     padding-inline: 12px;
   }
 }
+
+/* Keep the preview and primary controls inside the available Safari viewport. */
+html,body{width:100%;overflow-x:clip}
+button{touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.app{height:100dvh;min-height:100dvh;display:flex;flex-direction:column}
+.stage{height:auto;min-height:0;flex:1}
+.control-dock{height:auto;flex:none;padding:10px max(12px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
+.instruction{min-height:45px;height:auto;padding-block:6px}
+.instruction div{min-width:0}
+.instruction b{overflow-wrap:anywhere}
+.action-row{margin-top:10px}
+.analyze{min-width:0}
+.analyze small{overflow-wrap:anywhere}
+.disclaimer{line-height:1.5}
+.sheet{max-height:100dvh;max-width:min(760px,100vw);margin:auto auto 0}
+.sheet>article{overscroll-behavior:contain;overflow-x:hidden}
+.history-item{grid-template-columns:auto minmax(0,1fr) auto}
+.history-item span,.result-card b,.score p{min-width:0;overflow-wrap:anywhere}
+.score-note{margin:16px 0 0;color:var(--mint2);font-size:13px;font-weight:700}
+.result-notice{color:var(--muted);font-size:12px;line-height:1.7}
+#historyMessage{color:var(--muted);font-size:12px}
+@media(max-height:740px){
+  .empty-state{inset:158px 76px 12px 20px}
+  .scan-icon,.empty-state .eyebrow{display:none}
+  .empty-state h1{font-size:28px;margin:0 0 8px}
+  .empty-state>p:not(.eyebrow){font-size:11px;line-height:1.5;margin-bottom:10px}
+  .start-actions{min-width:0;width:100%;max-width:260px}
+  .start-actions .primary{padding:11px 12px;font-size:13px}
+  .start-actions .photo-button{padding:10px 8px;font-size:11px}
+  .tools{gap:5px;transform:none;top:165px}
+  .tools button{min-height:42px;width:49px;border-radius:12px;padding:4px 2px;white-space:nowrap}
+  .tools span{font-size:16px;margin:0}
+  .guide{inset:165px 70px 25px 45px}
+}
+@media(max-width:360px){
+  .brand b{font-size:11px}
+  .empty-state{top:166px}
+  .empty-state h1{font-size:24px}
+  .topbar{padding-inline:max(10px,env(safe-area-inset-left)) max(10px,env(safe-area-inset-right))}
+  .top-actions{gap:4px}
+  .instruction{gap:8px;padding-inline:9px}
+  .instruction b{font-size:11px}
+  .action-row .analyze{padding:8px;grid-template-columns:24px 1fr}
+  .analyze span{width:20px;height:20px;border-width:5px}
+  .analyze b{font-size:16px}
+  .analyze small{font-size:8px}
+}
+@media(max-height:450px) and (orientation:landscape){
+  .topbar{padding-top:calc(4px + env(safe-area-inset-top));padding-bottom:4px}
+  .mode-tabs{top:58px;left:calc(140px + env(safe-area-inset-left));transform:none}
+  .status-pill{top:108px;left:calc(140px + env(safe-area-inset-left));transform:none}
+  .empty-state{inset:55px 90px 8px 420px}
+  .empty-state h1,.empty-state>p:not(.eyebrow){display:none}
+  .start-actions{min-width:160px}
+  .tools{top:52px;right:max(12px,env(safe-area-inset-right));gap:3px}
+  .tools button{min-height:36px}
+  .tools span{font-size:13px}
+  .guide{inset:55px 40% 16px 40%}
+  .guide p{display:none}
+  .instruction{min-height:34px}
+  .instruction small{display:none}
+  .action-row{margin-top:6px}
+  .action-row .secondary{height:48px}
+  .analyze{height:50px}
+  .disclaimer{margin-top:5px}
+}

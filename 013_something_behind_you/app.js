@@ -304,6 +304,7 @@ async function startCamera(generation) {
     return { ok: true };
   } catch (error) {
     if (generation !== startGeneration) return { ok: false };
+    stopCamera();
     runtime.cameraPermission = error?.name === "NotAllowedError" ? "denied" : "failed";
     return { ok: false, message: cameraFailureMessage(error) };
   }
@@ -330,7 +331,7 @@ function beginSensorTimeout() {
 }
 
 async function startExperience() {
-  if (runtime.starting || runtime.started) return;
+  if (document.hidden || runtime.starting || runtime.started) return;
 
   const generation = ++startGeneration;
   stopCamera();
@@ -414,6 +415,7 @@ async function startExperience() {
   elements.startScreen.classList.add("is-hidden");
   window.addEventListener("deviceorientation", handleOrientation, true);
   elements.startButton.disabled = false;
+  showMessage("方向を確認しています", "端末をゆっくり動かしてください。新しい方位が取得できるまで演出を待機します。", false);
   beginSensorTimeout();
 }
 
@@ -567,17 +569,11 @@ for (const button of encounterView.buttons) {
 }
 
 document.addEventListener("visibilitychange", () => {
-  stalker.pause();
-  stopPresence();
   previousFrameAt = performance.now();
-  if (!document.hidden) return;
-  runtime.lastOrientationAt = -Infinity;
-  cleanupEncounterVisual();
-  hideEntity();
-  director.finish(performance.now());
-  if (encounterPausedAt === null) encounterPausedAt = performance.now();
-  if (runtime.appState === "RUNNING") setState(STATES.STALKING);
-  encounterView.escapeStartedAt = null;
+  if (document.hidden && (runtime.started || runtime.starting)) {
+    stopExperience();
+    setStartStatus("画面が非表示になったため停止しました。STARTで再開できます");
+  }
 });
 
 function updateGame(now, elapsedMs) {
@@ -599,6 +595,9 @@ function updateGame(now, elapsedMs) {
     director.finish(now);
     setState(STATES.STALKING);
     if (now - runtime.lastOrientationAt > CONFIG.orientationTimeout) {
+      if (runtime.orientationPermission !== "no-data") {
+        showMessage("方向データを待っています", "端末をゆっくり動かしてください。方向を取得できるまで演出を待機します。", false);
+      }
       runtime.orientationPermission = "no-data";
     }
     return;
@@ -607,6 +606,7 @@ function updateGame(now, elapsedMs) {
     if (director.deadline !== null) director.deadline += Math.max(0, now - encounterPausedAt);
     encounterPausedAt = null;
   }
+  if (runtime.orientationPermission === "no-data") hideMessage();
   runtime.orientationPermission = "active";
   const selected = director.update(now);
   if (selected) prepareEncounter(selected, now);

@@ -72,6 +72,7 @@ function harness(debug = true, cameraDenied = false, orientationDenied = false, 
   return {
     ...sandbox.testApp, nodes, buttons, distanceButtons, audioButtons, directionButtons, setNow: value => { now = value; }, stopped: () => stopped,
     pendingCamera(fn) { sandbox.navigator.mediaDevices.getUserMedia = fn; },
+    pendingOrientation(fn) { sandbox.window.DeviceOrientationEvent.requestPermission = fn; },
     resources() { return { sensors: Number(Boolean(windowEvents.deviceorientation)), timers: timers.size, frames: frames.length, nodes: nodes.size }; },
     flushFrame(value) { now = value; frames.splice(0).forEach(fn => fn(now)); },
     hide() { sandbox.document.hidden = true; documentEvents.visibilitychange(); },
@@ -147,7 +148,8 @@ app.flushFrame(420);
 assert.equal(app.runtime.state, "STALKING");
 app.buttons[1].click();
 app.hide();
-assert.equal(app.director.state, "COOLDOWN");
+assert.equal(app.runtime.appState, "STOPPED");
+assert.equal(app.director.currentEncounter, null);
 assert.equal(app.encounterView.animation, null);
 app.updateDebug(500);
 assert.ok(!app.nodes.get("#debugEncounter").textContent.includes("NaN"));
@@ -195,14 +197,18 @@ assert.equal(distanceApp.stalker.distance, pausedDistance);
 distanceApp.show();
 distanceApp.updateGame(3000, 100);
 assert.equal(distanceApp.stalker.distance, pausedDistance, "resume waits for fresh orientation");
+assert.equal(distanceApp.runtime.started, false, "visibility does not restart camera");
+await distanceApp.startExperience();
+assert.equal(distanceApp.stalker.distance, 85, "explicit restart resets distance");
+const restartedDistance = distanceApp.stalker.distance;
 distanceApp.handleOrientation({ webkitCompassHeading: 0 });
 distanceApp.runtime.angleDiff = 35;
 distanceApp.updateGame(3000, 100);
-assert.equal(distanceApp.stalker.distance, pausedDistance, "LOOKING stops without recovery");
+assert.equal(distanceApp.stalker.distance, restartedDistance, "LOOKING stops without recovery");
 distanceApp.runtime.stream = { getTracks: () => [{ readyState: "ended", stop() {} }] };
 distanceApp.runtime.angleDiff = 90;
 for (let i=0;i<30;i++) distanceApp.updateGame(3000,100);
-assert.equal(distanceApp.stalker.distance, pausedDistance, "ended camera pauses approach");
+assert.equal(distanceApp.stalker.distance, restartedDistance, "ended camera pauses approach");
 distanceApp.pagehide();
 assert.equal(distanceApp.runtime.started, false);
 assert.equal(distanceApp.stalker.paused, true);
@@ -273,6 +279,10 @@ assert.equal(context.starts, strongStarts, "hidden does not start sound");
 soundApp.show();
 soundApp.updateGame(1100,100);
 assert.equal(context.starts,strongStarts,"resume needs fresh sensor and fresh wait");
+assert.equal(soundApp.runtime.started, false);
+await soundApp.startExperience();
+assert.equal(soundApp.runtime.initialYaw, null);
+soundApp.runtime.motionPermission = "granted";
 soundApp.setNow(1200);
 soundApp.handleOrientation({webkitCompassHeading:0});
 soundApp.presence.random=()=>0;
@@ -442,3 +452,131 @@ assert.equal(race.runtime.appState, "RUNNING");
 race.stopExperience();
 assert.ok(!/SurvivalGame|surviveTimer|finishGame|resultScreen|data-test-game/.test(source + html));
 console.log("Experience integration: lifecycle x30, no win/time limit, sensor/timer/DOM stability, hidden pause and canceled camera race passed");
+
+// カメラ取得・再生待ちの各段階で停止と再開を検証する。
+function trackedStream() {
+  const track = { kind: "video", readyState: "live", stop() { this.readyState = "ended"; } };
+  return { track, getTracks: () => [track] };
+}
+for (const interrupt of ["stopExperience", "hide"]) {
+  const pending = harness();
+  let resolveCamera;
+  pending.pendingCamera(() => new Promise(resolve => { resolveCamera = resolve; }));
+  const starting = pending.startExperience();
+  pending[interrupt]();
+  const late = trackedStream();
+  resolveCamera(late);
+  await starting;
+  assert.equal(late.track.readyState, "ended");
+  assert.equal(pending.runtime.stream, null);
+  assert.equal(pending.nodes.get("#camera").srcObject, null);
+  assert.equal(pending.runtime.appState, "STOPPED");
+  assert.equal(pending.resources().sensors, 0);
+  if (interrupt === "hide") {
+    await pending.startExperience();
+    assert.equal(pending.runtime.appState, "STOPPED", "hidden START is ignored");
+    pending.stopExperience();
+    pending.show();
+    assert.equal(pending.runtime.appState, "STOPPED", "hidden STOP does not cause auto restart");
+  }
+}
+
+const failedPlay = harness();
+const failedStream = trackedStream();
+failedPlay.pendingCamera(async () => failedStream);
+failedPlay.nodes.get("#camera").play = async () => { throw new Error("play failed"); };
+await failedPlay.startExperience();
+assert.equal(failedStream.track.readyState, "ended");
+assert.equal(failedPlay.runtime.stream, null);
+assert.equal(failedPlay.nodes.get("#camera").srcObject, null);
+assert.equal(failedPlay.runtime.appState, "READY");
+assert.equal(failedPlay.nodes.get("#startButton").disabled, false);
+assert.equal(denied.runtime.stream, null);
+assert.equal(denied.runtime.appState, "READY");
+
+const blockedPermission = harness();
+let resolveOrientation;
+blockedPermission.pendingOrientation(() => new Promise(resolve => { resolveOrientation = resolve; }));
+const blockedStream = trackedStream();
+blockedPermission.pendingCamera(async () => blockedStream);
+blockedPermission.nodes.get("#camera").play = async () => { throw new Error("play failed before sensor permission"); };
+const blockedStart = blockedPermission.startExperience();
+await new Promise(setImmediate);
+assert.equal(blockedStream.track.readyState, "ended", "play failure releases camera without waiting for sensor permission");
+assert.equal(blockedPermission.nodes.get("#camera").srcObject, null);
+resolveOrientation("granted");
+await blockedStart;
+assert.equal(blockedPermission.runtime.appState, "READY");
+
+for (const rejects of [false, true]) {
+  const playing = harness();
+  const old = trackedStream();
+  let settlePlay;
+  playing.pendingCamera(async () => old);
+  playing.nodes.get("#camera").play = () => new Promise((resolve, reject) => {
+    settlePlay = () => rejects ? reject(new Error("interrupted")) : resolve();
+  });
+  const starting = playing.startExperience();
+  await new Promise(setImmediate);
+  assert.ok(settlePlay);
+  playing.hide();
+  assert.equal(old.track.readyState, "ended");
+  playing.show();
+  playing.nodes.get("#camera").play = async () => {};
+  const fresh = trackedStream();
+  playing.pendingCamera(async () => fresh);
+  await playing.startExperience();
+  settlePlay();
+  await starting;
+  assert.equal(playing.runtime.stream, fresh, "stale play cannot affect new stream");
+  assert.equal(fresh.track.readyState, "live");
+  playing.stopExperience();
+  assert.equal(fresh.track.readyState, "ended");
+  assert.equal(playing.nodes.get("#camera").srcObject, null);
+}
+
+const resumed = harness(true, false, false, true);
+const live = trackedStream();
+resumed.pendingCamera(async () => live);
+await resumed.startExperience();
+assert.equal(resumed.nodes.get("#message").hidden, false, "fresh heading wait is explained");
+resumed.handleOrientation({ webkitCompassHeading: 20 });
+resumed.runtime.motionPermission = "granted";
+resumed.stalker.setDistance(10);
+await resumed.testPresence("TAP");
+const stoppedVoice = resumed.audio.voice;
+resumed.buttons[1].click();
+resumed.hide();
+assert.equal(live.track.readyState, "ended");
+assert.equal(resumed.nodes.get("#camera").srcObject, null);
+assert.equal(resumed.audio.voice, null);
+assert.ok(stoppedVoice.source.stopTimes.length >= 2);
+assert.ok(stoppedVoice.nodes.every(node => node.disconnected));
+assert.equal(resumed.presence.bait, null);
+assert.equal(resumed.resources().sensors, 0);
+assert.equal(resumed.resources().timers, 0);
+resumed.show();
+assert.match(resumed.nodes.get("#startStatus").textContent, /START/);
+resumed.handleOrientation({ webkitCompassHeading: 100 });
+assert.equal(resumed.runtime.currentYaw, null);
+resumed.pendingCamera(async () => trackedStream());
+await resumed.startExperience();
+assert.equal(resumed.stalker.distance, 85);
+assert.equal(resumed.director.previousEncounter, null);
+assert.equal(resumed.presence.previousPresence, null);
+assert.equal(resumed.presence.deadline, null);
+resumed.handleOrientation({ alpha: null, webkitCompassHeading: null });
+assert.equal(resumed.runtime.initialYaw, null);
+resumed.handleOrientation({ webkitCompassHeading: 240 });
+assert.equal(resumed.runtime.initialYaw, 240);
+assert.equal(resumed.runtime.relativeYaw, 0);
+assert.equal(resumed.nodes.get("#message").hidden, true);
+resumed.setNow(4000);
+resumed.updateGame(4000, 16);
+assert.equal(resumed.runtime.orientationPermission, "no-data");
+assert.equal(resumed.nodes.get("#message").hidden, false);
+resumed.handleOrientation({ webkitCompassHeading: 245 });
+resumed.updateGame(4000, 16);
+assert.equal(resumed.nodes.get("#message").hidden, true);
+resumed.stopExperience();
+console.log("Safari lifecycle: pending acquisition/play cleanup, hidden STOP, explicit restart, fresh heading/history and audio stop passed");
