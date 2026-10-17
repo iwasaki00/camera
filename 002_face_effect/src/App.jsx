@@ -642,6 +642,15 @@ export default function App() {
   const streamRef = useRef(null);
   const faceLandmarkerRef = useRef(null);
   const lastVideoTimeRef = useRef(-1);
+  const modelPromiseRef = useRef(null);
+  const mountedRef = useRef(false);
+  const lifetimeRef = useRef(0);
+  const cameraGenerationRef = useRef(0);
+  // A stopped browser request still holds this lock until it settles.
+  const startInFlightRef = useRef(false);
+  const hasFrameRef = useRef(false);
+  const screenshotInFlightRef = useRef(false);
+  const downloadUrlsRef = useRef(new Map());
   const effectRef = useRef("genius");
   const settingsRef = useRef({
     whiteEye: {
@@ -687,6 +696,11 @@ export default function App() {
   const [message, setMessage] = useState("前面カメラでエフェクトを開始できます。");
   const [error, setError] = useState("");
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
+  const [frameReady, setFrameReady] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [captureError, setCaptureError] = useState("");
+  const [savedImage, setSavedImage] = useState(null);
   const [thinkingMode, setThinkingMode] = useState(false);
   const [effect, setEffect] = useState("genius");
   const [whiteEyeScale, setWhiteEyeScale] = useState(100);
@@ -728,31 +742,49 @@ export default function App() {
     }
   }
 
-  async function ensureLandmarker() {
+  function ensureLandmarker() {
     if (faceLandmarkerRef.current) {
-      return faceLandmarkerRef.current;
+      return Promise.resolve(faceLandmarkerRef.current);
     }
+    if (modelPromiseRef.current) return modelPromiseRef.current;
 
-    const vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
-    const landmarker = await FaceLandmarker.createFromOptions(vision, {
-      baseOptions: { modelAssetPath: FACE_MODEL_URL },
-      runningMode: "VIDEO",
-      numFaces: 1,
-      minFaceDetectionConfidence: 0.45,
-      minFacePresenceConfidence: 0.45,
-      minTrackingConfidence: 0.45,
-      outputFaceBlendshapes: false,
-      outputFacialTransformationMatrixes: false
-    });
+    const lifetime = lifetimeRef.current;
+    const isCurrent = () => mountedRef.current && lifetime === lifetimeRef.current;
+    const pending = (async () => {
+      const vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
+      if (!isCurrent()) throw new Error("モデルの読み込みを中断しました。");
+      const landmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: FACE_MODEL_URL },
+        runningMode: "VIDEO",
+        numFaces: 1,
+        minFaceDetectionConfidence: 0.45,
+        minFacePresenceConfidence: 0.45,
+        minTrackingConfidence: 0.45,
+        outputFaceBlendshapes: false,
+        outputFacialTransformationMatrixes: false
+      });
 
-    faceLandmarkerRef.current = landmarker;
-    return landmarker;
+      if (!isCurrent()) {
+        landmarker.close();
+        throw new Error("モデルの読み込みを中断しました。");
+      }
+      faceLandmarkerRef.current = landmarker;
+      return landmarker;
+    })();
+    modelPromiseRef.current = pending;
+    const clearPending = () => {
+      if (modelPromiseRef.current === pending) modelPromiseRef.current = null;
+    };
+    pending.then(clearPending, clearPending);
+    return pending;
   }
 
-  function stopCamera() {
+  function stopCamera(showMessage = true) {
+    cameraGenerationRef.current += 1;
     window.cancelAnimationFrame(animationFrameRef.current);
     animationFrameRef.current = 0;
     lastVideoTimeRef.current = -1;
+    hasFrameRef.current = false;
 
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -760,13 +792,26 @@ export default function App() {
     }
 
     if (videoRef.current) {
+      videoRef.current.pause();
       videoRef.current.srcObject = null;
     }
 
+    const canvas = canvasRef.current;
+    canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    if (!mountedRef.current) return;
     setCameraActive(false);
+    setFrameReady(false);
+    if (showMessage) {
+      updateUi({
+        status: "停止中", statusState: "idle", thinking: false, error: "",
+        message: "カメラを停止しました。起動ボタンで再開できます。"
+      });
+    }
   }
 
-  function renderLoop() {
+  function renderLoop(generation) {
+    if (!mountedRef.current || generation !== cameraGenerationRef.current || document.hidden) return;
+    animationFrameRef.current = 0;
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const frame = frameRef.current;
@@ -781,86 +826,110 @@ export default function App() {
       return;
     }
 
-    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-      animationFrameRef.current = window.requestAnimationFrame(renderLoop);
-      return;
-    }
+    try {
+      if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) return;
+      // Preserve the composited image until a new video frame arrives.
+      if (video.currentTime === lastVideoTimeRef.current) return;
 
-    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      frame.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
-    }
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        frame.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
+      }
 
-    drawMirroredVideo(ctx, video, canvas.width, canvas.height);
+      drawMirroredVideo(ctx, video, canvas.width, canvas.height);
+      if (!hasFrameRef.current) {
+        hasFrameRef.current = true;
+        setFrameReady(true);
+      }
 
-    if (video.currentTime === lastVideoTimeRef.current) {
-      animationFrameRef.current = window.requestAnimationFrame(renderLoop);
-      return;
-    }
+      lastVideoTimeRef.current = video.currentTime;
+      const now = performance.now();
+      let faceLandmarks;
+      try {
+        faceLandmarks = landmarker.detectForVideo(video, now).faceLandmarks?.[0];
+      } catch {
+        updateUi({
+          status: "顔認識エラー", statusState: "error", thinking: false,
+          message: "映像は表示しています。顔認識を再試行しています。",
+          error: "顔認識処理に失敗しました。改善しない場合はカメラを停止して再開してください。"
+        });
+        return;
+      }
 
-    lastVideoTimeRef.current = video.currentTime;
-    const now = performance.now();
-    const result = landmarker.detectForVideo(video, now);
-    const faceLandmarks = result.faceLandmarks?.[0];
+      if (!faceLandmarks) {
+        updateUi({
+          status: "顔が見つかりません",
+          statusState: "waiting",
+          message: "明るい場所で顔を正面に向けてください。顔が戻るとエフェクトを再開します。",
+          error: "",
+          thinking: false
+        });
+        return;
+      }
 
-    if (!faceLandmarks) {
+      const metrics = getFaceMetrics(faceLandmarks, canvas.width, canvas.height);
+      const head = getHeadGeometry(faceLandmarks, canvas.width, canvas.height);
+      const currentEffect = effectRef.current;
+      const geniusSettings = settingsRef.current.genius;
+      const whiteEyeSettings = settingsRef.current.whiteEye;
+      const unibrowSettings = settingsRef.current.unibrow;
+      const eyeMaskSettings = settingsRef.current.eyeMask;
+      const heartEyesSettings = settingsRef.current.heartEyes;
+      const eyeMosaicSettings = settingsRef.current.eyeMosaic;
+
+      switch (currentEffect) {
+        case "white-eye":
+          drawWhiteEyeOverlay(ctx, faceLandmarks, canvas.width, canvas.height, whiteEyeSettings);
+          break;
+        case "unibrow":
+          drawUnibrowOverlay(ctx, faceLandmarks, canvas.width, canvas.height, unibrowSettings);
+          break;
+        case "eye-mask":
+          drawEyeMask(ctx, faceLandmarks, canvas.width, canvas.height, eyeMaskSettings);
+          break;
+        case "heart-eyes":
+          drawHeartEyes(ctx, faceLandmarks, canvas.width, canvas.height, now, heartEyesSettings);
+          break;
+        case "eye-mosaic":
+          drawEyeMosaic(ctx, canvas, faceLandmarks, canvas.width, canvas.height, eyeMosaicSettings);
+          break;
+        case "genius":
+        default:
+          drawGeniusOverlay(ctx, metrics, head, canvas.width, canvas.height, now, geniusSettings);
+          break;
+      }
+
       updateUi({
-        status: "待機中",
-        statusState: "waiting",
-        message: "顔を正面に向けるとエフェクトを重ねます。",
+        status: metrics.thinking && currentEffect === "genius" ? "考え中モード" : "顔を検出中",
+        statusState: "detecting",
+        message: describeEffect(currentEffect, metrics.thinking),
         error: "",
-        thinking: false
+        thinking: metrics.thinking
       });
-      animationFrameRef.current = window.requestAnimationFrame(renderLoop);
-      return;
+
+    } catch {
+      updateUi({
+        status: "描画エラー", statusState: "error", thinking: false,
+        message: "映像の描画を再試行しています。",
+        error: "プレビューの描画に失敗しました。改善しない場合はカメラを再開してください。"
+      });
+    } finally {
+      if (mountedRef.current && generation === cameraGenerationRef.current && streamRef.current && !document.hidden) {
+        animationFrameRef.current = window.requestAnimationFrame(() => renderLoop(generation));
+      }
     }
-
-    const metrics = getFaceMetrics(faceLandmarks, canvas.width, canvas.height);
-    const head = getHeadGeometry(faceLandmarks, canvas.width, canvas.height);
-    const currentEffect = effectRef.current;
-    const geniusSettings = settingsRef.current.genius;
-    const whiteEyeSettings = settingsRef.current.whiteEye;
-    const unibrowSettings = settingsRef.current.unibrow;
-    const eyeMaskSettings = settingsRef.current.eyeMask;
-    const heartEyesSettings = settingsRef.current.heartEyes;
-    const eyeMosaicSettings = settingsRef.current.eyeMosaic;
-
-    switch (currentEffect) {
-      case "white-eye":
-        drawWhiteEyeOverlay(ctx, faceLandmarks, canvas.width, canvas.height, whiteEyeSettings);
-        break;
-      case "unibrow":
-        drawUnibrowOverlay(ctx, faceLandmarks, canvas.width, canvas.height, unibrowSettings);
-        break;
-      case "eye-mask":
-        drawEyeMask(ctx, faceLandmarks, canvas.width, canvas.height, eyeMaskSettings);
-        break;
-      case "heart-eyes":
-        drawHeartEyes(ctx, faceLandmarks, canvas.width, canvas.height, now, heartEyesSettings);
-        break;
-      case "eye-mosaic":
-        drawEyeMosaic(ctx, canvas, faceLandmarks, canvas.width, canvas.height, eyeMosaicSettings);
-        break;
-      case "genius":
-      default:
-        drawGeniusOverlay(ctx, metrics, head, canvas.width, canvas.height, now, geniusSettings);
-        break;
-    }
-
-    updateUi({
-      status: metrics.thinking && currentEffect === "genius" ? "考え中モード" : "顔を検出中",
-      statusState: "detecting",
-      message: describeEffect(currentEffect, metrics.thinking),
-      error: "",
-      thinking: metrics.thinking
-    });
-
-    animationFrameRef.current = window.requestAnimationFrame(renderLoop);
   }
 
   async function startCamera() {
-    stopCamera();
+    if (!mountedRef.current || document.hidden || startInFlightRef.current || streamRef.current) return;
+    startInFlightRef.current = true;
+    setCameraStarting(true);
+    stopCamera(false);
+    const generation = cameraGenerationRef.current;
+    const lifetime = lifetimeRef.current;
+    const isCurrent = () => mountedRef.current && generation === cameraGenerationRef.current && !document.hidden;
+    let stage = "conditions";
     updateUi({
       status: "起動準備中",
       statusState: "waiting",
@@ -868,14 +937,16 @@ export default function App() {
       error: "",
       thinking: false
     });
+    setCaptureError("");
 
     try {
-      await ensureLandmarker();
-
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error("このブラウザではカメラ API を利用できません。");
+      if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+        throw new Error("カメラを利用できません。HTTPS（開発時は localhost）と対応ブラウザをご確認ください。");
       }
-
+      stage = "model";
+      await ensureLandmarker();
+      if (!isCurrent()) return;
+      stage = "camera";
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: {
@@ -885,38 +956,120 @@ export default function App() {
         }
       });
 
+      if (!isCurrent()) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
+      stage = "play";
       if (!videoRef.current) {
         throw new Error("video 要素を初期化できませんでした。");
       }
 
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
+      if (!isCurrent()) return;
       setCameraActive(true);
-      renderLoop();
+      renderLoop(generation);
     } catch (caught) {
-      const detail = caught instanceof Error ? caught.message : String(caught);
+      if (!isCurrent()) return;
+      let detail;
+      if (stage === "conditions") {
+        detail = caught.message;
+      } else if (stage === "model") {
+        detail = "顔認識モデルの読み込みに失敗しました。通信環境をご確認のうえ、再度起動してください。";
+      } else if (stage === "play") {
+        detail = "カメラ映像の再生に失敗しました。カメラを再度起動してください。";
+      } else {
+        switch (caught?.name) {
+          case "NotAllowedError":
+          case "PermissionDeniedError":
+            detail = "カメラの利用が許可されていません。Safariや端末のカメラ権限、サイトの利用制限をご確認ください。";
+            break;
+          case "NotFoundError":
+          case "DevicesNotFoundError":
+            detail = "利用できるカメラが見つかりません。接続や端末の設定をご確認ください。";
+            break;
+          case "NotReadableError":
+          case "TrackStartError":
+            detail = "カメラを読み取れません。別のアプリで使用中の可能性があります。ほかのカメラアプリを閉じて再試行してください。";
+            break;
+          default:
+            detail = "カメラの起動に失敗しました。原因を特定できません。ブラウザや端末の設定を確認して再試行してください。";
+        }
+      }
+      stopCamera(false);
       updateUi({
         status: "エラー",
         statusState: "error",
-        message: "カメラの起動に失敗しました。",
+        message: "起動ボタンから再試行できます。",
         error: detail,
         thinking: false
       });
-      stopCamera();
+    } finally {
+      startInFlightRef.current = false;
+      if (mountedRef.current && lifetime === lifetimeRef.current) setCameraStarting(false);
     }
   }
 
-  function takeScreenshot() {
+  function releaseSavedImage() {
+    setSavedImage(null);
+  }
+
+  async function takeScreenshot() {
     const canvas = canvasRef.current;
-    if (!canvas) {
+    const video = videoRef.current;
+    if (screenshotInFlightRef.current) return;
+    if (!streamRef.current || !hasFrameRef.current || !canvas?.width || !canvas?.height ||
+        !video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) {
+      setCaptureError("保存できる映像がありません。カメラを起動し、プレビューを確認してください。");
       return;
     }
-
-    const link = document.createElement("a");
-    link.href = canvas.toDataURL("image/png");
-    link.download = `face-effect-${Date.now()}.png`;
-    link.click();
+    screenshotInFlightRef.current = true;
+    setSaving(true);
+    setCaptureError("");
+    const generation = cameraGenerationRef.current;
+    const lifetime = lifetimeRef.current;
+    let url;
+    try {
+      // toBlob snapshots the composited canvas at invocation time.
+      const blob = await new Promise((resolve, reject) => {
+        if (canvas.toBlob) {
+          canvas.toBlob((value) => value ? resolve(value) : reject(new Error("PNG生成失敗")), "image/png");
+        } else {
+          // Compatibility fallback; this does not make a network request.
+          const data = atob(canvas.toDataURL("image/png").split(",")[1]);
+          resolve(new Blob([Uint8Array.from(data, (char) => char.charCodeAt(0))], { type: "image/png" }));
+        }
+      });
+      if (!mountedRef.current || generation !== cameraGenerationRef.current) return;
+      url = URL.createObjectURL(blob);
+      const name = `face-effect-${Date.now()}.png`;
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = name;
+      document.body.appendChild(link);
+      try { link.click(); } finally { link.remove(); }
+      // Allow the browser to consume the download before revoking its URL.
+      const timer = window.setTimeout(() => {
+        URL.revokeObjectURL(url);
+        downloadUrlsRef.current.delete(url);
+      }, 60000);
+      downloadUrlsRef.current.set(url, timer);
+      setSavedImage({ url: URL.createObjectURL(blob), name });
+    } catch {
+      if (url) {
+        window.clearTimeout(downloadUrlsRef.current.get(url));
+        downloadUrlsRef.current.delete(url);
+        URL.revokeObjectURL(url);
+      }
+      if (mountedRef.current && lifetime === lifetimeRef.current) {
+        setCaptureError("スクリーンショットの生成・保存に失敗しました。映像を確認し、もう一度お試しください。");
+      }
+    } finally {
+      screenshotInFlightRef.current = false;
+      if (mountedRef.current && lifetime === lifetimeRef.current) setSaving(false);
+    }
   }
 
   useEffect(() => {
@@ -971,14 +1124,38 @@ export default function App() {
   }, [heartEyeScale, heartEyeAlpha]);
 
   useEffect(() => {
+    mountedRef.current = true;
+    lifetimeRef.current += 1;
+    const onVisibilityChange = () => {
+      if (document.hidden) stopCamera();
+    };
+    const onPageHide = () => stopCamera();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", onPageHide);
     return () => {
-      stopCamera();
+      mountedRef.current = false;
+      lifetimeRef.current += 1;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", onPageHide);
+      stopCamera(false);
+      modelPromiseRef.current = null;
       if (faceLandmarkerRef.current) {
         faceLandmarkerRef.current.close();
         faceLandmarkerRef.current = null;
       }
+      for (const [url, timer] of downloadUrlsRef.current) {
+        window.clearTimeout(timer);
+        URL.revokeObjectURL(url);
+      }
+      downloadUrlsRef.current.clear();
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (savedImage) URL.revokeObjectURL(savedImage.url);
+    };
+  }, [savedImage]);
 
   return (
     <main className="app-shell">
@@ -990,16 +1167,6 @@ export default function App() {
           天才風、白目、つながり眉、目隠し、ハート目、モザイクを切り替えられます。
           iPhone Safari でも使いやすいように、エフェクト選択と調整をひとつの画面にまとめています。
         </p>
-
-        <div className="action-row">
-          <button className="primary-button" type="button" onClick={startCamera}>
-            カメラ起動
-          </button>
-          <button className="secondary-button" type="button" onClick={takeScreenshot}>
-            スクリーンショット
-          </button>
-          <p className={`status-pill status-pill--${statusState}`}>{statusText}</p>
-        </div>
       </section>
 
       <section className="viewer-card">
@@ -1009,10 +1176,32 @@ export default function App() {
           {!cameraActive && <div className="canvas-placeholder">前面カメラで起動</div>}
         </div>
 
+        <div className="action-row" aria-label="撮影操作">
+          <button className="primary-button" type="button" onClick={startCamera} disabled={cameraStarting || cameraActive}>
+            {cameraStarting ? "起動処理中…" : "カメラ起動"}
+          </button>
+          <button className="secondary-button" type="button" onClick={() => stopCamera()} disabled={!cameraStarting && !cameraActive}>
+            停止
+          </button>
+          <button className="secondary-button" type="button" onClick={takeScreenshot} disabled={!cameraActive || !frameReady || saving}>
+            {saving ? "保存中…" : "スクリーンショット"}
+          </button>
+        </div>
+        <p className={`status-pill status-pill--${statusState}`} role="status">{statusText}</p>
+        {error ? <p className="error-box" role="alert">{error}</p> : null}
+        {captureError ? <p className="error-box" role="alert">{captureError}</p> : null}
+        {savedImage ? (
+          <div className="save-help">
+            <p>Safariで保存されない場合は「画像を開く」を押し、画像の長押しや共有メニューから保存してください。</p>
+            <a href={savedImage.url} target="_blank" rel="noopener noreferrer">画像を開く</a>
+            <button className="secondary-button" type="button" onClick={releaseSavedImage}>閉じる</button>
+          </div>
+        ) : null}
+
         <div className="info-panel">
           <div>
-            <p className="info-label">エフェクト</p>
-            <select className="effect-select" value={effect} onChange={(event) => setEffect(event.target.value)}>
+            <label className="info-label" htmlFor="effect-select">エフェクト</label>
+            <select id="effect-select" className="effect-select" value={effect} onChange={(event) => setEffect(event.target.value)}>
               {EFFECTS.map((item) => (
                 <option key={item.value} value={item.value}>
                   {item.label}
@@ -1026,7 +1215,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="settings-panel">
+        <div className="settings-panel" role="region" aria-label="エフェクトの詳細設定" tabIndex={0}>
           {effect === "genius" ? (
             <>
               <div className="settings-header">
@@ -1308,7 +1497,6 @@ export default function App() {
           )}
         </div>
 
-        {error ? <p className="error-box">{error}</p> : null}
       </section>
 
       <section className="notes-card">

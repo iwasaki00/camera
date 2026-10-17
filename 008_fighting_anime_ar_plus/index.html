@@ -14,20 +14,21 @@
     <div class="scoreboard" aria-label="score">
       <div class="player-score player-a">
         <span>P1</span>
-        <meter id="p1Hp" min="0" max="100" value="100"></meter>
+        <meter aria-label="P1 HP" id="p1Hp" min="0" max="100" value="100"></meter>
       </div>
       <div class="player-score player-b">
         <span>P2</span>
-        <meter id="p2Hp" min="0" max="100" value="100"></meter>
+        <meter aria-label="P2 HP" id="p2Hp" min="0" max="100" value="100"></meter>
       </div>
     </div>
 
     <section class="hud" aria-label="debug and controls">
       <div class="hud-row">
-        <strong id="statusText" class="status">idle</strong>
-        <button id="startButton" type="button">START</button>
-        <button id="cameraButton" type="button" class="secondary">CAM</button>
-        <button id="panelButton" type="button" class="secondary" aria-expanded="false">DEBUG</button>
+        <strong id="statusText" class="status" role="status" aria-live="polite">START to begin</strong>
+        <button id="startButton" type="button" title="Start / reset the round">START</button>
+        <button id="stopButton" type="button" class="secondary" disabled title="Stop camera and combat">STOP</button>
+        <button id="cameraButton" type="button" class="secondary" aria-label="Switch camera: currently front">CAM front</button>
+        <button id="panelButton" type="button" class="secondary" aria-expanded="false" aria-controls="hudBody">DEBUG</button>
       </div>
 
       <div id="hudBody" class="hud-body" hidden>

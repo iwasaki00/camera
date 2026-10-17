@@ -24,7 +24,10 @@ async function getWorker() {
 
       console.log("[ocr] worker ready");
       return worker;
-    })();
+    })().catch((error) => {
+      workerPromise = null;
+      throw error;
+    });
   }
 
   return workerPromise;

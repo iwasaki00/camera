@@ -96,8 +96,7 @@ h1 {
 }
 
 .primary-button,
-.secondary-button,
-.secondary-link {
+.secondary-button {
   appearance: none;
   border: 0;
   border-radius: 999px;
@@ -112,19 +111,10 @@ h1 {
   background: linear-gradient(135deg, #dff8ff, #9ee7ff);
 }
 
-.secondary-button,
-.secondary-link {
+.secondary-button {
   color: var(--text);
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.14);
-}
-
-.secondary-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 48px;
-  text-decoration: none;
 }
 
 .status-pill {
@@ -253,17 +243,126 @@ h1 {
   line-height: 1.8;
 }
 
-@media (max-width: 640px) {
-  .info-panel {
-    grid-template-columns: 1fr;
+button, .settings-details summary {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+button:disabled {
+  opacity: 0.48;
+  cursor: default;
+}
+
+button:focus-visible, summary:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.viewer-card .action-row {
+  padding: 12px;
+  margin-top: 0;
+}
+
+.status-pill {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.canvas-frame canvas {
+  object-fit: contain;
+}
+
+.info-panel {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 10px 12px;
+  gap: 6px;
+}
+
+.info-value { overflow-wrap: anywhere; }
+
+.settings-details summary {
+  padding: 14px 16px;
+  min-height: 44px;
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.settings-panel {
+  max-height: 45vh;
+  max-height: 45dvh;
+  overflow-y: auto;
+}
+
+.screenshot-notice {
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.screenshot-notice a {
+  display: inline-block;
+  color: var(--accent);
+  padding: 10px 0;
+}
+
+@media (max-width: 640px), (max-height: 500px) and (max-width: 960px) {
+  .app-shell {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: calc(8px + env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  }
+
+  .hero-card {
+    padding: 10px 12px;
+    border-radius: 16px;
+  }
+
+  .eyebrow { font-size: 0.65rem; margin-bottom: 4px; }
+  h1 { font-size: clamp(1.2rem, 5vw, 1.7rem); line-height: 1.2; }
+  .lead { display: none; }
+  .viewer-card { margin-top: 8px; border-radius: 16px; }
+
+  .canvas-frame {
+    aspect-ratio: auto;
+    height: clamp(160px, calc(100vh - 300px - env(safe-area-inset-top) - env(safe-area-inset-bottom)), 640px);
+    height: clamp(160px, calc(100dvh - 300px - env(safe-area-inset-top) - env(safe-area-inset-bottom)), 640px);
   }
 
   .action-row {
-    flex-direction: column;
-    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr 0.6fr 1.7fr;
+    gap: 6px;
   }
 
-  .status-pill {
-    justify-content: center;
+  .primary-button, .secondary-button {
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 5px;
+    font-size: 0.75rem;
+    line-height: 1.25;
   }
+
+  .status-pill { grid-column: 1 / -1; border-radius: 12px; }
+  .info-label { font-size: 0.6rem; letter-spacing: 0; line-height: 1.3; }
+  .info-value { font-size: 0.75rem; margin-top: 4px; line-height: 1.3; }
+  .settings-details summary { line-height: 1.3; padding-block: 12px; }
+  .notes-card { margin-top: 10px; padding: 14px; font-size: 0.8rem; }
+}
+
+@media (max-height: 500px) and (min-width: 641px) and (max-width: 960px) {
+  .app-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: 8px;
+    align-items: start;
+  }
+  .viewer-card { margin-top: 0; grid-column: 2; grid-row: 1 / 3; }
+  .canvas-frame { height: max(120px, calc(100dvh - 220px - env(safe-area-inset-top) - env(safe-area-inset-bottom))); }
+  .notes-card { grid-column: 1; margin-top: 0; }
 }

@@ -245,6 +245,14 @@ export default function App() {
   const lastLandmarksRef = useRef<Landmark[] | undefined>(undefined);
   const streamRef = useRef<MediaStream | null>(null);
   const faceLandmarkerRef = useRef<FaceLandmarker | null>(null);
+  const landmarkerPromiseRef = useRef<Promise<FaceLandmarker> | null>(null);
+  const mountedRef = useRef(true);
+  const lifecycleRef = useRef(0);
+  const cameraRequestRef = useRef(0);
+  const cameraStartingRef = useRef(false);
+  const gameActionRef = useRef(0);
+  const frameReadyRef = useRef(false);
+  const [frameReady, setFrameReady] = useState(false);
   const animationFrameRef = useRef<number>(0);
   const timeoutRef = useRef<number | null>(null);
   const lastVideoTimeRef = useRef(-1);
@@ -339,22 +347,43 @@ export default function App() {
       return faceLandmarkerRef.current;
     }
 
-    const vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
-    const landmarker = await FaceLandmarker.createFromOptions(vision, {
-      baseOptions: { modelAssetPath: FACE_MODEL_URL },
-      runningMode: "VIDEO",
-      numFaces: 1,
-      minFaceDetectionConfidence: 0.45,
-      minFacePresenceConfidence: 0.45,
-      minTrackingConfidence: 0.45,
-      outputFaceBlendshapes: false,
-      outputFacialTransformationMatrixes: false
-    });
-    faceLandmarkerRef.current = landmarker;
-    return landmarker;
+    if (landmarkerPromiseRef.current) return landmarkerPromiseRef.current;
+    const lifecycle = lifecycleRef.current;
+    const pending = (async () => {
+      const vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
+      if (!mountedRef.current || lifecycle !== lifecycleRef.current) {
+        throw new Error("モデルの起動を中断しました。もう一度起動してください。");
+      }
+      const landmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: FACE_MODEL_URL },
+        runningMode: "VIDEO",
+        numFaces: 1,
+        minFaceDetectionConfidence: 0.45,
+        minFacePresenceConfidence: 0.45,
+        minTrackingConfidence: 0.45,
+        outputFaceBlendshapes: false,
+        outputFacialTransformationMatrixes: false
+      });
+      if (!mountedRef.current || lifecycle !== lifecycleRef.current) {
+        landmarker.close();
+        throw new Error("モデルの起動を中断しました。もう一度起動してください。");
+      }
+      faceLandmarkerRef.current = landmarker;
+      return landmarker;
+    })();
+    landmarkerPromiseRef.current = pending;
+    try { return await pending; }
+    finally { if (landmarkerPromiseRef.current === pending) landmarkerPromiseRef.current = null; }
   }
 
   function stopCamera(): void {
+    cameraRequestRef.current++;
+    cameraStartingRef.current = false;
+    gameActionRef.current++;
+    if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current);
+    gameTimerRef.current = null;
+    if (appModeRef.current === "blink-drop") pauseGame();
+    frameReadyRef.current = false; setFrameReady(false);
     clearChallengeGuide();
     cancelAnimationFrame(animationFrameRef.current);
     animationFrameRef.current = 0;
@@ -373,7 +402,7 @@ export default function App() {
     lastRenderedStateRef.current = null;
     lastGameSessionRef.current = null;
     rendererRef.current?.clearCache();
-    gameRendererRef.current?.clearCache();
+    if (gameSessionRef.current.phase !== "completed") gameRendererRef.current?.clearCache();
     triggerManagerRef.current!.reset();
 
     if (streamRef.current) {
@@ -391,6 +420,7 @@ export default function App() {
   }
 
   function renderLoop(): void {
+    animationFrameRef.current = 0;
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const frame = frameRef.current;
@@ -407,7 +437,7 @@ export default function App() {
       return;
     }
 
-    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) {
       animationFrameRef.current = requestAnimationFrame(renderLoop);
       return;
     }
@@ -423,12 +453,20 @@ export default function App() {
     // A 20ms minimum never duplicates a 30fps camera frame.
     const detect = () => {
       const detectStart = performance.now();
-      const result = landmarker.detectForVideo(video, now);
+      let landmarks: Landmark[] | undefined;
+      try {
+        landmarks = landmarker.detectForVideo(video, now).faceLandmarks?.[0];
+      } catch {
+        // A transient detector failure must not break the animation chain.
+        smootherRef.current.reset(); trackingRef.current = false;
+        setFaceTracked(false); setStatus("顔検出待ち");
+        setMessage("顔を中央に合わせてください。改善しない場合はカメラを再起動してください。");
+      }
       const ms = performance.now() - detectStart;
       detectionStatsRef.current = { ms, interval: Number.isFinite(lastDetectionRef.current) ? now - lastDetectionRef.current : 0 };
       pendingDetectMsRef.current = ms;
       lastDetectionRef.current = now; lastDetectionVideoTimeRef.current = video.currentTime;
-      lastLandmarksRef.current = result.faceLandmarks?.[0];
+      lastLandmarksRef.current = landmarks;
       smootherRef.current.update(lastLandmarksRef.current, now);
       if (gameActive) {
         const accepting = gameSessionRef.current.phase === "playing" &&
@@ -476,6 +514,7 @@ export default function App() {
       gameSessionRef.current.phase === "completed" ? "normal" : gameDebugModeRef.current);
     else rendererRef.current.renderFeatureEffects(sourceCanvas, ctx, landmarks, effectStateRef.current, undefined,
       { effects: faceEffectsRef.current, quality: profile });
+    if (!frameReadyRef.current) { frameReadyRef.current = true; setFrameReady(true); }
     const guide = challengeGuideRef.current;
     const showGuide = gameActive && gameSessionRef.current.gameMode === "challenge" &&
       ["countdown", "playing", "fixing", "paused"].includes(gameSessionRef.current.phase);
@@ -512,25 +551,32 @@ export default function App() {
     if (trackingRef.current !== tracking) {
       trackingRef.current = tracking;
       setFaceTracked(tracking);
-      setStatus(tracking ? "顔を検出中" : "待機中");
+      setStatus(tracking ? "顔を検出中" : "顔検出待ち");
       setMessage(tracking ? "映像を見ながらパーツを調整できます。" : "顔を画面の中央に寄せてください。");
-      setError("");
     }
     animationFrameRef.current = requestAnimationFrame(renderLoop);
   }
 
   async function startCamera(): Promise<boolean> {
+    if (cameraStartingRef.current || !mountedRef.current || document.hidden) return false;
+    if (streamRef.current) return true;
     stopCamera();
+    const request = cameraRequestRef.current;
+    const valid = () => mountedRef.current && !document.hidden && cameraRequestRef.current === request;
+    cameraStartingRef.current = true;
     setStatus("起動中");
     setMessage("カメラと顔認識モデルを起動しています。");
     setError("");
 
+    let stage = "model";
+    let acquired: MediaStream | null = null;
     try {
-      await ensureLandmarker();
-
       if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error("このブラウザではカメラ API が使えません。");
+        throw new Error("このブラウザではカメラ API が使えません。HTTPS接続と対応ブラウザを確認してください。");
       }
+      await ensureLandmarker();
+      if (!valid()) return false;
+      stage = "camera";
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
@@ -541,6 +587,8 @@ export default function App() {
           height: { ideal: 960 }
         }
       });
+      acquired = stream;
+      if (!valid()) { stream.getTracks().forEach(track => track.stop()); return false; }
 
       const video = videoRef.current;
       if (!video) {
@@ -550,30 +598,54 @@ export default function App() {
       getSourceCanvas();
       streamRef.current = stream;
       video.srcObject = stream;
+      stream.getTracks().forEach(track => track.addEventListener("ended", () => {
+        if (streamRef.current === stream) interruptCamera();
+      }, { once: true }));
+      stage = "video";
       await video.play();
+      if (!valid()) { stream.getTracks().forEach(track => track.stop()); return false; }
       setCameraActive(true);
-      renderLoop();
+      if (!animationFrameRef.current) animationFrameRef.current = requestAnimationFrame(renderLoop);
       return true;
     } catch (caught) {
+      acquired?.getTracks().forEach(track => track.stop());
+      if (!valid()) return false;
       const detail = caught instanceof Error ? caught.message : String(caught);
+      const name = caught instanceof Error ? caught.name : "";
+      const advice = !navigator.mediaDevices?.getUserMedia ? detail
+        : stage === "model" ? "顔認識モデルを読み込めませんでした。通信を確認して再試行してください。"
+        : stage === "video" ? "映像を再生できませんでした。カメラ起動をもう一度押してください。"
+        : name === "NotAllowedError" ? "カメラの使用が許可されませんでした。ブラウザの権限設定を確認して再試行してください。"
+        : name === "NotFoundError" ? "利用できるカメラが見つかりません。接続や端末の設定を確認してください。"
+        : name === "NotReadableError" ? "カメラを使用できません。他のアプリでの使用や端末の状態を確認して再試行してください。"
+        : "カメラを起動できませんでした。接続・権限・他のアプリでの使用状況を確認して再試行してください。";
+      stopCamera();
       setStatus("エラー");
       setMessage("カメラの起動に失敗しました。");
-      setError(detail);
-      stopCamera();
+      setError(advice + (advice === detail ? "" : `（${detail}）`));
       return false;
+    } finally {
+      if (cameraRequestRef.current === request) cameraStartingRef.current = false;
     }
   }
 
   function takeScreenshot(): void {
     const canvas = canvasRef.current;
-    if (!canvas) {
+    if (!canvas || !streamRef.current || !frameReadyRef.current || !canvas.width || !canvas.height) {
+      setError("映像の準備ができていません。カメラを起動し、映像が表示されてから保存してください。");
       return;
     }
-
-    const link = document.createElement("a");
-    link.href = canvas.toDataURL("image/png");
-    link.download = `henface-maker-${Date.now()}.png`;
-    link.click();
+    try {
+      // Keep the download synchronous with the tap for iPhone Safari.
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `henface-maker-${Date.now()}.png`;
+      document.body.appendChild(link);
+      try { link.click(); } finally { link.remove(); }
+      setError("");
+    } catch {
+      setError("画像を保存できませんでした。映像を確認して再試行してください。Safariでは保存先やダウンロードも確認してください。");
+    }
   }
 
   function updatePart(partId: PartId, patch: Partial<PartConfig>): void {
@@ -685,6 +757,7 @@ export default function App() {
   }
 
   function exitBlinkDrop(): void {
+    gameActionRef.current++;
     blinkTestRef.current.running = false; setBlinkTestRunning(false);
     if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current);
     gameTimerRef.current = null;
@@ -695,6 +768,7 @@ export default function App() {
   }
 
   async function startBlinkDrop(): Promise<void> {
+    if (cameraStartingRef.current) return;
     const selectedDifficulty = difficulty;
     const selectedMode = gameMode, selectedChallenge = challengeId;
     const selectedTriggers = { ...triggerSettings };
@@ -702,7 +776,10 @@ export default function App() {
     if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current);
     triggerManagerRef.current!.reset(selectedTriggers);
     gameRendererRef.current?.clearCache();
-    const available = cameraActive || await startCamera();
+    const pending = streamRef.current ? Promise.resolve(true) : startCamera();
+    const action = ++gameActionRef.current;
+    const available = await pending;
+    if (!mountedRef.current || document.hidden || action !== gameActionRef.current || appModeRef.current !== "blink-drop") return;
     if (!available) {
       updateGame({ ...createBlinkDropSession("error"), error: "カメラを起動できませんでした。" });
       return;
@@ -712,6 +789,7 @@ export default function App() {
   }
 
   function returnToGameSetup(): void {
+    gameActionRef.current++;
     if (gameTimerRef.current !== null) window.clearTimeout(gameTimerRef.current);
     gameTimerRef.current = null;
     blinkTestRef.current.running = false; setBlinkTestRunning(false);
@@ -720,14 +798,24 @@ export default function App() {
   }
 
   function pauseGame(): void { updateGame(pauseBlinkDrop(gameSessionRef.current, performance.now())); }
-  function resumeGame(): void { triggerManagerRef.current!.requireNeutral(); updateGame(resumeBlinkDrop(gameSessionRef.current, performance.now())); }
+  async function resumeGame(): Promise<void> {
+    if (cameraStartingRef.current || gameSessionRef.current.phase !== "paused") return;
+    const pending = streamRef.current ? Promise.resolve(true) : startCamera();
+    const action = ++gameActionRef.current;
+    if (!await pending || !mountedRef.current || document.hidden || action !== gameActionRef.current || appModeRef.current !== "blink-drop") return;
+    triggerManagerRef.current!.requireNeutral();
+    updateGame(resumeBlinkDrop(gameSessionRef.current, performance.now()));
+  }
   function selectTriggers(settings: FaceTriggerSettings): void {
     setTriggerSettings(settings); saveFaceTriggers(settings);
     triggerManagerRef.current!.reset(settings);
     blinkTestRef.current.running = false; setBlinkTestRunning(false);
   }
   async function startBlinkTest(kind: "blink" | "face" = "blink"): Promise<void> {
-    if (!(cameraActive || await startCamera())) return;
+    if (cameraStartingRef.current) return;
+    const pending = streamRef.current ? Promise.resolve(true) : startCamera();
+    const action = ++gameActionRef.current;
+    if (!await pending || !mountedRef.current || document.hidden || action !== gameActionRef.current || appModeRef.current !== "blink-drop") return;
     triggerManagerRef.current!.reset(triggerSettings);
     blinkTestRef.current = { running: true, startedAt: performance.now(), events: [], kind, faceEvents: [] };
     setBlinkTestRunning(true);
@@ -767,18 +855,26 @@ export default function App() {
   }, [gameSession]);
 
   useEffect(() => {
-    const hide = () => {
-      if (document.hidden && appModeRef.current === "blink-drop") {
-        triggerManagerRef.current!.requireNeutral();
-        updateGame(pauseBlinkDrop(gameSessionRef.current, performance.now()));
-      }
-    };
+    const hide = () => { if (document.hidden) interruptCamera(); };
     document.addEventListener("visibilitychange", hide);
-    return () => document.removeEventListener("visibilitychange", hide);
+    window.addEventListener("pagehide", interruptCamera);
+    return () => {
+      document.removeEventListener("visibilitychange", hide);
+      window.removeEventListener("pagehide", interruptCamera);
+    };
   }, []);
 
+  function interruptCamera(): void {
+    stopCamera();
+    setStatus("停止中");
+    setMessage("カメラを停止しました。カメラ起動またはゲームの再開を押してください。");
+  }
+
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
+      lifecycleRef.current++;
       stopCamera();
       if (timeoutRef.current) {
         window.clearTimeout(timeoutRef.current);
@@ -858,7 +954,7 @@ export default function App() {
         <button className="primary-button" type="button" disabled={status === "起動中"} onClick={cameraActive ? () => { stopCamera(); setStatus("待機中"); setMessage("カメラを停止しました。"); } : startCamera}>
           {status === "起動中" ? "起動中…" : cameraActive ? "カメラ停止" : "カメラ起動"}
         </button>
-        <button className="secondary-button" type="button" disabled={!cameraActive} onClick={takeScreenshot}>写真を保存</button>
+        <button className="secondary-button" type="button" disabled={!cameraActive || !frameReady} onClick={takeScreenshot}>写真を保存</button>
         <span className="camera-status" role="status">{status}</span>
       </div>}
       <div className="camera-workspace">
@@ -869,7 +965,7 @@ export default function App() {
             <canvas ref={canvasRef} aria-label="変顔メーカーのプレビュー" />
             <video ref={videoRef} playsInline muted />
             <canvas ref={challengeGuideRef} className="challenge-guide" aria-label="チャレンジ目標ガイド" aria-hidden="true" />
-            {!cameraActive && <div className="placeholder">{appMode === "blink-drop" ? "スタートでカメラを起動します" : "カメラを起動して遊ぼう"}</div>}
+            {!cameraActive && !(appMode === "blink-drop" && gameSession.phase === "completed") && <div className="placeholder">{appMode === "blink-drop" ? "スタート・再開でカメラを起動します" : "カメラを起動して遊ぼう"}</div>}
             {loadingOverlay && <div className="loading-overlay">{loadingOverlay}</div>}
             {appMode === "camera" && <button className="game-entry-button" type="button" onClick={enterBlinkDrop}><span aria-hidden="true">👁</span> {GAME_TITLE}</button>}
             {appMode === "camera" && layout === "simple" && <button className="simple-random-button" type="button" aria-label="全パーツをランダム" onClick={randomizeFace}>

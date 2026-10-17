@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#081714">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,14 +16,14 @@
   <meta name="twitter:description" content="動きを撮って、骨格クイズにしよう。">
   <meta name="twitter:image" content="./assets/og.png">
   <title>Motion Quiz Camera</title>
-  <link rel="stylesheet" href="./styles/main.css?v=20260820d">
+  <link rel="stylesheet" href="./styles/main.css?v=20261017a">
 </head>
 <body>
   <main class="app-shell">
     <header class="app-header">
       <button class="brand" type="button" data-view="capture" aria-label="撮影画面へ">
         <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-        <span><b>MOTION</b><small>QUIZ CAMERA <span class="version-badge" aria-label="アプリバージョン">v2026.08.20.1</span></small></span>
+        <span><b>MOTION</b><small>QUIZ CAMERA <span class="version-badge" aria-label="アプリバージョン">v2026.10.17.1</span></small></span>
       </button>
       <nav aria-label="メインメニュー">
         <button class="nav-button is-active" type="button" data-view="capture">撮影</button>
@@ -31,6 +31,7 @@
       </nav>
     </header>
 
+    <p id="appNotice" class="app-notice" role="status" hidden></p>
     <section class="view is-active" id="captureView" aria-label="撮影">
       <div class="camera-card">
         <div class="stage" id="stage">
@@ -51,7 +52,7 @@
             <small>映像と動きはこの端末内で処理されます</small>
           </div>
 
-          <div class="countdown" id="countdown" hidden aria-live="assertive">3</div>
+          <div class="countdown" id="countdown" hidden><span id="countdownNumber" aria-live="assertive">3</span><button id="cancelCountdownButton" class="secondary-button" type="button">キャンセル</button></div>
           <div class="recording-hud" id="recordingHud" hidden>
             <span class="record-dot"></span><b>REC</b><time id="elapsedTime">00:00.0</time>
           </div>
@@ -120,7 +121,8 @@
 
   <dialog id="reviewDialog" class="sheet-dialog">
     <form method="dialog" class="dialog-card" id="reviewForm">
-      <header><div><p class="eyebrow">CAPTURE COMPLETE</p><h2>クイズに仕上げる</h2></div><button class="close-button" value="cancel" aria-label="閉じる">×</button></header>
+      <header><div><p class="eyebrow">CAPTURE COMPLETE</p><h2>クイズに仕上げる</h2></div><button class="close-button" id="closeReviewButton" type="button" aria-label="閉じる">×</button></header>
+      <p id="reviewNotice" class="app-notice" role="status"></p>
       <div class="review-player">
         <video id="reviewVideo" playsinline loop muted></video>
         <canvas id="reviewSkeleton"></canvas>
@@ -165,6 +167,6 @@
     </article>
   </dialog>
 
-  <script type="module" src="./src/main.js?v=20260820d"></script>
+  <script type="module" src="./src/main.js?v=20261017a"></script>
 </body>
 </html>

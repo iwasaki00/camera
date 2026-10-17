@@ -32,6 +32,9 @@ button,select {
   min-height: 44px
 }
 button {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   cursor: pointer;
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -76,9 +79,10 @@ option {
 .henface-app {
   width: min(100%,680px);
   margin: auto;
-  padding: calc(8px + env(safe-area-inset-top)) 10px calc(8px + env(safe-area-inset-bottom))
+  padding: calc(8px + env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))
 }
 .app-header {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -106,6 +110,7 @@ option {
   font-size: 12px
 }
 .camera-toolbar {
+  flex-wrap: wrap;
   display: flex;
   gap: 8px;
   align-items: center;
@@ -183,6 +188,7 @@ option {
   z-index: 3
 }
 .controls-card {
+  min-width: 0;
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 20px;
@@ -556,6 +562,7 @@ option {
   z-index: 6
 }
 .game-panel {
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -578,6 +585,8 @@ option {
 .game-panel button {
   width: min(100%,260px)
 }
+.game-panel > * { flex-shrink: 0 }
+.game-panel > * { flex-shrink: 0 }
 .game-order {
   color: var(--blue);
   font-weight: 700
@@ -724,7 +733,7 @@ option {
   position: absolute;
   left: 10px;
   right: 10px;
-  bottom: 10px;
+  bottom: max(10px,env(safe-area-inset-bottom));
   display: grid;
   grid-template-columns: repeat(3,1fr);
   gap: 6px;
@@ -737,6 +746,7 @@ option {
   background: #111927cf
 }
 .game-paused {
+  pointer-events: none;
   position: absolute;
   inset: 0;
   display: grid;
@@ -744,4 +754,16 @@ option {
   font-size: 24px;
   font-weight: 800;
   background: #05070c9c
+}
+
+.camera-workspace, .viewer-card, .app-header > div { min-width: 0 }
+.game-mini-actions { z-index: 1 }
+.debug-panel { overflow-wrap: anywhere }
+.mode-blink-drop > .error-box { flex-shrink: 0; max-height: 25dvh; overflow-y: auto }
+@media (max-height: 450px) {
+  .game-panel { justify-content: flex-start; padding: 12px; gap: 8px }
+  .game-panel.game-countdown strong { font-size: 40px }
+  .game-target { top: 6px; padding: 6px 10px }
+  .game-target strong { font-size: 14px }
+  .blink-status { top: 54px }
 }

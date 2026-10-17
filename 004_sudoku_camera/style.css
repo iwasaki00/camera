@@ -1988,3 +1988,53 @@ button.closeButton {
     text-align: left;
   }
 }
+
+/* Touch controls keep page pinch zoom and vertical document scrolling available. */
+.cameraStage, .ocrResultBoard, .boardGrid, .miniKeypad,
+.solutionBoard, .explanationBoard, .alignmentControls {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+.app {
+  padding-left: max(12px, env(safe-area-inset-left));
+  padding-right: max(12px, env(safe-area-inset-right));
+}
+.panel, .panel > *, .progressSummary > *, .sectionHeading > * { min-width: 0; }
+.ocrNotice, .progressSummary, .explanationReason, .explanationMeta {
+  overflow-wrap: anywhere;
+}
+#cameraSection .buttonStack {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+#cameraSection button { min-height: 48px; padding: 10px 8px; }
+.fullOcrSection[aria-busy="true"] .stateBadge {
+  animation: readingPulse 1.6s ease-in-out infinite;
+}
+@keyframes readingPulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) {
+  .fullOcrSection[aria-busy="true"] .stateBadge { animation: none; }
+}
+@media (max-width: 559px) {
+  .app { padding-top: calc(6px + env(safe-area-inset-top)); }
+  .hero { padding: 9px 12px; }
+  .hero h1 { font-size: 1.4rem; margin-top: 3px; }
+  .eyebrow { font-size: 0.61rem; letter-spacing: 0.04em; }
+  #cameraSection { gap: 9px; padding: 10px; }
+  #cameraSection .stepLabel { display: none; }
+  .cameraStage { aspect-ratio: 1; }
+  .cameraStage > .sudokuGuide { width: 92%; }
+  .alignmentControls { column-gap: 3px; }
+  .cropControl input[type="range"] { min-height: 44px; }
+}
+@media (max-height: 450px) and (orientation: landscape) {
+  .hero { padding: 7px 12px; }
+  .hero h1 { font-size: 1.3rem; margin-top: 2px; }
+  #cameraSection { grid-template-columns: minmax(0, 1fr) minmax(160px, 0.65fr); gap: 8px; padding: 10px; }
+  #cameraSection .stepLabel { display: none; }
+  #cameraSection .sectionHeading { grid-column: 1 / -1; }
+  #cameraSection .cameraStage { width: min(100%, 44dvh); aspect-ratio: 1; justify-self: center; }
+  #cameraSection .buttonStack { grid-template-columns: 1fr; align-content: center; }
+}

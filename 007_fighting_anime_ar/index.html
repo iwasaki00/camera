@@ -13,10 +13,11 @@
 
     <section class="hud" aria-label="デバッグと操作">
       <div class="status-row">
-        <strong id="statusText" class="status">idle</strong>
+        <strong id="statusText" class="status" role="status" aria-live="polite">stopped</strong>
         <div class="button-row">
-          <button id="panelButton" type="button" class="secondary">PANEL</button>
+          <button id="panelButton" type="button" class="secondary" aria-controls="hudBody" aria-expanded="false">PANEL</button>
           <button id="startButton" type="button">START</button>
+          <button id="stopButton" type="button" class="secondary" disabled>STOP</button>
         </div>
       </div>
 

@@ -10,6 +10,7 @@ const video = document.querySelector("#camera");
 const canvas = document.querySelector("#overlay");
 const ctx = canvas.getContext("2d");
 const startButton = document.querySelector("#startButton");
+const stopButton = document.querySelector("#stopButton");
 const cameraButton = document.querySelector("#cameraButton");
 const panelButton = document.querySelector("#panelButton");
 const hudBody = document.querySelector("#hudBody");
@@ -72,6 +73,13 @@ const HAND_CONNECTIONS = [
 const FINGER_TIPS = [8, 12, 16, 20];
 const FINGER_PIPS = [6, 10, 14, 18];
 
+const modelResources = new Set();
+const closedModels = new WeakSet();
+let modelPromise = null;
+let modelGeneration = 0;
+let cameraGeneration = 0;
+let cameraQueue = Promise.resolve();
+let isStarting = false;
 let mediaPipeTasks;
 let handLandmarker;
 let poseLandmarker;
@@ -163,9 +171,14 @@ function resizeCanvas() {
 }
 
 function toScreenPoint(landmark) {
+  // Match the centered object-fit: cover crop of the video in both orientations.
+  const scale = Math.max(window.innerWidth / (video.videoWidth || window.innerWidth),
+    window.innerHeight / (video.videoHeight || window.innerHeight));
+  const width = (video.videoWidth || window.innerWidth) * scale;
+  const height = (video.videoHeight || window.innerHeight) * scale;
   return {
-    x: (isFrontCamera() ? 1 - landmark.x : landmark.x) * window.innerWidth,
-    y: landmark.y * window.innerHeight,
+    x: (isFrontCamera() ? 1 - landmark.x : landmark.x) * width + (window.innerWidth - width) / 2,
+    y: landmark.y * height + (window.innerHeight - height) / 2,
     z: landmark.z ?? 0,
     visibility: landmark.visibility ?? 1
   };
@@ -632,116 +645,213 @@ function updateDebug() {
   }
 }
 
-async function loadModels() {
-  if (handLandmarker && poseLandmarker) return;
-
-  statusText.textContent = "loading";
-  mediaPipeTasks ||= await import(MEDIAPIPE_MODULE_URL);
-  const { FilesetResolver, HandLandmarker, PoseLandmarker } = mediaPipeTasks;
-  const vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
-  const sharedOptions = { runningMode: "VIDEO" };
-
-  handLandmarker = await HandLandmarker.createFromOptions(vision, {
-    ...sharedOptions,
-    numHands: 4,
-    minHandDetectionConfidence: 0.5,
-    minHandPresenceConfidence: 0.5,
-    minTrackingConfidence: 0.45,
-    baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "GPU" }
-  }).catch(() =>
-    HandLandmarker.createFromOptions(vision, {
-      ...sharedOptions,
-      numHands: 4,
-      baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "CPU" }
-    })
-  );
-
-  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-    ...sharedOptions,
-    numPoses: 2,
-    minPoseDetectionConfidence: 0.45,
-    minPosePresenceConfidence: 0.45,
-    minTrackingConfidence: 0.45,
-    baseOptions: { modelAssetPath: POSE_MODEL_URL, delegate: "GPU" }
-  }).catch(() =>
-    PoseLandmarker.createFromOptions(vision, {
-      ...sharedOptions,
-      numPoses: 2,
-      baseOptions: { modelAssetPath: POSE_MODEL_URL, delegate: "CPU" }
-    })
-  );
+function closeModel(model) {
+  if (!model || closedModels.has(model)) return;
+  closedModels.add(model);
+  modelResources.delete(model);
+  try { model.close(); } catch (error) { console.warn("Model cleanup failed", error); }
 }
 
-function stopCamera() {
-  if (stream) {
-    stream.getTracks().forEach((track) => track.stop());
-    stream = null;
-  }
-  video.srcObject = null;
-}
-
-async function startCamera() {
-  isRunning = false;
-  if (frameRequest) {
-    cancelAnimationFrame(frameRequest);
-    frameRequest = 0;
-  }
-  startButton.disabled = true;
-  cameraButton.disabled = true;
+async function createModel(factory, vision, options, modelAssetPath, label) {
   try {
-    await loadModels();
-    stopCamera();
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode,
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      },
-      audio: false
+    return await factory.createFromOptions(vision, {
+      ...options, baseOptions: { modelAssetPath, delegate: "GPU" }
     });
-    video.srcObject = stream;
-    video.classList.toggle("is-front", isFrontCamera());
-    await video.play();
-    isRunning = true;
-    lastVideoTime = -1;
-    lastFrameAt = performance.now();
-    startButton.textContent = "RESET";
-    statusText.textContent = "searching";
-    frameRequest = requestAnimationFrame(frame);
-  } catch (error) {
-    console.error(error);
-    statusText.textContent = "camera error";
-  } finally {
-    startButton.disabled = false;
-    cameraButton.disabled = false;
+  } catch (gpuError) {
+    try {
+      // Preserve the original CPU fallback options and recognition defaults.
+      return await factory.createFromOptions(vision, {
+        runningMode: "VIDEO",
+        ...(label === "Hand" ? { numHands: 4 } : { numPoses: 2 }),
+        baseOptions: { modelAssetPath, delegate: "CPU" }
+      });
+    } catch (cpuError) {
+      throw new Error(label + " Landmarker initialization failed on both GPU and CPU. Check the connection or device and retry START.",
+        { cause: { gpuError, cpuError } });
+    }
   }
 }
 
-async function switchCamera() {
-  facingMode = isFrontCamera() ? "environment" : "user";
-  values.camera.textContent = isFrontCamera() ? "front" : "back";
-  if (isRunning) {
-    await startCamera();
-  } else {
-    video.classList.toggle("is-front", isFrontCamera());
-  }
+function loadModels() {
+  if (handLandmarker && poseLandmarker) return Promise.resolve();
+  if (modelPromise) return modelPromise;
+  const generation = modelGeneration;
+  modelPromise = (async () => {
+    let hand;
+    let pose;
+    try {
+      mediaPipeTasks ||= await import(MEDIAPIPE_MODULE_URL);
+      const { FilesetResolver, HandLandmarker, PoseLandmarker } = mediaPipeTasks;
+      const vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
+      if (generation !== modelGeneration) throw new Error("Model initialization interrupted. Retry START.");
+      hand = await createModel(HandLandmarker, vision, {
+        runningMode: "VIDEO", numHands: 4,
+        minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5, minTrackingConfidence: 0.45
+      }, HAND_MODEL_URL, "Hand");
+      modelResources.add(hand);
+      if (generation !== modelGeneration) throw new Error("Model initialization interrupted. Retry START.");
+      pose = await createModel(PoseLandmarker, vision, {
+        runningMode: "VIDEO", numPoses: 2,
+        minPoseDetectionConfidence: 0.45, minPosePresenceConfidence: 0.45, minTrackingConfidence: 0.45
+      }, POSE_MODEL_URL, "Pose");
+      modelResources.add(pose);
+      if (generation !== modelGeneration) throw new Error("Model initialization interrupted. Retry START.");
+      handLandmarker = hand;
+      poseLandmarker = pose;
+    } catch (error) {
+      closeModel(hand);
+      closeModel(pose);
+      if (/Landmarker|interrupted/.test(error.message)) throw error;
+      throw new Error("MediaPipe shared files failed to load or initialize. Check the connection and retry START.", { cause: error });
+    } finally {
+      modelPromise = null;
+    }
+  })();
+  return modelPromise;
 }
 
-function resetRound() {
+function releaseModels() {
+  modelGeneration += 1;
+  // Also release a completed Hand model while Pose is still loading.
+  [...modelResources].forEach(closeModel);
+  handLandmarker = null;
+  poseLandmarker = null;
+}
+
+function stopTracks(mediaStream) {
+  mediaStream?.getTracks().forEach((track) => track.stop());
+}
+
+function clearCombatState(resetHp = false) {
   players.forEach((player) => {
-    player.hp = 100;
-    player.previousPose = null;
-    player.previousHands = { left: "unknown", right: "unknown" };
-    player.cooldownUntil = { left: 0, right: 0 };
-    player.nextBarrierWaveAt = 0;
+    const hp = resetHp ? 100 : player.hp;
+    Object.assign(player, createPlayer(player.id, player.label, player.color, player.altColor), { hp });
   });
+  poseCount = 0;
   particles = [];
   projectiles = [];
   shockwaves = [];
+  shakeUntil = 0;
+  shakeMagnitude = 0;
+  lastVideoTime = -1;
+  lastFrameAt = performance.now();
+  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  updateDebug();
+}
+
+function stopCamera(message = "Stopped - START to resume") {
+  cameraGeneration += 1;
+  isRunning = false;
+  isStarting = false;
+  if (frameRequest) cancelAnimationFrame(frameRequest);
+  frameRequest = 0;
+  const attachedStream = video.srcObject;
+  video.pause();
+  video.srcObject = null;
+  stopTracks(stream);
+  if (attachedStream !== stream) stopTracks(attachedStream);
+  stream = null;
+  clearCombatState();
+  startButton.textContent = "START";
+  startButton.disabled = false;
+  stopButton.disabled = true;
+  statusText.textContent = message;
+}
+
+function cameraError(error, requestedFacing) {
+  const cameraName = requestedFacing === "user" ? "Front" : "Back";
+  if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+    return "Camera permission was not granted. Check Safari and device permissions.";
+  }
+  return cameraName + " camera acquisition failed. Check availability, use by other apps, and device settings.";
+}
+
+function startCamera() {
+  stopCamera();
+  if (document.hidden) return Promise.resolve();
+  const generation = cameraGeneration;
+  const requestedFacing = facingMode;
+  const current = () => generation === cameraGeneration && !document.hidden;
+  isStarting = true;
+  startButton.disabled = true;
+  stopButton.disabled = false;
+  statusText.textContent = "Loading models / camera";
+  // Serialize acquisition and play: stale streams are released before the next request.
+  cameraQueue = cameraQueue.catch(() => {}).then(async () => {
+    let acquired;
+    try {
+      if (!current()) return;
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Camera API unavailable. Check HTTPS and browser support.");
+      }
+      await loadModels();
+      if (!current()) return;
+      try {
+        acquired = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: requestedFacing, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false
+        });
+      } catch (error) {
+        throw new Error(cameraError(error, requestedFacing), { cause: error });
+      }
+      if (!current()) return;
+      const actualFacing = acquired.getVideoTracks?.()[0]?.getSettings?.().facingMode;
+      if (actualFacing === "user" || actualFacing === "environment") facingMode = actualFacing;
+      updateCameraLabel();
+      stream = acquired;
+      video.srcObject = acquired;
+      video.classList.toggle("is-front", isFrontCamera());
+      try {
+        await video.play();
+      } catch (error) {
+        throw new Error("video.play() failed. Camera released; retry START.", { cause: error });
+      }
+      if (!current()) return;
+      isRunning = true;
+      isStarting = false;
+      lastVideoTime = -1;
+      lastFrameAt = performance.now();
+      startButton.textContent = "RESET";
+      statusText.textContent = "searching";
+      frameRequest = requestAnimationFrame((now) => { if (current()) frame(now); });
+    } catch (error) {
+      console.error(error);
+      if (current()) stopCamera(error.message);
+    } finally {
+      if (!current() || !isRunning) stopTracks(acquired);
+      if (current()) {
+        isStarting = false;
+        startButton.disabled = false;
+      }
+    }
+  });
+  return cameraQueue;
+}
+
+function updateCameraLabel() {
+  values.camera.textContent = isFrontCamera() ? "front" : "back";
+  cameraButton.textContent = isFrontCamera() ? "CAM front" : "CAM back";
+  cameraButton.setAttribute("aria-label", "Switch camera: currently " + (isFrontCamera() ? "front" : "back"));
+}
+
+function switchCamera() {
+  const shouldRestart = isRunning || isStarting;
+  facingMode = isFrontCamera() ? "environment" : "user";
+  updateCameraLabel();
+  if (shouldRestart) return startCamera();
+  video.classList.toggle("is-front", isFrontCamera());
+}
+
+function resetRound() {
+  clearCombatState(true);
 }
 
 function frame(now) {
+  frameRequest = 0;
   if (!isRunning) return;
+  if (document.hidden) {
+    stopCamera("Suspended - START to resume");
+    return;
+  }
   resizeCanvas();
   const delta = clamp(now - lastFrameAt, 1, 48);
   lastFrameAt = now;
@@ -784,9 +894,10 @@ function frame(now) {
 
 startButton.addEventListener("click", () => {
   resetRound();
-  startCamera();
+  if (!isRunning) startCamera();
 });
 
+stopButton.addEventListener("click", () => stopCamera());
 cameraButton.addEventListener("click", switchCamera);
 
 panelButton.addEventListener("click", () => {
@@ -799,7 +910,13 @@ panelButton.addEventListener("click", () => {
 
 window.addEventListener("resize", resizeCanvas);
 window.addEventListener("orientationchange", resizeCanvas);
-window.addEventListener("pagehide", stopCamera);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopCamera("Suspended - START to resume");
+});
+window.addEventListener("pagehide", () => {
+  stopCamera("Suspended - START to resume");
+  releaseModels();
+});
 
 video.classList.add("is-front");
 resizeCanvas();

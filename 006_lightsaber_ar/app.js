@@ -1,8 +1,3 @@
-import {
-  FilesetResolver,
-  HandLandmarker
-} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/+esm";
-
 const WASM_ROOT = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm";
 const HAND_MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
@@ -11,6 +6,9 @@ const video = document.querySelector("#camera");
 const canvas = document.querySelector("#overlay");
 const ctx = canvas.getContext("2d");
 const startButton = document.querySelector("#startButton");
+const stopButton = document.querySelector("#stopButton");
+const cameraStateText = document.querySelector("#cameraStateText");
+const audioStatus = document.querySelector("#audioStatus");
 const offButton = document.querySelector("#offButton");
 const debugButton = document.querySelector("#debugButton");
 const statusText = document.querySelector("#statusText");
@@ -48,7 +46,15 @@ const PALM_POINTS = [0, 5, 9, 13, 17];
 const ACTIVATION_HOLD_MS = 180;
 
 let handLandmarker;
-let stream;
+let modelPromise = null;
+let modelPromiseGeneration = 0;
+let modelGeneration = 0;
+let stream = null;
+let cameraState = "stopped";
+let cameraRequest = 0;
+let animationFrameId = null;
+let swingTimeout = null;
+const audioVoices = new Set();
 let isRunning = false;
 let debugEnabled = false;
 let selectedColor = "blue";
@@ -97,23 +103,31 @@ function setJudgeState(key, value, state = "wait") {
 
 function resizeCanvas() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const width = Math.floor(window.innerWidth * dpr);
-  const height = Math.floor(window.innerHeight * dpr);
+  const { width: viewWidth, height: viewHeight } = video.getBoundingClientRect();
+  const width = Math.floor(viewWidth * dpr);
+  const height = Math.floor(viewHeight * dpr);
 
   if (canvas.width !== width || canvas.height !== height) {
     canvas.width = width;
     canvas.height = height;
-    canvas.style.width = `${window.innerWidth}px`;
-    canvas.style.height = `${window.innerHeight}px`;
+    canvas.style.width = `${viewWidth}px`;
+    canvas.style.height = `${viewHeight}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    smoothedPose = null;
+    previousPose = null;
   }
 }
 
-// MediaPipe の座標は映像基準なので、鏡表示に合わせて X だけ反転してCanvas座標へ変換する。
+// MediaPipe の映像座標を、鏡表示と中央クロップに合わせてCanvas座標へ変換する。
 function toScreenPoint(landmark) {
+  const { width, height } = video.getBoundingClientRect();
+  // Match the centered object-fit: cover crop, including the mirrored X axis.
+  const scale = Math.max(width / (video.videoWidth || width), height / (video.videoHeight || height));
+  const imageWidth = (video.videoWidth || width) * scale;
+  const imageHeight = (video.videoHeight || height) * scale;
   return {
-    x: (1 - landmark.x) * window.innerWidth,
-    y: landmark.y * window.innerHeight
+    x: (1 - landmark.x) * imageWidth - (imageWidth - width) / 2,
+    y: landmark.y * imageHeight - (imageHeight - height) / 2
   };
 }
 
@@ -293,21 +307,55 @@ function smoothPose(pose) {
 }
 
 function ensureAudio() {
-  if (!audioContext) {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  try {
+    if (!audioContext || audioContext.state === "closed") {
+      const Audio = window.AudioContext || window.webkitAudioContext;
+      if (!Audio) throw new Error("AudioContext unavailable");
+      audioContext = new Audio();
+    }
+    if (audioContext.state === "suspended") {
+      Promise.resolve(audioContext.resume()).catch(reportAudioUnavailable);
+    }
+    return audioContext;
+  } catch (error) {
+    reportAudioUnavailable();
+    return null;
   }
-  if (audioContext.state === "suspended") {
-    audioContext.resume();
+}
+
+function reportAudioUnavailable() {
+  audioStatus.textContent = "音声を利用できません。カメラは使用できます。";
+}
+
+function trackVoice(osc, filter, gain) {
+  const voice = { osc, filter, gain };
+  audioVoices.add(voice);
+  osc.onended = () => {
+    osc.disconnect();
+    filter.disconnect();
+    gain.disconnect();
+    audioVoices.delete(voice);
+  };
+}
+
+function stopAudio() {
+  for (const { osc, filter, gain } of audioVoices) {
+    try { osc.stop(); } catch { /* Already ended. */ }
+    osc.disconnect();
+    filter.disconnect();
+    gain.disconnect();
   }
-  return audioContext;
+  audioVoices.clear();
 }
 
 function playIgnitionSound() {
   const audio = ensureAudio();
+  if (!audio) return;
   const now = audio.currentTime;
   const osc = audio.createOscillator();
   const gain = audio.createGain();
   const filter = audio.createBiquadFilter();
+  trackVoice(osc, filter, gain);
 
   osc.type = "sawtooth";
   osc.frequency.setValueAtTime(90, now);
@@ -326,10 +374,12 @@ function playIgnitionSound() {
 
 function playSwingSound() {
   const audio = ensureAudio();
+  if (!audio) return;
   const now = audio.currentTime;
   const osc = audio.createOscillator();
   const gain = audio.createGain();
   const filter = audio.createBiquadFilter();
+  trackVoice(osc, filter, gain);
 
   osc.type = "triangle";
   osc.frequency.setValueAtTime(170, now);
@@ -346,11 +396,15 @@ function playSwingSound() {
   osc.stop(now + 0.3);
 }
 
+function safelyPlaySound(play) {
+  try { play(); } catch { stopAudio(); reportAudioUnavailable(); }
+}
+
 function activateSaber(now) {
   if (saberState === "on" || saberState === "igniting") return;
   saberState = "igniting";
   saberStartedAt = now;
-  playIgnitionSound();
+  safelyPlaySound(playIgnitionSound);
 }
 
 function turnOffSaber() {
@@ -377,8 +431,9 @@ function detectSwing(pose, now) {
   if (saberState === "on" && speed > threshold && now - lastSwingAt > 520) {
     lastSwingAt = now;
     swingBadge.classList.add("is-visible");
-    playSwingSound();
-    window.setTimeout(() => swingBadge.classList.remove("is-visible"), 260);
+    safelyPlaySound(playSwingSound);
+    window.clearTimeout(swingTimeout);
+    swingTimeout = window.setTimeout(() => swingBadge.classList.remove("is-visible"), 260);
   }
 }
 
@@ -500,49 +555,126 @@ function updateState(pose, now) {
   return smoothPose(pose);
 }
 
-async function loadHandLandmarker() {
-  if (handLandmarker) return handLandmarker;
+function setCameraState(state, message) {
+  cameraState = state;
+  cameraStateText.textContent = message;
+  startButton.disabled = state === "starting" || state === "running";
+  stopButton.disabled = state === "stopped" || state === "error";
+}
 
-  updateStatus("MediaPipe読込中");
-  const vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
-  const options = {
-    runningMode: "VIDEO",
-    numHands: 2,
-    minHandDetectionConfidence: 0.55,
-    minHandPresenceConfidence: 0.55,
-    minTrackingConfidence: 0.5
-  };
+function stopTracks(mediaStream) {
+  mediaStream?.getTracks().forEach((track) => track.stop());
+}
 
-  try {
-    handLandmarker = await HandLandmarker.createFromOptions(vision, {
-      ...options,
-      baseOptions: {
-        modelAssetPath: HAND_MODEL_URL,
-        delegate: "GPU"
-      }
-    });
-  } catch (error) {
-    // iOSの環境や省電力状態でGPU delegateが失敗する場合はCPUへ落として起動を優先する。
-    console.warn("GPU delegate failed. Falling back to CPU.", error);
-    handLandmarker = await HandLandmarker.createFromOptions(vision, {
-      ...options,
-      baseOptions: {
-        modelAssetPath: HAND_MODEL_URL,
-        delegate: "CPU"
-      }
+function stopCamera() {
+  ++cameraRequest;
+  isRunning = false;
+  if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
+  animationFrameId = null;
+  stopTracks(stream);
+  if (video.srcObject !== stream) stopTracks(video.srcObject);
+  video.pause();
+  video.srcObject = null;
+  stream = null;
+  lastVideoTime = -1;
+  lastSeenHandsAt = 0;
+  lastSwingAt = 0;
+  saberStartedAt = 0;
+  window.clearTimeout(swingTimeout);
+  swingTimeout = null;
+  swingBadge.classList.remove("is-visible");
+  stopAudio();
+  turnOffSaber();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  setCameraState("stopped", "カメラ停止中 — STARTで再開");
+}
+
+function disposeHandLandmarker() {
+  ++modelGeneration;
+  handLandmarker?.close();
+  handLandmarker = undefined;
+  // Keep the pending promise until it settles: a restart must not create
+  // a second model alongside the obsolete initialization.
+}
+
+function loadHandLandmarker() {
+  if (handLandmarker) return Promise.resolve(handLandmarker);
+  const generation = modelGeneration;
+  if (modelPromise) {
+    if (modelPromiseGeneration === generation) return modelPromise;
+    return modelPromise.catch(() => {}).then(() => {
+      if (generation !== modelGeneration) throw new Error("Model initialization cancelled");
+      return loadHandLandmarker();
     });
   }
+  const valid = () => generation === modelGeneration;
+  const pending = (async () => {
+    const { FilesetResolver, HandLandmarker } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/+esm");
+    if (!valid()) throw new Error("Model initialization cancelled");
+    const vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
+    if (!valid()) throw new Error("Model initialization cancelled");
+    const options = {
+      runningMode: "VIDEO",
+      numHands: 2,
+      minHandDetectionConfidence: 0.55,
+      minHandPresenceConfidence: 0.55,
+      minTrackingConfidence: 0.5
+    };
+    let model;
+    try {
+      model = await HandLandmarker.createFromOptions(vision, {
+        ...options,
+        baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "GPU" }
+      });
+    } catch (gpuError) {
+      if (!valid()) throw gpuError;
+      console.warn("GPU delegate failed. Falling back to CPU.", gpuError);
+      model = await HandLandmarker.createFromOptions(vision, {
+        ...options,
+        baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "CPU" }
+      });
+    }
+    if (!valid()) {
+      model.close();
+      throw new Error("Model initialization cancelled");
+    }
+    handLandmarker = model;
+    return model;
+  })();
+  modelPromise = pending;
+  modelPromiseGeneration = generation;
+  const clear = () => { if (modelPromise === pending) modelPromise = null; };
+  pending.then(clear, clear);
+  return pending;
+}
 
-  return handLandmarker;
+function startErrorMessage(error, stage) {
+  if (stage === "api") return "カメラAPIを利用できません。対応ブラウザ・HTTPS接続をご確認ください。";
+  if (stage === "model") return "手認識モデルの読み込みに失敗しました。通信またはGPU / CPU初期化の問題の可能性があります。STARTで再試行できます。";
+  if (stage === "play") return "映像の再生に失敗しました。Safariの中断や再生制限の可能性があります。STARTで再試行できます。";
+  if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+    return "カメラを許可できませんでした。権限設定やブラウザの制限をご確認ください。";
+  }
+  return "カメラを取得できませんでした。他アプリの使用中・端末の制限・接続の問題などの可能性があります。STARTで再試行できます。";
 }
 
 async function startCamera() {
-  startButton.disabled = true;
+  if (cameraState === "starting" || cameraState === "running" || document.hidden) return;
+  const request = ++cameraRequest;
+  const valid = () => request === cameraRequest && !document.hidden;
+  let acquired = null;
+  let stage = "api";
+  setCameraState("starting", "カメラ起動中：準備しています");
+  ensureAudio(); // Called directly from the user gesture; audio failure is optional.
   try {
-    ensureAudio();
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error("Camera API unavailable");
+    stage = "model";
+    setCameraState("starting", "カメラ起動中：手認識モデル読込");
     await loadHandLandmarker();
-
-    stream = await navigator.mediaDevices.getUserMedia({
+    if (!valid()) return;
+    stage = "camera";
+    setCameraState("starting", "カメラ起動中：アクセスを待っています");
+    acquired = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: "user",
         width: { ideal: 1280 },
@@ -550,62 +682,90 @@ async function startCamera() {
       },
       audio: false
     });
-
-    video.srcObject = stream;
+    if (!valid()) { stopTracks(acquired); return; }
+    stream = acquired;
+    video.srcObject = acquired;
+    stage = "play";
     await video.play();
-    isRunning = true;
+    if (!valid()) { stopTracks(acquired); return; }
+    lastVideoTime = -1;
     lastSeenHandsAt = performance.now();
-    requestAnimationFrame(frame);
+    isRunning = true;
+    setCameraState("running", "カメラ動作中");
+    animationFrameId = requestAnimationFrame(frame);
     updateStatus("手認識中");
   } catch (error) {
+    stopTracks(acquired);
+    if (!valid()) return;
     console.error(error);
-    updateStatus("カメラ起動に失敗");
-    startButton.disabled = false;
+    stopCamera();
+    setCameraState("error", startErrorMessage(error, stage));
   }
 }
 
 function frame(now) {
+  animationFrameId = null;
   if (!isRunning) return;
-  resizeCanvas();
-  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  if (document.hidden) { stopCamera(); return; }
+  try {
+    resizeCanvas();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
-    lastVideoTime = video.currentTime;
-    const results = handLandmarker.detectForVideo(video, now);
-    const hands = (results.landmarks || []).map((landmarks, index) =>
-      readHand(landmarks, results.handedness?.[index]?.[0])
-    );
-    const pose = getTwoHandPose(hands);
-    const activePose = updateState(pose, now);
-    updateDiagnostics(hands, pose, now);
+    if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+      lastVideoTime = video.currentTime;
+      const results = handLandmarker.detectForVideo(video, now);
+      const hands = (results.landmarks || []).map((landmarks, index) =>
+        readHand(landmarks, results.handedness?.[index]?.[0])
+      );
+      const pose = getTwoHandPose(hands);
+      const activePose = updateState(pose, now);
+      updateDiagnostics(hands, pose, now);
 
-    drawSaber(activePose, now);
-    drawLandmarks(hands);
-    if (activePose) detectSwing(activePose, now);
+      drawSaber(activePose, now);
+      drawLandmarks(hands);
+      if (activePose) detectSwing(activePose, now);
+    }
+
+    animationFrameId = requestAnimationFrame(frame);
+  } catch (error) {
+    console.error(error);
+    stopCamera();
+    setCameraState("error", "手認識処理を継続できませんでした。STARTで再試行できます。");
+    disposeHandLandmarker();
   }
-
-  requestAnimationFrame(frame);
 }
 
 startButton.addEventListener("click", startCamera);
+stopButton.addEventListener("click", stopCamera);
 offButton.addEventListener("click", turnOffSaber);
 
 debugButton.addEventListener("click", () => {
   debugEnabled = !debugEnabled;
   debugButton.textContent = debugEnabled ? "DEBUG ON" : "DEBUG OFF";
+  debugButton.setAttribute("aria-pressed", String(debugEnabled));
+  document.querySelector(".judge-panel").hidden = !debugEnabled;
 });
 
 colorButtons.forEach((button) => {
   button.addEventListener("click", () => {
     selectedColor = button.dataset.color;
     document.documentElement.style.setProperty("--accent", COLORS[selectedColor].glow);
-    colorButtons.forEach((item) => item.classList.toggle("is-active", item === button));
+    colorButtons.forEach((item) => {
+      item.classList.toggle("is-active", item === button);
+      item.setAttribute("aria-pressed", String(item === button));
+    });
   });
 });
 
 window.addEventListener("resize", resizeCanvas);
+window.visualViewport?.addEventListener("resize", resizeCanvas);
+video.addEventListener("loadedmetadata", resizeCanvas);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopCamera();
+});
 window.addEventListener("pagehide", () => {
-  if (stream) stream.getTracks().forEach((track) => track.stop());
+  stopCamera();
+  disposeHandLandmarker();
 });
 
 resizeCanvas();

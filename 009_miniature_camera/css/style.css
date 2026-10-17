@@ -76,7 +76,7 @@ select { color: var(--ink); border: 0; background: transparent; outline: 0; font
 .degree-control b { color: var(--ink); font-size: 10px; white-space: nowrap; }
 .degree-control input { min-width: 0; }
 .mode-tabs { width: min(100%, 260px); margin: 7px auto 6px; padding: 3px; display: flex; border-radius: 99px; background: #080c0d; }
-.mode-tab { flex: 1; padding: 7px; border: 0; border-radius: 99px; color: var(--muted); background: transparent; font-size: 12px; font-weight: 800; }
+.mode-tab { flex: 1; min-width: 0; white-space: nowrap; padding: 7px 5px; border: 0; border-radius: 99px; color: var(--muted); background: transparent; font-size: 12px; font-weight: 800; }
 .mode-tab.is-active { color: #111608; background: var(--lime); }
 .mode-tab:disabled { opacity: .38; }
 .capture-row { grid-template-columns: 1fr 88px 1fr; }
@@ -126,3 +126,38 @@ input[type="range"] { width: 100%; accent-color: var(--lime); }
 .speed-row button.is-active { color: #111608; border-color: var(--lime); background: var(--lime); }
 @media (min-width: 700px) { .app { width: min(100%, 500px); margin: 0 auto; box-shadow: 0 0 80px #000; } }
 @media (orientation: landscape) and (max-height: 600px) { .app { grid-template-columns: 1fr 260px; grid-template-rows: 1fr; } .control-deck { display: grid; align-content: center; border-top: 0; border-left: 1px solid var(--line); } }
+
+/* Capture controls fit narrow screens; accessibility zoom remains available outside the preview. */
+html, body { width: 100%; max-width: 100%; }
+.app { max-width: 100%; }
+.viewport, .control-deck, .quick-row > *, .capture-row > * { min-width: 0; }
+.viewport, .control-deck { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+button, select, input { touch-action: manipulation; }
+.rec-status[hidden] { display: none; }
+.shutter.is-recording { border-color: var(--orange); box-shadow: 0 0 0 4px rgba(255,112,73,.22); }
+button:disabled, select:disabled { cursor: default; opacity: .45; }
+.settings-sheet { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.settings-sheet input, .settings-sheet select { min-width: 0; max-width: 100%; }
+.download-button { width: 100%; margin-bottom: 10px; }
+.review-footer { padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 350px) {
+  .control-deck { padding-left: 10px; padding-right: 10px; }
+  .quick-row { grid-template-columns: minmax(0, 1fr) 62px 62px; }
+  .topbar { padding: 12px 10px; }
+  .brand { font-size: 10px; letter-spacing: .1em; }
+  .slider-row { grid-template-columns: 62px minmax(0, 1fr) 35px 28px; gap: 5px; }
+}
+@media (max-height: 600px) and (orientation: portrait) {
+  .control-deck { padding-top: 6px; }
+  .quick-row .icon-button, .select-wrap { height: 40px; }
+  .degree-control { margin-top: 5px; }
+  .mode-tabs { margin-top: 5px; margin-bottom: 4px; }
+  .empty-state { gap: 9px; padding: 16px; }
+  .lens-mark { width: 52px; height: 52px; }
+}
+@media (orientation: landscape) and (max-height: 600px) {
+  .app { width: 100%; max-width: 100%; grid-template-columns: minmax(0, 1fr) 260px; }
+  .control-deck { padding-right: max(12px, env(safe-area-inset-right)); padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  .quick-row { grid-template-columns: minmax(0, 1fr) 54px 54px; }
+  .mode-tab { font-size: 11px; }
+}

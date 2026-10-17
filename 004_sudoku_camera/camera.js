@@ -1,4 +1,34 @@
 let activeStream = null;
+let activeVideo = null;
+let pendingRequest = null;
+let cameraGeneration = 0;
+
+function cancelledError() {
+  return new DOMException("カメラの起動を中止しました。", "AbortError");
+}
+
+export function isCameraReady(videoElement) {
+  return hasLiveCameraStream(videoElement) && !videoElement.paused
+    && videoElement.readyState >= 2 && videoElement.videoWidth > 0 && videoElement.videoHeight > 0;
+}
+
+function waitForFrame(video, request) {
+  return new Promise((resolve, reject) => {
+    const check = () => { if (isCameraReady(video)) { cleanup(); resolve(); } };
+    const fail = () => { cleanup(); reject(new Error("カメラ映像を再生できません。「カメラ開始」で再試行してください。")); };
+    const cleanup = () => {
+      clearTimeout(timer);
+      for (const event of ["loadeddata", "canplay", "playing", "resize"]) video.removeEventListener(event, check);
+      video.removeEventListener("error", fail);
+      request.cleanup = null;
+    };
+    const timer = setTimeout(fail, 15000);
+    request.cleanup = cleanup;
+    for (const event of ["loadeddata", "canplay", "playing", "resize"]) video.addEventListener(event, check);
+    video.addEventListener("error", fail);
+    check();
+  });
+}
 
 function stopTracks(stream) {
   if (!stream) return;
@@ -13,50 +43,70 @@ export function isCameraSupported() {
   return Boolean(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function");
 }
 
-export async function startCamera(videoElement) {
+export function startCamera(videoElement) {
+  if (pendingRequest?.video === videoElement) return pendingRequest.promise;
+  stopCamera(activeVideo);
   if (!isCameraSupported()) {
-    throw new Error("カメラを利用できません。iPhone SafariでHTTPSページとして開いてください。");
+    return Promise.reject(new Error("カメラを利用できません。iPhone SafariでHTTPSページとして開いてください。"));
   }
-
-  stopTracks(activeStream);
-  activeStream = null;
-  const preferredConstraints = {
-    audio: false,
-    video: {
-      facingMode: { ideal: "environment" },
-      width: { ideal: 1920 },
-      height: { ideal: 1080 }
+  const request = { video: videoElement, generation: cameraGeneration, cleanup: null };
+  pendingRequest = request;
+  const current = () => request.generation === cameraGeneration;
+  const aborted = new Promise((_, reject) => { request.cancel = () => reject(cancelledError()); });
+  const setup = async () => {
+    let stream;
+    try {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+        });
+      } catch (error) {
+        if (!current()) throw cancelledError();
+        stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
+      }
+      if (!current()) { stopTracks(stream); throw cancelledError(); }
+      activeStream = stream;
+      activeVideo = videoElement;
+      videoElement.autoplay = true;
+      videoElement.muted = true;
+      videoElement.playsInline = true;
+      for (const attribute of ["autoplay", "muted", "playsinline", "webkit-playsinline"]) videoElement.setAttribute(attribute, "");
+      videoElement.srcObject = stream;
+      // Acquisition alone does not mean Safari can supply a frame.
+      let playTimer;
+      request.cleanup = () => clearTimeout(playTimer);
+      try {
+        await Promise.race([
+          videoElement.play(),
+          aborted,
+          new Promise((_, reject) => {
+            playTimer = setTimeout(() => reject(new Error("映像再生がタイムアウトしました。")), 15000);
+          })
+        ]);
+      } finally {
+        clearTimeout(playTimer);
+      }
+      if (!current()) throw cancelledError();
+      await Promise.race([waitForFrame(videoElement, request), aborted]);
+      if (!current()) throw cancelledError();
+      return stream;
+    } catch (error) {
+      stopTracks(stream);
+      if (current()) {
+        videoElement.pause();
+        videoElement.srcObject = null;
+        activeStream = null;
+        activeVideo = null;
+      }
+      if (!current()) throw cancelledError();
+      throw new Error("カメラの起動・映像再生に失敗しました。カメラの許可を確認し、「カメラ開始」で再試行してください。", { cause: error });
     }
   };
-
-  console.log("[camera] requesting camera", preferredConstraints);
-  try {
-    activeStream = await navigator.mediaDevices.getUserMedia(preferredConstraints);
-  } catch (preferredError) {
-    console.warn("[camera] preferred constraints failed; retrying with default video", preferredError);
-    activeStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
-  }
-
-  videoElement.autoplay = true;
-  videoElement.muted = true;
-  videoElement.playsInline = true;
-  videoElement.setAttribute("autoplay", "");
-  videoElement.setAttribute("muted", "");
-  videoElement.setAttribute("playsinline", "");
-  videoElement.setAttribute("webkit-playsinline", "");
-  videoElement.srcObject = activeStream;
-
-  try {
-    const playPromise = videoElement.play();
-    if (playPromise && typeof playPromise.catch === "function") {
-      playPromise.catch((error) => console.warn("[camera] play() rejected; stream remains available", error));
-    }
-  } catch (error) {
-    console.warn("[camera] play() threw; stream remains available", error);
-  }
-
-  console.log("[camera] stream attached; capture UI may be enabled", activeStream);
-  return activeStream;
+  request.promise = Promise.race([setup(), aborted]).finally(() => {
+    request.cleanup?.();
+    if (pendingRequest === request) pendingRequest = null;
+  });
+  return request.promise;
 }
 
 export function hasLiveCameraStream(videoElement) {
@@ -100,7 +150,7 @@ export function getCoverSourceRect(videoElement, guideElement) {
     throw new Error("ガイドがカメラ映像の外にあります。画面を再読み込みしてください。");
   }
 
-  console.log("[camera] guide crop geometry", {
+  console.debug("[camera] guide crop geometry", {
     videoVideoWidth: videoWidth,
     videoVideoHeight: videoHeight,
     videoDisplayWidth: videoRect.width,
@@ -123,6 +173,7 @@ export function getCoverSourceRect(videoElement, guideElement) {
 }
 
 export function captureGuideArea(videoElement, guideElement, outputCanvas, outputSize = 900) {
+  if (!isCameraReady(videoElement)) throw new Error("カメラ映像の準備が完了していません。もう一度カメラを開始してください。");
   const sourceRect = getCoverSourceRect(videoElement, guideElement);
   const size = Math.max(1, Math.round(outputSize));
   outputCanvas.width = size;
@@ -141,7 +192,7 @@ export function captureGuideArea(videoElement, guideElement, outputCanvas, outpu
     size
   );
 
-  console.log("[camera] guide area captured", {
+  console.debug("[camera] guide area captured", {
     outputWidth: outputCanvas.width,
     outputHeight: outputCanvas.height,
     sourceCrop: sourceRect
@@ -149,12 +200,19 @@ export function captureGuideArea(videoElement, guideElement, outputCanvas, outpu
   return sourceRect;
 }
 
-export function stopCamera(videoElement) {
-  if (videoElement) {
-    videoElement.pause();
-    videoElement.srcObject = null;
+export function stopCamera(videoElement = activeVideo) {
+  cameraGeneration += 1;
+  pendingRequest?.cleanup?.();
+  pendingRequest?.cancel();
+  pendingRequest = null;
+  const videos = new Set([videoElement, activeVideo]);
+  for (const video of videos) {
+    if (!video) continue;
+    stopTracks(video.srcObject);
+    video.pause();
+    video.srcObject = null;
   }
   stopTracks(activeStream);
   activeStream = null;
-  console.log("[camera] stream stopped");
+  activeVideo = null;
 }

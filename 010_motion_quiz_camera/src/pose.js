@@ -3,7 +3,13 @@ import { MODEL_URL, POSE_VERSION, WASM_ROOT } from "./config.js";
 export class PoseDetector {
   constructor() { this.landmarker = null; this.lastVideoTime = -1; }
 
-  async init() {
+  init() {
+    if(this.landmarker)return Promise.resolve();
+    if(!this.initPromise)this.initPromise=this.initialize().finally(()=>{this.initPromise=null;});
+    return this.initPromise;
+  }
+
+  async initialize() {
     const module = await import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${POSE_VERSION}`);
     const vision = module.default || module;
     const fileset = await vision.FilesetResolver.forVisionTasks(WASM_ROOT);
@@ -27,5 +33,7 @@ export class PoseDetector {
     return result.landmarks?.[0] || [];
   }
 
-  close() { this.landmarker?.close(); this.landmarker = null; }
+  reset() { this.lastVideoTime=-1; }
+
+  close() { this.reset(); this.landmarker?.close(); this.landmarker = null; }
 }

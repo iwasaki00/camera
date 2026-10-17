@@ -1,4 +1,4 @@
-import { captureGuideArea, hasLiveCameraStream, startCamera, stopCamera } from "./camera.js";
+import { captureGuideArea, hasLiveCameraStream, isCameraReady, startCamera, stopCamera } from "./camera.js";
 import { drawCellCrop, drawOriginalCell, splitBoardIntoCells } from "./gridOcr.js";
 import { recognizeSingleDigit, setOcrPageSegmentationMode, setOcrProgressListener } from "./ocr.js";
 import { isClearlyBlankCell, OCR_INPUT_SIZE, prepareBenchmarkOcrImages, prepareFinalOcrImages, prepareOcrImages } from "./ocrImage.js?v=1.0.0";
@@ -197,6 +197,9 @@ let explanationSelectedPlacementCell = null;
 let pendingConfirmedAction = null;
 let isFullOcrRunning = false;
 let isCaptureInProgress = false;
+let cameraRequestId = 0;
+let isCameraStarting = false;
+let fullOcrGeneration = 0;
 let isBenchmarkRunning = false;
 let isImageLoading = false;
 let isTuningRunning = false;
@@ -237,7 +240,7 @@ function setCameraActive(active) {
   cameraState.textContent = active ? "起動中" : "未起動";
   cameraState.classList.toggle("active", active);
   startCameraButton.textContent = active ? "カメラを再起動" : "カメラ開始";
-  const captureReady = active && !isCaptureInProgress;
+  const captureReady = active && isCameraReady(cameraPreview) && !isCaptureInProgress;
   captureButton.disabled = !captureReady;
   cameraTapHint.hidden = !captureReady;
   cameraStage.setAttribute("aria-disabled", String(!captureReady));
@@ -1213,6 +1216,7 @@ function resetOcrResult() {
 }
 
 function setPreprocessing(enabled) {
+  if (isFullOcrRunning) return;
   const changed = preprocessEnabled !== enabled;
   preprocessEnabled = enabled;
   preprocessOnButton.classList.toggle("active", enabled);
@@ -1270,6 +1274,7 @@ function clearOcrHistory() {
 }
 
 function clearFullOcrResults(message, badgeText = "未実行") {
+  fullOcrGeneration += 1;
   closeMiniKeypad();
   clearSolverResult({ disableSolve: true, message: "読み取り後に答えや解き方を表示できます。" });
   clearExplanationResult({ disableExplain: true });
@@ -1305,6 +1310,7 @@ function copyCapturedImageToSource() {
 }
 
 function activatePreparedBoard({ sourceLabel, imageInfo, truth = null }) {
+  suspendCamera();
   closeCellModal();
   closeBenchmarkModal();
   closeResultDiagnostics();
@@ -1377,6 +1383,9 @@ function applyAlignmentAction(action) {
 function setFullOcrControlsDisabled(disabled) {
   isFullOcrRunning = disabled;
   runFullOcrButton.disabled = disabled;
+  readingResultSection.setAttribute("aria-busy", String(disabled));
+  runBenchmarkButton.disabled = disabled;
+  startCameraButton.disabled = disabled || isCameraStarting;
   fullPreprocessOnButton.disabled = disabled;
   fullPreprocessOffButton.disabled = disabled;
   preprocessOnButton.disabled = disabled;
@@ -1413,7 +1422,7 @@ function benchmarkConditionsText(conditions) {
 }
 
 async function handleRunBenchmark() {
-  if (isBenchmarkRunning || isFullOcrRunning || cells.length !== 81) return;
+  if (isBenchmarkRunning || isFullOcrRunning || isImageLoading || cells.length !== 81) return;
   if (!benchmarkTruth.some((value) => value > 0)) {
     benchmarkStateBadge.textContent = "正解未設定";
     benchmarkStateBadge.classList.add("warning");
@@ -1607,7 +1616,7 @@ async function handleCopyBenchmark() {
 }
 
 async function handleRunFullOcr() {
-  if (isFullOcrRunning || cells.length !== 81) return;
+  if (isFullOcrRunning || isImageLoading || cells.length !== 81) return;
 
   closeMiniKeypad();
   closeCellModal();
@@ -1617,6 +1626,14 @@ async function handleRunFullOcr() {
   setResultMode("reading");
   regenerateFromAlignment();
   const revisionAtStart = alignmentRevision;
+  const generation = ++fullOcrGeneration;
+  const isCurrent = () => generation === fullOcrGeneration && alignmentRevision === revisionAtStart;
+  const boardSnapshot = document.createElement("canvas");
+  boardSnapshot.width = croppedCanvas.width;
+  boardSnapshot.height = croppedCanvas.height;
+  boardSnapshot.getContext("2d").drawImage(croppedCanvas, 0, 0);
+  const cellsSnapshot = cells.map((cell) => ({ ...cell }));
+  fullOcrRevision = null;
   const preprocessAtStart = preprocessEnabled;
   const ocrConditions = {
     x: alignment.x,
@@ -1633,26 +1650,29 @@ async function handleRunFullOcr() {
   fullOcrStateBadge.classList.remove("success", "warning");
   fullOcrStateBadge.classList.add("active");
   fullOcrNotice.classList.remove("stale");
-  fullOcrNotice.textContent = "数字を読み取っています。画面を閉じずにお待ちください。";
+  fullOcrNotice.textContent = "数字を読み取っています。スクロールして進捗を確認できます。撮り直し・画像調整・診断は完了後に操作できます。";
   fullOcrProgressBar.value = 0;
   fullOcrPercent.textContent = "0%";
   const batchStartedAt = performance.now();
   let currentIndex = 0;
 
   setOcrProgressListener(() => {
+    if (!isCurrent()) return;
     fullOcrProgressText.textContent = `数字を読み取っています… ${currentIndex} / 81`;
   });
 
   try {
     await setOcrPageSegmentationMode("8");
-    for (let index = 0; index < cells.length; index += 1) {
+    if (!isCurrent()) return;
+    for (let index = 0; index < cellsSnapshot.length; index += 1) {
+      if (!isCurrent()) return;
       currentIndex = index + 1;
-      const cell = cells[index];
+      const cell = cellsSnapshot[index];
       const label = getCellLabel(cell);
       fullOcrCurrentCell.textContent = `現在：${label}`;
       fullOcrProgressText.textContent = `数字を読み取っています… ${index} / 81`;
 
-      drawCellCrop(croppedCanvas, cell, batchCellCanvas);
+      drawCellCrop(boardSnapshot, cell, batchCellCanvas);
       let result;
       if (isClearlyBlankCell(batchCellCanvas)) {
         result = { digit: "", rawText: "", confidence: null, elapsedMs: 0, status: "empty", display: "空欄" };
@@ -1661,6 +1681,7 @@ async function handleRunFullOcr() {
         else prepareOcrImages(batchCellCanvas, batchScaledCanvas, batchInputCanvas, false);
         result = await recognizeSingleDigit(batchInputCanvas);
       }
+      if (!isCurrent()) return;
       const recognizedValue = result.digit ? Number(result.digit) : 0;
       fullOcrResults[index] = {
         ocrValue: recognizedValue,
@@ -1681,7 +1702,7 @@ async function handleRunFullOcr() {
       fullOcrProgressText.textContent = `数字を読み取っています… ${completed} / 81`;
     }
 
-    if (alignmentRevision !== revisionAtStart) {
+    if (!isCurrent()) {
       invalidateFullOcrResults("画像が変わりました。もう一度数字を読み取ってください。");
       return;
     }
@@ -1705,12 +1726,15 @@ async function handleRunFullOcr() {
     ocrConditionSummary.hidden = false;
     setStatus("数字の読み取りが完了しました。結果を確認してください。");
   } catch (error) {
+    if (!isCurrent()) return;
     console.error("[ocr] full grid OCR failed", error);
+    fullOcrResults = Array.from({ length: 81 }, () => null);
+    renderOcrResultBoard();
     fullOcrRevision = null;
     fullOcrStateBadge.textContent = "エラー";
     fullOcrStateBadge.classList.remove("active", "success");
     fullOcrStateBadge.classList.add("warning");
-    const message = "数字を読み取れませんでした。画像を確認してもう一度お試しください。";
+    const message = "数字を読み取れませんでした。画像を確認し、「数字を読み取る」を押して再試行してください。";
     fullOcrProgressText.textContent = message;
     fullOcrNotice.textContent = message;
     setStatus(message);
@@ -1725,9 +1749,13 @@ async function handleRunFullOcr() {
 }
 
 async function handleRunSingleOcr() {
+  if (isFullOcrRunning || isImageLoading) return;
   const cell = cells[selectedCellIndex];
   if (!cell) return;
 
+  const revisionAtStart = alignmentRevision;
+  const blankAtStart = isClearlyBlankCell(modalInnerCanvas);
+  setFullOcrControlsDisabled(true);
   const cellIndex = selectedCellIndex;
   const cellLabel = getCellLabel(cell);
   const usedPreprocessing = preprocessEnabled;
@@ -1740,15 +1768,17 @@ async function handleRunSingleOcr() {
   preprocessOffButton.disabled = true;
   ocrProgress.textContent = "Tesseract.jsを準備しています…";
   setOcrProgressListener((message) => {
+    if (alignmentRevision !== revisionAtStart || selectedCellIndex !== cellIndex) return;
     const percent = Number.isFinite(message.progress) ? ` ${Math.round(message.progress * 100)}%` : "";
     ocrProgress.textContent = `${message.status || "OCR処理中"}${percent}`;
   });
 
   try {
     await setOcrPageSegmentationMode("8");
-    const result = isClearlyBlankCell(modalInnerCanvas)
+    const result = blankAtStart
       ? { digit: "", rawText: "", confidence: null, elapsedMs: 0, status: "empty", display: "空欄" }
       : await recognizeSingleDigit(ocrSnapshot);
+    if (alignmentRevision !== revisionAtStart) return;
     if (selectedCellIndex === cellIndex) {
       ocrRawResult.textContent = JSON.stringify(result.rawText);
       ocrNormalizedResult.textContent = result.display;
@@ -1759,10 +1789,12 @@ async function handleRunSingleOcr() {
     }
     addOcrHistoryEntry(cellLabel, result, usedPreprocessing);
   } catch (error) {
+    if (alignmentRevision !== revisionAtStart) return;
     console.error("[ocr] single cell OCR failed", error);
     ocrProgress.textContent = error instanceof Error ? error.message : "OCRの実行に失敗しました。";
   } finally {
     setOcrProgressListener(null);
+    setFullOcrControlsDisabled(false);
     runSingleOcrButton.disabled = false;
     preprocessOnButton.disabled = false;
     preprocessOffButton.disabled = false;
@@ -1897,7 +1929,7 @@ function renderTuningResults(tuningResult, sourceLabel) {
 }
 
 async function handleRunTuning() {
-  if (isTuningRunning || isFullOcrRunning || isBenchmarkRunning || cells.length !== 81) return;
+  if (isTuningRunning || isFullOcrRunning || isBenchmarkRunning || isImageLoading || cells.length !== 81) return;
   if (!benchmarkTruth.some(Number)) {
     tuningStateBadge.textContent = "正解未設定";
     tuningStateBadge.classList.add("warning");
@@ -1943,7 +1975,7 @@ async function handleRunTuning() {
 }
 
 async function handleRunFinalCandidate() {
-  if (isTuningRunning || isFullOcrRunning || isBenchmarkRunning || cells.length !== 81) return;
+  if (isTuningRunning || isFullOcrRunning || isBenchmarkRunning || isImageLoading || cells.length !== 81) return;
   if (!benchmarkTruth.some(Number)) {
     tuningProgressText.textContent = "正解盤面を設定してから実行してください。";
     return;
@@ -2060,22 +2092,39 @@ async function handleLoadSample(sampleName = "sudoku-sample-01") {
   }
 }
 
+function suspendCamera() {
+  cameraRequestId += 1;
+  isCameraStarting = false;
+  stopCamera(cameraPreview);
+  setCameraActive(false);
+  startCameraButton.disabled = isFullOcrRunning;
+}
+
 async function handleStartCamera() {
+  if (isCameraStarting || isFullOcrRunning || isImageLoading || document.hidden) return false;
+  const requestId = ++cameraRequestId;
+  isCameraStarting = true;
   startCameraButton.disabled = true;
   isCaptureInProgress = false;
   setCameraActive(false);
-  setStatus("カメラを起動しています…");
-
+  cameraState.textContent = "準備中";
+  setStatus("カメラを起動し、映像を準備しています…");
   try {
     await startCamera(cameraPreview);
+    if (requestId !== cameraRequestId) return false;
     setCameraActive(true);
-    setStatus("枠に問題を合わせてカメラ映像をタップしてください。");
+    setStatus("枠に問題を合わせてカメラ映像をタップ、または「撮影」を押してください。");
+    return true;
   } catch (error) {
-    console.error("[app] start camera failed", error);
+    if (requestId !== cameraRequestId) return false;
     setCameraActive(false);
-    setStatus(error instanceof Error ? error.message : "カメラの起動に失敗しました。");
+    setStatus(error instanceof Error ? error.message : "カメラを開始できません。「カメラ開始」で再試行してください。");
+    return false;
   } finally {
-    startCameraButton.disabled = false;
+    if (requestId === cameraRequestId) {
+      isCameraStarting = false;
+      startCameraButton.disabled = false;
+    }
   }
 }
 
@@ -2084,7 +2133,8 @@ function handleCapture() {
     isCaptureInProgress
     || isImageLoading
     || captureButton.disabled
-    || !hasLiveCameraStream(cameraPreview)
+    || isFullOcrRunning
+    || !isCameraReady(cameraPreview)
   ) return;
 
   isCaptureInProgress = true;
@@ -2115,7 +2165,10 @@ function handleCapture() {
   }
 }
 
-function handleRetake() {
+async function handleRetake() {
+  if (isFullOcrRunning || isImageLoading || isCameraStarting) return;
+  alignmentRevision += 1;
+  invalidateFullOcrResults("撮り直し後、もう一度数字を読み取ってください。");
   clearSolverResult({ disableSolve: true, message: "読み取り後に答えや解き方を表示できます。" });
   clearExplanationResult({ disableExplain: true });
   closeMiniKeypad();
@@ -2128,15 +2181,14 @@ function handleRetake() {
   cameraSection.hidden = false;
   isCaptureInProgress = false;
 
-  const streamIsLive = hasLiveCameraStream(cameraPreview);
-  setCameraActive(streamIsLive);
-  captureButton.disabled = !streamIsLive;
-  setStatus(
-    streamIsLive
-      ? "枠に問題を合わせてカメラ映像をタップしてください。"
-      : "カメラが停止しています。「カメラ開始」を押してください。"
-  );
+  // Keep both canvases until a new capture has succeeded.
   cameraStage.scrollIntoView({ behavior: "smooth", block: "center" });
+  const expectedRequestId = cameraRequestId + 1;
+  const started = await handleStartCamera();
+  if (!started && expectedRequestId === cameraRequestId && !document.hidden && capturedSourceCanvas.width) {
+    resultSection.hidden = false;
+    setStatus("カメラを開始できませんでした。撮影済み画像は保持しています。「カメラ開始」で再試行するか、現在の画像を読み取れます。");
+  }
 }
 
 buildCellViews();
@@ -2280,6 +2332,10 @@ document.addEventListener("pointerdown", (event) => {
 window.addEventListener("resize", positionMiniKeypad);
 window.addEventListener("scroll", positionMiniKeypad, { passive: true });
 
-window.addEventListener("pagehide", () => {
-  stopCamera(cameraPreview);
+window.addEventListener("pagehide", suspendCamera);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && (isCameraStarting || hasLiveCameraStream(cameraPreview))) {
+    suspendCamera();
+    setStatus("カメラを停止しました。撮影するには「カメラ開始」を押してください。");
+  }
 });

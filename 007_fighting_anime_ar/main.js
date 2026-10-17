@@ -10,6 +10,7 @@ const video = document.querySelector("#camera");
 const canvas = document.querySelector("#overlay");
 const ctx = canvas.getContext("2d");
 const startButton = document.querySelector("#startButton");
+const stopButton = document.querySelector("#stopButton");
 const panelButton = document.querySelector("#panelButton");
 const hudBody = document.querySelector("#hudBody");
 const statusText = document.querySelector("#statusText");
@@ -68,8 +69,14 @@ const STABLE_FRAMES = 4;
 
 let handLandmarker;
 let poseLandmarker;
-let stream;
+let stream = null;
 let isRunning = false;
+let cameraState = "stopped";
+let cameraGeneration = 0;
+let animationFrameId = null;
+let modelPromise = null;
+let modelGeneration = 0;
+let pageAvailable = true;
 let lastVideoTime = -1;
 let mode = "idle";
 let chargeFrames = 0;
@@ -611,85 +618,212 @@ function updateDebug(hands, pose, barrier) {
   values.leftAngle.textContent = pose ? `${Math.round(pose.leftAngle)}deg` : "--";
   values.rightAngle.textContent = pose ? `${Math.round(pose.rightAngle)}deg` : "--";
   values.barrier.textContent = barrier ? "true" : "false";
-  statusText.textContent = mode;
+  if (isRunning) statusText.textContent = `running · ${mode}`;
 }
 
-async function loadModels() {
-  if (handLandmarker && poseLandmarker) return;
-
-  statusText.textContent = "loading";
-  mediaPipeTasks ||= await import(MEDIAPIPE_MODULE_URL);
-  const { FilesetResolver, HandLandmarker, PoseLandmarker } = mediaPipeTasks;
-  const vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
-  const sharedOptions = {
-    runningMode: "VIDEO"
-  };
-
-  handLandmarker = await HandLandmarker.createFromOptions(vision, {
-    ...sharedOptions,
-    numHands: 2,
-    minHandDetectionConfidence: 0.55,
-    minHandPresenceConfidence: 0.55,
-    minTrackingConfidence: 0.5,
-    baseOptions: {
-      modelAssetPath: HAND_MODEL_URL,
-      delegate: "GPU"
-    }
-  }).catch(() =>
-    HandLandmarker.createFromOptions(vision, {
-      ...sharedOptions,
-      numHands: 2,
-      baseOptions: { modelAssetPath: HAND_MODEL_URL, delegate: "CPU" }
-    })
-  );
-
-  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-    ...sharedOptions,
-    numPoses: 1,
-    minPoseDetectionConfidence: 0.5,
-    minPosePresenceConfidence: 0.5,
-    minTrackingConfidence: 0.5,
-    baseOptions: {
-      modelAssetPath: POSE_MODEL_URL,
-      delegate: "GPU"
-    }
-  }).catch(() =>
-    PoseLandmarker.createFromOptions(vision, {
-      ...sharedOptions,
-      numPoses: 1,
-      baseOptions: { modelAssetPath: POSE_MODEL_URL, delegate: "CPU" }
-    })
-  );
-}
-
-async function startCamera() {
-  startButton.disabled = true;
+function closeModel(model) {
   try {
-    await loadModels();
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: "user",
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      },
-      audio: false
-    });
-    video.srcObject = stream;
-    await video.play();
-    isRunning = true;
-    statusText.textContent = "idle";
-    requestAnimationFrame(frame);
+    model?.close();
   } catch (error) {
-    console.error(error);
-    statusText.textContent = "camera error";
-    startButton.disabled = false;
+    console.warn("Model cleanup failed", error);
   }
 }
 
-let lastFrameAt = performance.now();
+function disposeModels() {
+  modelGeneration += 1;
+  closeModel(handLandmarker);
+  closeModel(poseLandmarker);
+  handLandmarker = null;
+  poseLandmarker = null;
+  // A pending pair owns its local instances and closes them before settling.
+}
+
+function appError(message, cause) {
+  const error = new Error(message, { cause });
+  error.userMessage = message;
+  return error;
+}
+
+async function createLandmarker(Type, vision, name, options, modelAssetPath, cpuOptions) {
+  try {
+    return await Type.createFromOptions(vision, {
+      ...options,
+      baseOptions: { modelAssetPath, delegate: "GPU" }
+    });
+  } catch (gpuError) {
+    try {
+      return await Type.createFromOptions(vision, {
+        ...cpuOptions,
+        baseOptions: { modelAssetPath, delegate: "CPU" }
+      });
+    } catch (cpuError) {
+      throw appError(`${name} 読み込み失敗：GPU・CPU両方の初期化に失敗しました。再試行してください。`,
+        { gpuError, cpuError });
+    }
+  }
+}
+
+function loadModels() {
+  if (handLandmarker && poseLandmarker) return;
+  if (modelPromise) return modelPromise;
+  const generation = modelGeneration;
+  modelPromise = initializeModels(generation).finally(() => {
+    modelPromise = null;
+  });
+  return modelPromise;
+}
+
+async function initializeModels(generation) {
+  let hand;
+  let pose;
+  try {
+    try {
+      mediaPipeTasks ||= await import(MEDIAPIPE_MODULE_URL);
+    } catch (error) {
+      throw appError("Hand/Pose共通ライブラリの読み込みに失敗しました。通信状況などを確認して再試行してください。", error);
+    }
+    const { FilesetResolver, HandLandmarker, PoseLandmarker } = mediaPipeTasks;
+    let vision;
+    try {
+      vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
+    } catch (error) {
+      throw appError("Hand/Pose共通WASMの読み込みに失敗しました。再試行してください。", error);
+    }
+    if (generation !== modelGeneration) throw appError("モデル初期化を中断しました。STARTで再試行してください。");
+    const sharedOptions = {
+      runningMode: "VIDEO"
+    };
+
+    hand = await createLandmarker(HandLandmarker, vision, "Hand Landmarker", {
+      ...sharedOptions,
+      numHands: 2,
+      minHandDetectionConfidence: 0.55,
+      minHandPresenceConfidence: 0.55,
+      minTrackingConfidence: 0.5
+    }, HAND_MODEL_URL, { ...sharedOptions, numHands: 2 });
+    if (generation !== modelGeneration) throw appError("モデル初期化を中断しました。STARTで再試行してください。");
+
+    pose = await createLandmarker(PoseLandmarker, vision, "Pose Landmarker", {
+      ...sharedOptions,
+      numPoses: 1,
+      minPoseDetectionConfidence: 0.5,
+      minPosePresenceConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    }, POSE_MODEL_URL, { ...sharedOptions, numPoses: 1 });
+    if (generation !== modelGeneration) throw appError("モデル初期化を中断しました。STARTで再試行してください。");
+    handLandmarker = hand;
+    poseLandmarker = pose;
+  } catch (error) {
+    closeModel(hand);
+    closeModel(pose);
+    throw error;
+  }
+}
+
+function stopStream(mediaStream) {
+  mediaStream?.getTracks().forEach((track) => track.stop());
+}
+
+function resetEffects() {
+  lastPose = null;
+  lastHands = { left: { state: "unknown", landmarks: null }, right: { state: "unknown", landmarks: null } };
+  lastTechnique = { barrier: false };
+  previousHands = { left: "unknown", right: "unknown" };
+  previousGesturePose = null;
+  rocketCooldownUntil = { left: 0, right: 0 };
+  mode = "idle";
+  chargeFrames = barrierFrames = chargeStartedAt = 0;
+  shakeUntil = shakeMagnitude = 0;
+  particles = [];
+  projectiles = [];
+  shockwaves = [];
+  lastVideoTime = -1;
+  lastFrameAt = 0;
+  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  updateDebug(lastHands, lastPose, false);
+}
+
+function setCameraState(state, message) {
+  cameraState = state;
+  startButton.disabled = state === "starting" || state === "running" || !pageAvailable || document.hidden;
+  stopButton.disabled = state !== "starting" && state !== "running";
+  statusText.textContent = message;
+}
+
+function stopCamera(message = "stopped") {
+  cameraGeneration += 1;
+  isRunning = false;
+  if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
+  animationFrameId = null;
+  stopStream(stream);
+  video.pause();
+  video.srcObject = null;
+  stream = null;
+  resetEffects();
+  setCameraState("stopped", message);
+}
+
+async function startCamera() {
+  if (cameraState === "starting" || isRunning || document.hidden || !pageAvailable) return;
+  const generation = ++cameraGeneration;
+  const isCurrent = () => generation === cameraGeneration && pageAvailable && !document.hidden;
+  let acquiredStream = null;
+  setCameraState("starting", "starting · モデル読み込み中");
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw appError("カメラAPI非対応：HTTPS接続と対応ブラウザを確認してください。");
+    }
+    await loadModels();
+    if (!isCurrent()) return;
+    statusText.textContent = "starting · カメラ接続中";
+    try {
+      acquiredStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+    } catch (error) {
+      throw appError(error.name === "NotAllowedError"
+        ? "カメラ権限が拒否されました。Safariの設定やサイトの許可を確認してください。"
+        : "カメラ取得に失敗しました。カメラの使用状況や設定を確認して再試行してください。", error);
+    }
+    if (!isCurrent()) {
+      stopStream(acquiredStream);
+      return;
+    }
+    stream = acquiredStream;
+    video.srcObject = acquiredStream;
+    try {
+      await video.play();
+    } catch (error) {
+      throw appError("映像の再生（video.play）に失敗しました。STARTで再試行してください。", error);
+    }
+    if (!isCurrent()) {
+      stopStream(acquiredStream);
+      return;
+    }
+    resetEffects();
+    lastFrameAt = performance.now();
+    isRunning = true;
+    setCameraState("running", "running · idle");
+    animationFrameId = requestAnimationFrame(frame);
+  } catch (error) {
+    stopStream(acquiredStream);
+    if (!isCurrent()) return;
+    console.error(error);
+    stopCamera();
+    setCameraState("error", error.userMessage || "起動に失敗しました。原因を特定できません。STARTで再試行してください。");
+  }
+}
+
+let lastFrameAt = 0;
 
 function frame(now) {
-  if (!isRunning) return;
+  animationFrameId = null;
+  if (!isRunning || document.hidden || !pageAvailable) return;
   resizeCanvas();
   const delta = clamp(now - lastFrameAt, 1, 48);
   lastFrameAt = now;
@@ -728,10 +862,11 @@ function frame(now) {
   ctx.restore();
 
   updateDebug(hands, pose, technique.barrier);
-  requestAnimationFrame(frame);
+  animationFrameId = requestAnimationFrame(frame);
 }
 
 startButton.addEventListener("click", startCamera);
+stopButton.addEventListener("click", () => stopCamera());
 panelButton.addEventListener("click", () => {
   const willOpen = hudBody.hidden;
   hudBody.hidden = !willOpen;
@@ -742,7 +877,17 @@ panelButton.addEventListener("click", () => {
 });
 window.addEventListener("resize", resizeCanvas);
 window.addEventListener("pagehide", () => {
-  if (stream) stream.getTracks().forEach((track) => track.stop());
+  pageAvailable = false;
+  stopCamera();
+  disposeModels();
+});
+window.addEventListener("pageshow", () => {
+  pageAvailable = true;
+  setCameraState(cameraState, statusText.textContent);
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopCamera("stopped · STARTで再開");
+  else setCameraState(cameraState, statusText.textContent);
 });
 
 resizeCanvas();

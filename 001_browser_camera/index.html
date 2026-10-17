@@ -1,188 +1,92 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Browser Camera</title>
+  <title>iPhone Browser Camera</title>
   <style>
-    :root {
-      color-scheme: light;
-      --bg: #f4efe8;
-      --panel: rgba(255, 252, 247, 0.92);
-      --ink: #1e1a17;
-      --accent: #d4572f;
-      --accent-strong: #ab3511;
-      --line: rgba(30, 26, 23, 0.12);
-      --shadow: 0 20px 40px rgba(74, 45, 33, 0.15);
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
+    :root { color-scheme: light; --ink: #1e1a17; --line: rgba(30,26,23,.14); }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
-      color: var(--ink);
-      background:
-        radial-gradient(circle at top left, rgba(255, 191, 105, 0.35), transparent 30%),
-        linear-gradient(160deg, #f9f4ed 0%, #efe6db 55%, #e4d8cb 100%);
+      margin: 0; color: var(--ink); font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+      background: radial-gradient(circle at top left, #ffbf6959, transparent 30%),
+        linear-gradient(160deg, #f9f4ed, #efe6db 55%, #e4d8cb);
     }
-
     main {
-      width: min(100%, 720px);
-      margin: 0 auto;
-      padding: calc(20px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+      width: min(100%, 720px); height: 100vh; height: 100dvh; margin: auto;
+      padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+        max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+      display: grid; grid-template-rows: auto minmax(160px, 1fr) auto; gap: 10px;
     }
-
-    .hero {
-      margin-bottom: 18px;
-      padding: 20px;
-      border: 1px solid var(--line);
-      border-radius: 24px;
-      background: var(--panel);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(14px);
-    }
-
-    h1 {
-      margin: 0 0 8px;
-      font-size: 1.9rem;
-      line-height: 1.1;
-    }
-
-    p {
-      margin: 0;
-      line-height: 1.6;
-    }
-
+    .hero { min-width: 0; }
+    h1 { margin: 0 0 3px; font-size: clamp(1.1rem, 4.5vw, 1.6rem); line-height: 1.2; }
+    p { margin: 0; line-height: 1.5; }
+    .hero p, .notes { font-size: .8rem; }
     .camera-shell {
-      overflow: hidden;
-      border-radius: 28px;
-      border: 1px solid rgba(30, 26, 23, 0.18);
-      background: #201b17;
-      box-shadow: var(--shadow);
+      min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto auto;
+      overflow: hidden; border-radius: 22px; border: 1px solid var(--line);
+      background: #120f0d; box-shadow: 0 12px 30px #4a2d2126;
     }
-
-    .preview {
-      position: relative;
-      aspect-ratio: 3 / 4;
-      background: #120f0d;
+    .preview { position: relative; min-height: 0; overflow: hidden; }
+    video, canvas { display: block; width: 100%; height: 100%; object-fit: contain; background: #120f0d; }
+    .status { padding: 8px 12px; font-size: .85rem; line-height: 1.45; color: #fff7f1; background: #201b17; overflow-wrap: anywhere; }
+    .controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 10px; background: #fff8f1; }
+    button, a.action-link {
+      appearance: none; display: flex; align-items: center; justify-content: center; min-width: 0;
+      min-height: 52px; border: 0; border-radius: 999px; padding: 10px 12px;
+      font: inherit; font-weight: 600; text-align: center; text-decoration: none; color: #fffaf5;
+      background: linear-gradient(#d4572f, #ab3511); cursor: pointer;
+      touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
     }
-
-    video,
-    canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      background: #120f0d;
-    }
-
-    canvas {
-      display: none;
-    }
-
-    .status {
-      position: absolute;
-      left: 12px;
-      right: 12px;
-      bottom: 12px;
-      padding: 10px 12px;
-      border-radius: 14px;
-      font-size: 0.95rem;
-      background: rgba(18, 15, 13, 0.64);
-      color: #fff7f1;
-      backdrop-filter: blur(10px);
-    }
-
-    .controls {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      padding: 16px;
-      background: rgba(255, 248, 241, 0.96);
-    }
-
-    button,
-    a.action-link {
-      appearance: none;
-      border: 0;
-      border-radius: 999px;
-      padding: 14px 18px;
-      font: inherit;
-      text-align: center;
-      text-decoration: none;
-      color: #fffaf5;
-      background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
-      box-shadow: 0 10px 24px rgba(171, 53, 17, 0.25);
-    }
-
-    button.secondary {
-      color: var(--ink);
-      background: #fff7f0;
-      border: 1px solid rgba(30, 26, 23, 0.1);
-      box-shadow: none;
-    }
-
-    button:disabled,
-    a.action-link.disabled {
-      opacity: 0.45;
-      pointer-events: none;
-    }
-
-    .notes {
-      margin-top: 18px;
-      padding: 16px 18px;
-      border-radius: 20px;
-      border: 1px solid var(--line);
-      background: rgba(255, 252, 247, 0.78);
-    }
-
-    .notes ul {
-      margin: 10px 0 0;
-      padding-left: 18px;
-    }
-
-    @media (max-width: 480px) {
-      .controls {
-        grid-template-columns: 1fr;
-      }
+    #startButton, #captureButton { grid-column: 1 / -1; min-height: 58px; }
+    button.secondary { color: var(--ink); background: #fff7f0; border: 1px solid var(--line); }
+    button:disabled, a.disabled { opacity: .45; cursor: default; }
+    :focus-visible { outline: 3px solid #2575a6; outline-offset: -3px; }
+    .notes { min-width: 0; padding: 4px 2px; }
+    summary { cursor: pointer; touch-action: manipulation; }
+    .notes ul { margin: 6px 0 0; padding-left: 20px; line-height: 1.5; }
+    @media (orientation: landscape) and (max-height: 500px) {
+      main { width: min(100%, 1000px); gap: 6px; grid-template-rows: auto minmax(120px, 1fr) auto; }
+      .hero p { display: none; }
+      .camera-shell { grid-template-columns: minmax(0, 1fr) minmax(180px, 30%); grid-template-rows: minmax(0, 1fr) auto; }
+      .preview { grid-row: 1 / 3; }
+      .controls { grid-column: 2; grid-row: 1; align-content: center; }
+      .status { grid-column: 2; grid-row: 2; }
+      .controls { grid-template-columns: 1fr; }
+      #startButton, #captureButton { grid-column: auto; }
     }
   </style>
 </head>
 <body>
   <main>
-    <section class="hero">
+    <header class="hero">
       <h1>iPhone Browser Camera</h1>
-      <p>Safari から背面カメラを起動し、その場で静止画を撮影できます。</p>
-    </section>
-
-    <section class="camera-shell">
+      <p>背面カメラで撮影。画像はブラウザ内で処理します。</p>
+    </header>
+    <section class="camera-shell" aria-label="カメラ">
       <div class="preview">
-        <video id="camera" playsinline autoplay muted></video>
-        <canvas id="snapshot"></canvas>
-        <div id="status" class="status">カメラを起動してください。</div>
+        <video id="camera" playsinline autoplay muted aria-label="カメラプレビュー"></video>
+        <canvas id="snapshot" hidden role="img" aria-label="撮影した写真"></canvas>
       </div>
-      <div class="controls">
+      <p id="status" class="status" role="status" aria-live="polite">カメラを起動してください。</p>
+      <div class="controls" aria-label="撮影操作">
         <button id="startButton" type="button">カメラ起動</button>
-        <button id="captureButton" type="button" class="secondary" disabled>撮影</button>
-        <button id="retryButton" type="button" class="secondary" disabled>再撮影</button>
-        <a id="downloadLink" class="action-link disabled" href="#" download="browser-camera-shot.png">画像を保存</a>
+        <button id="captureButton" type="button" hidden disabled>撮影</button>
+        <button id="retryButton" type="button" class="secondary" hidden disabled>再撮影</button>
+        <a id="downloadLink" class="action-link disabled" hidden download="browser-camera-shot.png" aria-disabled="true" tabindex="-1">PNGを保存</a>
       </div>
     </section>
-
-    <section class="notes">
-      <p>利用メモ</p>
+    <details class="notes">
+      <summary>利用メモ・iPhoneでの保存方法</summary>
       <ul>
-        <li>iPhone Safari では HTTPS または localhost 配信でカメラ利用が必要です。</li>
-        <li>初回はカメラ権限の許可が必要です。</li>
-        <li>背面カメラが使えない端末では利用可能なカメラに自動で切り替わります。</li>
+        <li>HTTPS または localhost で開き、カメラの利用を許可してください。背面カメラを優先し、使えない場合は利用可能なカメラを試します。</li>
+        <li>黒い余白を除き、プレビューと保存画像は同じ範囲です。端末の映像解像度のままPNGに保存します。</li>
+        <li>iPhoneで画像が開いた場合は、画像を長押しするか共有メニューから「写真に保存」などを選んでください。ダウンロードされた場合は「ファイル」を確認してください。</li>
+        <li>撮影後・画面を離れたときはカメラを停止します。画像は外部へ送信しません。ページの再読み込み・終了では写真が失われるため、先に保存してください。</li>
       </ul>
-    </section>
+    </details>
   </main>
-
   <script>
     const video = document.getElementById("camera");
     const canvas = document.getElementById("snapshot");
@@ -192,100 +96,246 @@
     const retryButton = document.getElementById("retryButton");
     const downloadLink = document.getElementById("downloadLink");
 
+    let state = "idle"; // idle / starting / preview / captured / error
     let stream = null;
     let captured = false;
+    let hasPhoto = false;
+    let starting = false;
+    let encoding = false;
+    let requestId = 0;
+    let photoId = 0;
+    let photoBlob = null;
+    let photoUrl = null;
+    let pageActive = true;
+    let cancelPreviewWait = null;
 
-    function setStatus(message) {
-      statusBox.textContent = message;
+    function setStatus(message) { statusBox.textContent = message; }
+    function render() {
+      const photoMode = hasPhoto && state !== "preview";
+      video.hidden = photoMode;
+      canvas.hidden = !photoMode;
+      startButton.hidden = photoMode || state === "preview";
+      startButton.disabled = starting || encoding || document.hidden;
+      startButton.textContent = starting ? "起動中…" : "カメラ起動";
+      captureButton.hidden = state !== "preview";
+      captureButton.disabled = state !== "preview" || encoding;
+      retryButton.hidden = !photoMode;
+      retryButton.disabled = starting || encoding || document.hidden;
+      retryButton.textContent = starting ? "起動中…" : "再撮影";
+      downloadLink.hidden = !photoMode;
+      const canGenerate = photoMode && captured && !photoBlob && !starting && !encoding;
+      const canSave = photoMode && captured && !!photoUrl && !starting && !encoding;
+      downloadLink.textContent = hasPhoto && !photoBlob && !encoding ? "PNGを再生成" : "PNGを保存";
+      downloadLink.classList.toggle("disabled", !canSave && !canGenerate);
+      downloadLink.setAttribute("aria-disabled", String(!canSave && !canGenerate));
+      downloadLink.tabIndex = canSave || canGenerate ? 0 : -1;
+      if (canSave) downloadLink.href = photoUrl;
+      else downloadLink.removeAttribute("href");
     }
-
-    function setDownloadDisabled(disabled) {
-      downloadLink.classList.toggle("disabled", disabled);
-      if (disabled) {
-        downloadLink.removeAttribute("href");
+    function stopTracks(mediaStream) {
+      if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
+    }
+    function stopCamera() {
+      if (cancelPreviewWait) cancelPreviewWait();
+      const attached = video.srcObject;
+      video.pause();
+      video.srcObject = null;
+      stopTracks(stream);
+      if (attached !== stream) stopTracks(attached);
+      stream = null;
+    }
+    function releasePhotoUrl() {
+      downloadLink.removeAttribute("href");
+      if (photoUrl) URL.revokeObjectURL(photoUrl);
+      photoUrl = null;
+    }
+    function restorePhotoUrl() {
+      if (pageActive && photoBlob && !photoUrl) photoUrl = URL.createObjectURL(photoBlob);
+    }
+    function discardPhoto() {
+      ++photoId;
+      releasePhotoUrl();
+      photoBlob = null;
+      hasPhoto = captured = false;
+      canvas.width = canvas.height = 0;
+    }
+    function cameraError(error) {
+      switch (error.name) {
+        case "NotAllowedError": case "PermissionDeniedError":
+          return "カメラの利用が許可されませんでした。Safariや端末のカメラ権限を確認し、もう一度起動してください。";
+        case "NotFoundError": case "DevicesNotFoundError":
+          return "利用できるカメラが見つかりません。端末やカメラの接続を確認してください。";
+        case "NotReadableError": case "TrackStartError":
+          return "カメラを読み取れません。別のアプリが使用している可能性があります。他のカメラアプリを閉じて再度お試しください。";
+        case "SecurityError":
+          return "この環境ではカメラを利用できません。HTTPS または localhost と、ブラウザの利用制限を確認してください。";
+        case "PreviewError":
+          return "カメラ映像の準備が完了しませんでした。もう一度起動してください。";
+        default:
+          return "カメラの起動に失敗しました。権限・接続や他のアプリの使用状況を確認し、再度お試しください。";
       }
     }
-
+    function waitForPreview(id) {
+      return new Promise((resolve, reject) => {
+        let timer;
+        let settled = false;
+        const cleanup = () => {
+          clearTimeout(timer);
+          video.removeEventListener("loadeddata", check);
+          video.removeEventListener("canplay", check);
+          video.removeEventListener("error", fail);
+          cancelPreviewWait = null;
+        };
+        const fail = () => { if (settled) return; settled = true; cleanup(); reject({ name: "PreviewError" }); };
+        const check = () => {
+          if (settled) return;
+          if (id !== requestId) { settled = true; cleanup(); reject({ name: "AbortError" }); }
+          else if (video.readyState >= 2 && video.videoWidth && video.videoHeight) { settled = true; cleanup(); resolve(); }
+        };
+        cancelPreviewWait = () => { settled = true; cleanup(); reject({ name: "AbortError" }); };
+        video.addEventListener("loadeddata", check);
+        video.addEventListener("canplay", check);
+        video.addEventListener("error", fail);
+        timer = setTimeout(fail, 15000);
+        Promise.resolve().then(() => video.play()).then(check, fail);
+      });
+    }
     async function startCamera() {
-      setStatus("カメラを起動しています...");
-
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
-
-      const preferredConstraints = {
-        audio: false,
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
-      };
-
+      // Keep the lock until even a stale getUserMedia request has settled.
+      if (starting || encoding || state === "preview" || document.hidden) return;
+      starting = true;
+      captured = false;
+      const id = ++requestId;
+      state = "starting";
+      stopCamera();
+      render();
+      setStatus("カメラを起動しています。初回は利用を許可してください。");
+      const current = () => id === requestId && !document.hidden;
       try {
-        stream = await navigator.mediaDevices.getUserMedia(preferredConstraints);
-      } catch (error) {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        } catch (fallbackError) {
-          setStatus("カメラを起動できませんでした。HTTPS 配信と権限設定を確認してください。");
-          console.error(fallbackError);
+        if (!window.isSecureContext) throw { name: "SecurityError" };
+        if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
+          setStatus("このブラウザではカメラAPIを利用できません。HTTPS または localhost で、対応するSafariなどから開いてください。");
+          state = hasPhoto ? "captured" : "error";
+          captured = hasPhoto;
           return;
         }
+        let acquired;
+        try {
+          acquired = await navigator.mediaDevices.getUserMedia({ audio: false, video: {
+            facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 }
+          } });
+        } catch (error) {
+          if (!current()) return;
+          if (["NotAllowedError", "PermissionDeniedError", "SecurityError"].includes(error.name)) throw error;
+          acquired = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
+        if (!current()) { stopTracks(acquired); return; }
+        stream = acquired;
+        video.srcObject = acquired;
+        acquired.getVideoTracks().forEach(track => track.addEventListener("ended", () => {
+          if (stream !== acquired || id !== requestId) return;
+          suspendCamera("カメラ映像が停止しました。もう一度起動してください。");
+        }));
+        await waitForPreview(id);
+        if (!current()) return;
+        discardPhoto();
+        state = "preview";
+        setStatus("撮影できます。");
+      } catch (error) {
+        if (!current()) return;
+        stopCamera();
+        captured = hasPhoto;
+        state = hasPhoto ? "captured" : "error";
+        setStatus(cameraError(error) + (hasPhoto ? " 前の写真は保持しています。" : ""));
+      } finally {
+        starting = false;
+        render();
       }
-
-      video.srcObject = stream;
-      canvas.style.display = "none";
-      video.style.display = "block";
-      captured = false;
-      captureButton.disabled = false;
-      retryButton.disabled = true;
-      setDownloadDisabled(true);
-      setStatus("カメラ起動中。撮影できます。");
     }
-
-    function captureImage() {
-      if (!stream || !video.videoWidth || !video.videoHeight) {
-        setStatus("映像の準備がまだできていません。");
+    async function captureImage() {
+      if (state !== "preview" || encoding) return;
+      if (!stream || video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+        setStatus("カメラ映像の準備が完了していません。少し待ってから撮影してください。");
         return;
       }
-
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const context = canvas.getContext("2d");
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      video.style.display = "none";
-      canvas.style.display = "block";
-      captured = true;
-      retryButton.disabled = false;
-
-      const imageUrl = canvas.toDataURL("image/png");
-      downloadLink.href = imageUrl;
-      setDownloadDisabled(false);
-      setStatus("撮影しました。保存するか再撮影してください。");
-    }
-
-    function resetPreview() {
-      if (!captured) {
-        return;
+      encoding = true;
+      render();
+      let id;
+      try {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Canvas unavailable");
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        hasPhoto = captured = true;
+        id = ++photoId;
+        state = "captured";
+        stopCamera();
+        render();
+        setStatus("撮影しました。PNG画像を準備しています…");
+        const blob = await new Promise((resolve, reject) => {
+          if (typeof canvas.toBlob !== "function") { reject(new Error("PNG unavailable")); return; }
+          canvas.toBlob(result => result ? resolve(result) : reject(new Error("Empty PNG")), "image/png");
+        });
+        if (id !== photoId) return;
+        releasePhotoUrl();
+        photoBlob = blob;
+        if (pageActive && !document.hidden) restorePhotoUrl();
+        setStatus("撮影しました。PNGを保存するか、再撮影してください。");
+      } catch (error) {
+        setStatus("撮影画像の生成に失敗しました。" + (hasPhoto ? "写真は画面に保持しています。「PNGを再生成」をお試しください。" : "もう一度撮影してください。"));
+      } finally {
+        encoding = false;
+        render();
       }
-
-      canvas.style.display = "none";
-      video.style.display = "block";
-      retryButton.disabled = true;
-      setStatus("カメラ映像に戻りました。");
     }
-
+    async function regeneratePhoto() {
+      if (encoding || starting || !hasPhoto) return;
+      encoding = true;
+      render();
+      try {
+        const blob = await new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("Empty PNG")), "image/png"));
+        releasePhotoUrl();
+        photoBlob = blob;
+        if (pageActive && !document.hidden) restorePhotoUrl();
+        setStatus("PNG画像を準備しました。「PNGを保存」を押してください。");
+      } catch {
+        setStatus("撮影画像の生成に失敗しました。写真は保持しています。再度お試しいただくか、再撮影してください。");
+      } finally {
+        encoding = false;
+        render();
+      }
+    }
+    function suspendCamera(message) {
+      ++requestId;
+      stopCamera();
+      captured = hasPhoto;
+      state = hasPhoto ? "captured" : "idle";
+      if (!hasPhoto) setStatus(message);
+      render();
+    }
     startButton.addEventListener("click", startCamera);
     captureButton.addEventListener("click", captureImage);
-    retryButton.addEventListener("click", resetPreview);
-
-    window.addEventListener("beforeunload", () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
+    retryButton.addEventListener("click", startCamera);
+    downloadLink.addEventListener("click", event => {
+      if (!photoBlob && hasPhoto && !starting && !encoding) {
+        event.preventDefault();
+        regeneratePhoto();
+      } else if (!downloadLink.hasAttribute("href") || starting || encoding) event.preventDefault();
+      else setStatus("保存を開始しました。画像が開いた場合は長押し、または共有メニューから保存してください。");
     });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) suspendCamera("画面が非表示になったためカメラを停止しました。再度起動してください。");
+      else { restorePhotoUrl(); render(); }
+    });
+    window.addEventListener("pagehide", () => {
+      pageActive = false;
+      suspendCamera("カメラを停止しました。再度起動してください。");
+      releasePhotoUrl();
+    });
+    window.addEventListener("pageshow", () => { pageActive = true; restorePhotoUrl(); render(); });
+    window.addEventListener("beforeunload", () => { ++requestId; stopCamera(); releasePhotoUrl(); });
+    render();
   </script>
 </body>
 </html>

@@ -13,11 +13,12 @@
 
     <section class="hud" aria-label="操作パネル">
       <div class="status-row">
+        <span id="cameraStateText" class="status" role="status">カメラ停止中 — STARTで開始</span>
         <span id="statusText" class="status">待機中</span>
         <span id="swingBadge" class="badge">SWING</span>
       </div>
 
-      <div class="judge-panel" aria-label="現在の判定状況">
+      <div class="judge-panel" hidden aria-label="現在の判定状況">
         <div class="judge-item" id="judgeHands">
           <span class="judge-label">Hands</span>
           <strong id="handsValue">0 / 2</strong>
@@ -45,27 +46,33 @@
       </div>
 
       <div class="control-row">
-        <button id="startButton" type="button">START CAMERA</button>
-        <button id="offButton" type="button" class="secondary">OFF</button>
-        <button id="debugButton" type="button" class="secondary">DEBUG OFF</button>
+        <button id="startButton" type="button" aria-label="START カメラを開始">START</button>
+        <button id="stopButton" type="button" class="secondary" disabled>CAMERA STOP</button>
+        <button id="offButton" type="button" class="secondary" aria-label="OFF セーバーだけを消す">OFF</button>
+        <button id="debugButton" type="button" class="secondary" aria-pressed="false">DEBUG OFF</button>
       </div>
 
+      <p class="control-help">START：カメラ開始 ／ CAMERA STOP：カメラ停止<br>OFF：セーバーだけ消灯</p>
+      <p id="audioStatus" class="audio-status" role="status"></p>
       <div class="color-row" aria-label="ライトセーバーの色">
-        <button type="button" class="color-button is-active" data-color="blue" style="--swatch:#2f8cff" aria-label="青"></button>
-        <button type="button" class="color-button" data-color="green" style="--swatch:#3ee96b" aria-label="緑"></button>
-        <button type="button" class="color-button" data-color="red" style="--swatch:#ff3c3c" aria-label="赤"></button>
-        <button type="button" class="color-button" data-color="purple" style="--swatch:#a56bff" aria-label="紫"></button>
+        <button type="button" class="color-button is-active" data-color="blue" aria-pressed="true" style="--swatch:#2f8cff" aria-label="青"></button>
+        <button type="button" class="color-button" data-color="green" aria-pressed="false" style="--swatch:#3ee96b" aria-label="緑"></button>
+        <button type="button" class="color-button" data-color="red" aria-pressed="false" style="--swatch:#ff3c3c" aria-label="赤"></button>
+        <button type="button" class="color-button" data-color="purple" aria-pressed="false" style="--swatch:#a56bff" aria-label="紫"></button>
       </div>
 
-      <label class="range-line">
-        <span>感度</span>
-        <input id="sensitivityRange" type="range" min="0" max="100" value="55">
-      </label>
+      <details class="adjustments">
+        <summary>感度・長さの調整</summary>
+        <label class="range-line">
+          <span>感度</span>
+          <input id="sensitivityRange" type="range" min="0" max="100" value="55">
+        </label>
 
-      <label class="range-line">
-        <span>長さ</span>
-        <input id="lengthRange" type="range" min="30" max="75" value="52">
-      </label>
+        <label class="range-line">
+          <span>長さ</span>
+          <input id="lengthRange" type="range" min="30" max="75" value="52">
+        </label>
+      </details>
     </section>
   </main>
 

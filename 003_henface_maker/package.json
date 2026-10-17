@@ -4,6 +4,7 @@
   "version": "0.9.1",
   "type": "module",
   "scripts": {
+    "test:camera": "node tests/camera-lifecycle.test.mjs",
     "test:skin": "node tests/skin-reconstruction.test.mjs",
     "test:challenge": "node tests/face-challenge.test.mjs",
     "test:triggers": "node tests/face-triggers.test.mjs",

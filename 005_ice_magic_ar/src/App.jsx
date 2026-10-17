@@ -372,6 +372,15 @@ export default function IceMagicApp() {
   const streamRef = useRef(null);
   const animationFrameRef = useRef(0);
   const handLandmarkerRef = useRef(null);
+  const landmarkerPromiseRef = useRef(null);
+  const mountedRef = useRef(false);
+  const lifecycleRef = useRef(0);
+  const cameraRequestRef = useRef(0);
+  const startingRef = useRef(false);
+  const validFrameRef = useRef(false);
+  const screenshotBusyRef = useRef(false);
+  const screenshotRequestRef = useRef(0);
+  const screenshotUrlRef = useRef(null);
   const particlesRef = useRef([]);
   const castHoldRef = useRef(0);
   const lastVideoTimeRef = useRef(-1);
@@ -384,6 +393,11 @@ export default function IceMagicApp() {
   const isPalmOpenRef = useRef(false);
 
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
+  const [frameReady, setFrameReady] = useState(false);
+  const [screenshotBusy, setScreenshotBusy] = useState(false);
+  const [screenshotUrl, setScreenshotUrl] = useState(null);
+  const [screenshotMessage, setScreenshotMessage] = useState("");
   const [statusText, setStatusText] = useState("カメラを起動してください");
   const [statusState, setStatusState] = useState("waiting");
   const [isCasting, setIsCasting] = useState(false);
@@ -415,49 +429,90 @@ export default function IceMagicApp() {
     blizzardForceRef.current = blizzardForce;
   }, [blizzardForce]);
 
-  async function ensureHandLandmarker() {
+  function ensureHandLandmarker() {
     if (handLandmarkerRef.current) {
-      return handLandmarkerRef.current;
+      return Promise.resolve(handLandmarkerRef.current);
     }
+    if (landmarkerPromiseRef.current) return landmarkerPromiseRef.current;
+    const lifecycle = lifecycleRef.current;
+    const pending = (async () => {
+      let vision;
+      try {
+        vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
+      } catch (cause) {
+        throw new Error("手認識ライブラリを取得できませんでした。通信状態を確認して再試行してください。", { cause });
+      }
+      if (!mountedRef.current || lifecycle !== lifecycleRef.current) {
+        throw new Error("手認識の初期化は中断されました。");
+      }
+      const options = {
+        runningMode: "VIDEO",
+        numHands: 2,
+        minHandDetectionConfidence: 0.45,
+        minHandPresenceConfidence: 0.45,
+        minTrackingConfidence: 0.45
+      };
+      let landmarker;
 
-    const vision = await FilesetResolver.forVisionTasks(WASM_ROOT);
-    const options = {
-      runningMode: "VIDEO",
-      numHands: 2,
-      minHandDetectionConfidence: 0.45,
-      minHandPresenceConfidence: 0.45,
-      minTrackingConfidence: 0.45
+      try {
+        landmarker = await HandLandmarker.createFromOptions(vision, {
+          ...options,
+          baseOptions: {
+            modelAssetPath: HAND_MODEL_URL,
+            delegate: "GPU"
+          }
+        });
+      } catch (error) {
+        console.warn("[ice-magic] GPU delegate failed; retrying with CPU", error);
+        try {
+          landmarker = await HandLandmarker.createFromOptions(vision, {
+            ...options,
+            baseOptions: {
+              modelAssetPath: HAND_MODEL_URL,
+              delegate: "CPU"
+            }
+          });
+        } catch (cause) {
+          throw new Error("手認識モデルを初期化できませんでした（GPU・CPUともに失敗）。モデルの取得や端末の対応状況を確認して再試行してください。", { cause });
+        }
+      }
+
+      if (!mountedRef.current || lifecycle !== lifecycleRef.current) {
+        landmarker.close();
+        throw new Error("手認識の初期化は中断されました。");
+      }
+      handLandmarkerRef.current = landmarker;
+      return landmarker;
+    })();
+    landmarkerPromiseRef.current = pending;
+    const clearPending = () => {
+      if (landmarkerPromiseRef.current === pending) landmarkerPromiseRef.current = null;
     };
-    let landmarker;
-
-    try {
-      landmarker = await HandLandmarker.createFromOptions(vision, {
-        ...options,
-        baseOptions: {
-          modelAssetPath: HAND_MODEL_URL,
-          delegate: "GPU"
-        }
-      });
-    } catch (error) {
-      console.warn("[ice-magic] GPU delegate failed; retrying with CPU", error);
-      landmarker = await HandLandmarker.createFromOptions(vision, {
-        ...options,
-        baseOptions: {
-          modelAssetPath: HAND_MODEL_URL,
-          delegate: "CPU"
-        }
-      });
-    }
-
-    handLandmarkerRef.current = landmarker;
-    return landmarker;
+    pending.then(clearPending, clearPending);
+    return pending;
   }
 
   async function startCamera() {
+    if (startingRef.current || streamRef.current || !mountedRef.current || document.hidden) return;
+    startingRef.current = true;
+    setCameraStarting(true);
+    const request = ++cameraRequestRef.current;
+    // Every await may finish after stop, pagehide, or a newer start request.
+    const isCurrent = () => mountedRef.current && request === cameraRequestRef.current && !document.hidden;
+    let stage = "model";
     try {
+      if (!window.isSecureContext) {
+        throw new Error("カメラの利用にはHTTPSまたはlocalhostで開いてください。");
+      }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("この環境ではカメラを利用できません。Safariなどの対応ブラウザとサイトの利用条件を確認してください。");
+      }
       setStatusState("waiting");
       setStatusText("手認識モデルを読み込み中");
       const landmarker = await ensureHandLandmarker();
+      if (!isCurrent()) return;
+      stage = "camera";
+      setStatusText("カメラを起動中。必要に応じてカメラの利用を許可してください");
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: "user",
@@ -467,33 +522,77 @@ export default function IceMagicApp() {
         audio: false
       });
 
+      if (!isCurrent()) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      streamRef.current = stream;
       const video = videoRef.current;
+      if (!video) throw new Error("カメラの表示先を準備できませんでした。");
       video.srcObject = stream;
       video.playsInline = true;
       video.muted = true;
+      stage = "play";
       await video.play();
+      if (!isCurrent()) return;
 
-      streamRef.current = stream;
       setCameraActive(true);
       setStatusState("waiting");
       setStatusText("手をカメラに向けてください");
       cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = requestAnimationFrame(() => renderFrame(landmarker));
+      animationFrameRef.current = requestAnimationFrame(() => renderFrame(landmarker, request));
     } catch (error) {
+      if (!isCurrent()) return;
       console.error("[ice-magic] start failed", error);
+      stopCamera();
       setStatusState("error");
-      setStatusText("カメラまたは手認識を開始できませんでした");
+      let message = error.message;
+      if (stage === "play") {
+        message = "カメラ映像を再生できませんでした。もう一度カメラ起動を押してください。";
+      } else if (stage === "camera") {
+        const messages = {
+          NotAllowedError: "カメラの利用が許可されませんでした。Safariや端末のカメラ権限設定を確認してください。",
+          NotFoundError: "利用できるカメラが見つかりませんでした。",
+          NotReadableError: "カメラを取得できませんでした。他のアプリでの使用などを確認してください。",
+          OverconstrainedError: "指定の条件でカメラを取得できませんでした。端末やブラウザの対応状況を確認してください。"
+        };
+        message = messages[error.name] || "カメラを開始できませんでした。権限、利用条件、他のアプリでの使用を確認して再試行してください。";
+      }
+      setStatusText(message || "手認識を開始できませんでした。通信状態を確認して再試行してください。");
+    } finally {
+      if (request === cameraRequestRef.current) {
+        startingRef.current = false;
+        if (mountedRef.current) setCameraStarting(false);
+      }
     }
   }
 
   function stopCamera() {
+    // Invalidate pending acquisition/play as well as any queued frame callback.
+    cameraRequestRef.current += 1;
+    startingRef.current = false;
     cancelAnimationFrame(animationFrameRef.current);
+    animationFrameRef.current = 0;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    const video = videoRef.current;
+    if (video) {
+      video.pause();
+      video.srcObject = null;
+    }
+    validFrameRef.current = false;
+    canvasRef.current?.getContext("2d")?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    handsRef.current = [];
+    particlesRef.current = [];
+    castHoldRef.current = 0;
+    lastVideoTimeRef.current = -1;
     previousPalmRef.current = null;
     currentPalmDirectionRef.current = DIRECTIONS.NONE;
     particleSpawnCarryRef.current = 0;
     isPalmOpenRef.current = false;
+    if (!mountedRef.current) return;
+    setCameraStarting(false);
+    setFrameReady(false);
     setCameraActive(false);
     setIsCasting(false);
     setIsPalmOpen(false);
@@ -587,18 +686,18 @@ export default function IceMagicApp() {
     }, null);
   }
 
-  function renderFrame(landmarker) {
+  function renderFrame(landmarker, request) {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const frame = frameRef.current;
 
-    if (!video || !canvas || !frame || !streamRef.current) {
+    if (request !== cameraRequestRef.current || document.hidden || !mountedRef.current || !video || !canvas || !frame || !streamRef.current) {
       return;
     }
 
     const ctx = canvas.getContext("2d", { alpha: false });
-    if (!ctx || video.videoWidth === 0 || video.videoHeight === 0) {
-      animationFrameRef.current = requestAnimationFrame(() => renderFrame(landmarker));
+    if (!ctx || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
+      animationFrameRef.current = requestAnimationFrame(() => renderFrame(landmarker, request));
       return;
     }
 
@@ -675,23 +774,68 @@ export default function IceMagicApp() {
       currentPalmDirection: currentPalmDirectionRef.current
     });
 
-    animationFrameRef.current = requestAnimationFrame(() => renderFrame(landmarker));
+    if (!validFrameRef.current) {
+      validFrameRef.current = true;
+      setFrameReady(true);
+    }
+    animationFrameRef.current = requestAnimationFrame(() => renderFrame(landmarker, request));
   }
 
-  function takeScreenshot() {
+  async function takeScreenshot() {
     const canvas = canvasRef.current;
-    if (!canvas) {
+    if (!canvas || !streamRef.current || !validFrameRef.current || document.hidden || !canvas.width || !canvas.height || screenshotBusyRef.current) {
       return;
     }
-    const link = document.createElement("a");
-    link.href = canvas.toDataURL("image/png");
-    link.download = `ice-magic-ar-${Date.now()}.png`;
-    link.click();
+    const request = ++screenshotRequestRef.current;
+    screenshotBusyRef.current = true;
+    setScreenshotBusy(true);
+    setScreenshotMessage("");
+    try {
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((result) => result ? resolve(result) : reject(new Error("PNG生成に失敗")), "image/png");
+      });
+      if (!mountedRef.current || request !== screenshotRequestRef.current) return;
+      const url = URL.createObjectURL(blob);
+      const previousUrl = screenshotUrlRef.current;
+      screenshotUrlRef.current = url;
+      setScreenshotUrl(url);
+      // Keep the latest PNG available for Safari's manual open / long-press save.
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `ice-magic-ar-${Date.now()}.png`;
+      document.body.appendChild(link);
+      try { link.click(); } finally { link.remove(); }
+      setScreenshotMessage("PNGの保存を開始しました。iPhoneで保存できない場合は「撮影画像を開く」から画像を長押しして保存してください。");
+    } catch (error) {
+      if (mountedRef.current && request === screenshotRequestRef.current) {
+        setScreenshotMessage("画像の生成または保存操作に失敗しました。再撮影するか、表示されている撮影画像のリンクから保存してください。");
+      }
+    } finally {
+      if (request === screenshotRequestRef.current) {
+        screenshotBusyRef.current = false;
+        if (mountedRef.current) setScreenshotBusy(false);
+      }
+    }
   }
 
   useEffect(() => {
+    mountedRef.current = true;
+    const onVisibilityChange = () => { if (document.hidden) stopCamera(); };
+    const onPageHide = () => stopCamera();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", onPageHide);
     return () => {
+      mountedRef.current = false;
+      lifecycleRef.current += 1;
+      landmarkerPromiseRef.current = null;
+      screenshotRequestRef.current += 1;
+      screenshotBusyRef.current = false;
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", onPageHide);
       stopCamera();
+      if (screenshotUrlRef.current) URL.revokeObjectURL(screenshotUrlRef.current);
+      screenshotUrlRef.current = null;
       if (handLandmarkerRef.current) {
         handLandmarkerRef.current.close();
         handLandmarkerRef.current = null;
@@ -709,21 +853,6 @@ export default function IceMagicApp() {
           閉じると新しい噴射は即停止し、残った粒子だけ自然に消えます。
         </p>
 
-        <div className="action-row">
-          <button className="primary-button" type="button" onClick={startCamera}>
-            カメラ起動
-          </button>
-          <button className="secondary-button" type="button" onClick={stopCamera}>
-            停止
-          </button>
-          <button className="secondary-button" type="button" onClick={takeScreenshot}>
-            スクリーンショット
-          </button>
-          <a className="secondary-link" href="../">
-            メニューへ
-          </a>
-          <p className={`status-pill status-pill--${statusState}`}>{statusText}</p>
-        </div>
       </section>
 
       <section className="viewer-card">
@@ -732,6 +861,23 @@ export default function IceMagicApp() {
           <video ref={videoRef} playsInline muted />
           {!cameraActive && <div className="canvas-placeholder">前面カメラで起動</div>}
         </div>
+
+        <div className="action-row">
+          <button className="primary-button" type="button" onClick={startCamera} disabled={cameraStarting || cameraActive}>
+            {cameraStarting ? "起動中…" : "カメラ起動"}
+          </button>
+          <button className="secondary-button" type="button" onClick={stopCamera} disabled={!cameraStarting && !cameraActive}>
+            停止
+          </button>
+          <button className="secondary-button" type="button" onClick={takeScreenshot} disabled={!cameraActive || !frameReady || screenshotBusy}>
+            {screenshotBusy ? "生成中…" : "スクリーンショット"}
+          </button>
+          <p role="status" className={`status-pill status-pill--${statusState}`}>{statusText}</p>
+        </div>
+        {(screenshotMessage || screenshotUrl) && <div className="screenshot-notice">
+          <p role="status">{screenshotMessage}</p>
+          {screenshotUrl && <a href={screenshotUrl} target="_blank" rel="noopener noreferrer">撮影画像を開く</a>}
+        </div>}
 
         <div className="info-panel ice-info">
           <div>
@@ -752,44 +898,47 @@ export default function IceMagicApp() {
           </div>
         </div>
 
-        <div className="settings-panel">
-          <label className="slider-row">
-            <span>吹雪の量</span>
-            <strong>{blizzardAmount}</strong>
-          </label>
-          <input
-            className="slider-input"
-            type="range"
-            min="0"
-            max="100"
-            step="1"
-            value={blizzardAmount}
-            onChange={(event) => setBlizzardAmount(Number(event.target.value))}
-          />
-
-          <label className="slider-row">
-            <span>吹雪の勢い</span>
-            <strong>{blizzardForce}</strong>
-          </label>
-          <input
-            className="slider-input"
-            type="range"
-            min="0"
-            max="100"
-            step="1"
-            value={blizzardForce}
-            onChange={(event) => setBlizzardForce(Number(event.target.value))}
-          />
-
-          <label className="toggle-row">
-            <span>座標デバッグ表示</span>
+        <details className="settings-details">
+          <summary>詳細調整</summary>
+          <div className="settings-panel">
+            <label className="slider-row">
+              <span>吹雪の量</span>
+              <strong>{blizzardAmount}</strong>
+            </label>
             <input
-              type="checkbox"
-              checked={debugEnabled}
-              onChange={(event) => setDebugEnabled(event.target.checked)}
+              className="slider-input"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={blizzardAmount}
+              onChange={(event) => setBlizzardAmount(Number(event.target.value))}
             />
-          </label>
-        </div>
+
+            <label className="slider-row">
+              <span>吹雪の勢い</span>
+              <strong>{blizzardForce}</strong>
+            </label>
+            <input
+              className="slider-input"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={blizzardForce}
+              onChange={(event) => setBlizzardForce(Number(event.target.value))}
+            />
+
+            <label className="toggle-row">
+              <span>座標デバッグ表示</span>
+              <input
+                type="checkbox"
+                checked={debugEnabled}
+                onChange={(event) => setDebugEnabled(event.target.checked)}
+              />
+            </label>
+          </div>
+        </details>
       </section>
 
       <section className="notes-card">
