@@ -1,5 +1,6 @@
 import { Camera } from './camera.js';
 import { PartRenderer, sourceRect } from './renderer.js';
+import { TouchEditor, sourceFromBox } from './editor.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('composition'), ctx = canvas.getContext('2d');
@@ -8,7 +9,24 @@ const state = { image: null, running: false, mirror: true, guide: true,
   parts: [{ id: 'mouth', x: 50, y: 65, width: 24, height: 10, rotation: 0, feather: 20, shape: 'oval' }],
   source: { x: .5, y: .65, zoom: 1.5 } };
 let frame = 0, imageGeneration = 0, exportUrl = null;
+let photoEditor, cameraEditor;
+const controls = [];
 const message = (text, error = false) => { $('status').textContent = text; $('status').dataset.error = String(error); };
+
+function syncControls() {
+  for (const { key, input, output, unit } of controls) {
+    input.value = Number(state.parts[0][key].toFixed(1)); output.value = `${input.value}${unit}`;
+  }
+  $('quick-feather').value = state.parts[0].feather;
+  $('quick-feather-value').value = `${Math.round(state.parts[0].feather)}%`;
+  $('source-zoom').value = state.source.zoom;
+  $('source-zoom-value').value = `${state.source.zoom.toFixed(2)}×`;
+  for (const key of ['x', 'y']) {
+    $(`source-${key}`).value = (state.source[key] * 100).toFixed(1);
+    $(`source-${key}-value`).value = `${(state.source[key] * 100).toFixed(1)}%`;
+  }
+}
+function update() { syncControls(); render(); }
 
 for (const [key, title, min, max, step, unit] of [
   ['x', 'X座標', 0, 100, .1, '%'], ['y', 'Y座標', 0, 100, .1, '%'],
@@ -20,8 +38,16 @@ for (const [key, title, min, max, step, unit] of [
   const input = document.createElement('input'); input.id = `part-${key}`; input.type = 'range';
   Object.assign(input, { min, max, step, value: state.parts[0][key] });
   output.value = `${input.value}${unit}`; label.append(title, output);
-  input.addEventListener('input', () => { state.parts[0][key] = Number(input.value); output.value = `${input.value}${unit}`; render(); });
+  input.addEventListener('input', () => { state.parts[0][key] = Number(input.value); update(); });
+  controls.push({ key, input, output, unit });
   $('part-controls').append(label, input);
+}
+for (const [key, title] of [['x', 'カメラ側 / X'], ['y', 'カメラ側 / Y']]) {
+  const label = document.createElement('label'); label.className = 'slider-label'; label.htmlFor = `source-${key}`;
+  const output = document.createElement('output'); output.id = `source-${key}-value`; output.htmlFor = label.htmlFor;
+  const input = document.createElement('input'); Object.assign(input, { id: label.htmlFor, type: 'range', min: 0, max: 100, step: .1 });
+  label.append(title, output); $('source-controls').append(label, input);
+  input.addEventListener('input', () => { state.source[key] = Number(input.value) / 100; update(); });
 }
 
 function renderComposite(target, guide) {
@@ -30,23 +56,20 @@ function renderComposite(target, guide) {
   for (const part of state.parts) renderer.draw(target, state.running ? video : null, part, state.source, state.mirror, guide);
 }
 function render() {
-  renderComposite(ctx, state.guide && !!state.image);
+  renderComposite(ctx, false);
+  photoEditor?.draw();
   const preview = $('camera-preview'), c = preview.getContext('2d');
   c.clearRect(0, 0, preview.width, preview.height);
-  if (!state.running || video.readyState < 2 || !video.videoWidth) return;
+  if (!state.running || video.readyState < 2 || !video.videoWidth) { cameraEditor?.draw(); return; }
   const height = Math.round(preview.width * video.videoHeight / video.videoWidth);
   if (preview.height !== height) preview.height = height;
   c.save(); if (state.mirror) { c.translate(preview.width, 0); c.scale(-1, 1); }
   c.drawImage(video, 0, 0, preview.width, preview.height); c.restore();
-  const part = state.parts[0];
-  const crop = sourceRect(video.videoWidth, video.videoHeight,
-    (canvas.width * part.width) / (canvas.height * part.height), state.source, state.mirror);
-  const scale = preview.width / video.videoWidth;
-  c.strokeStyle = '#24e3cd'; c.lineWidth = 3;
-  c.strokeRect(crop.visualX * scale, crop.y * scale, crop.width * scale, crop.height * scale);
+  cameraEditor?.draw();
 }
 function tick() { render(); frame = state.running ? requestAnimationFrame(tick) : 0; }
 function stopCamera(text = 'カメラを停止しました。再開するには「カメラ開始」を押してください。') {
+  cameraEditor?.cancel();
   camera.stop(); state.running = false; cancelAnimationFrame(frame); frame = 0;
   $('start').disabled = false; $('stop').disabled = true;
   $('camera-state').textContent = '停止中'; $('camera-hint').hidden = false;
@@ -62,7 +85,7 @@ $('start').addEventListener('click', async () => {
     camera.stream.getVideoTracks().forEach(track => track.addEventListener('ended', () => {
       if (state.running) stopCamera('カメラとの接続が終了しました。再度開始してください。');
     }, { once: true }));
-    message('カメラ画面で口元をタップし、写真の口に合うように調整してください。'); tick();
+    message('写真は水色、カメラはオレンジの枠を直接ドラッグして合わせてください。'); tick();
   } catch (error) {
     stopCamera();
     const messages = { NotAllowedError: 'カメラが許可されていません。Safariのサイト設定で許可してください。',
@@ -72,17 +95,14 @@ $('start').addEventListener('click', async () => {
   }
 });
 $('stop').addEventListener('click', () => stopCamera());
-$('mirror').addEventListener('change', event => { state.mirror = event.target.checked; render(); });
-$('guide').addEventListener('change', event => { state.guide = event.target.checked; render(); });
+$('mirror').addEventListener('change', event => { cameraEditor.cancel(); state.mirror = event.target.checked; render(); });
+$('guide').addEventListener('change', event => { photoEditor.cancel(); cameraEditor.cancel(); state.guide = event.target.checked; render(); });
 $('shape').addEventListener('change', event => { state.parts[0].shape = event.target.value; render(); });
 $('source-zoom').addEventListener('input', event => {
-  state.source.zoom = Number(event.target.value); $('source-zoom-value').value = `${state.source.zoom.toFixed(1)}×`; render();
+  state.source.zoom = Number(event.target.value); update();
 });
-$('camera-preview').addEventListener('pointerdown', event => {
-  if (!state.running) return;
-  const rect = event.currentTarget.getBoundingClientRect();
-  state.source.x = (event.clientX - rect.left) / rect.width;
-  state.source.y = (event.clientY - rect.top) / rect.height; render();
+$('quick-feather').addEventListener('input', event => {
+  state.parts[0].feather = Number(event.target.value); update();
 });
 
 $('image-file').addEventListener('change', async event => {
@@ -100,6 +120,7 @@ $('image-file').addEventListener('change', async event => {
     background.width = Math.max(1, Math.round(image.naturalWidth * scale));
     background.height = Math.max(1, Math.round(image.naturalHeight * scale));
     background.getContext('2d').drawImage(image, 0, 0, background.width, background.height);
+    photoEditor.cancel(); cameraEditor.cancel();
     state.image = background; canvas.width = background.width; canvas.height = background.height;
     $('empty-hint').hidden = true; $('save').disabled = false; clearExport(); render();
     message('画像を読み込みました。口領域の位置・大きさを合わせてください。');
@@ -127,6 +148,48 @@ $('save').addEventListener('click', async () => {
   } catch { message('PNGの作成に失敗しました。再度お試しください。', true); }
   finally { $('save').disabled = !state.image; }
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden) stopCamera(); });
-window.addEventListener('pagehide', () => { stopCamera(); clearExport(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { photoEditor.cancel(); stopCamera(); } });
+window.addEventListener('pagehide', () => { photoEditor.cancel(); stopCamera(); clearExport(); });
+photoEditor = new TouchEditor(canvas, {
+  color: '#24e3cd', enabled: () => state.guide && !!state.image,
+  getBox: size => { const p = state.parts[0]; return { x: p.x / 100 * size.width, y: p.y / 100 * size.height,
+    width: p.width / 100 * size.width, height: p.height / 100 * size.height, angle: p.rotation * Math.PI / 180 }; },
+  change: (box, size) => {
+    Object.assign(state.parts[0], { x: box.x / size.width * 100, y: box.y / size.height * 100,
+      width: box.width / size.width * 100, height: box.height / size.height * 100, rotation: box.angle * 180 / Math.PI });
+    update();
+  }
+});
+cameraEditor = new TouchEditor($('camera-preview'), {
+  color: '#ffba69', rotation: false,
+  enabled: () => state.guide && state.running && video.readyState >= 2,
+  getBox: size => {
+    if (!video.videoWidth) return null;
+    const p = state.parts[0], crop = sourceRect(video.videoWidth, video.videoHeight,
+      canvas.width * p.width / (canvas.height * p.height), state.source, state.mirror);
+    return { x: (crop.visualX + crop.width / 2) / video.videoWidth * size.width,
+      y: (crop.y + crop.height / 2) / video.videoHeight * size.height,
+      width: crop.width / video.videoWidth * size.width, height: crop.height / video.videoHeight * size.height, angle: 0 };
+  },
+  change: (box, size, drag) => {
+    if (drag.action.type === 'move') {
+      // Use the visible crop center at drag start, avoiding a jump after edge clamping.
+      const p = state.parts[0], aspect = canvas.width * p.width / (canvas.height * p.height);
+      const result = sourceFromBox({ ...box, width: drag.box.width, height: drag.box.height }, size, aspect);
+      state.source.x = result.x; state.source.y = result.y;
+    } else {
+      const p = state.parts[0], aspect = canvas.width * p.width / (canvas.height * p.height);
+      const next = sourceFromBox(box, size, aspect);
+      const width = Math.min(size.width * .6 / next.zoom, size.height * aspect), height = width / aspect;
+      // Keep the opposite corner fixed while preserving the source aspect ratio.
+      const anchored = { ...box, width, height,
+        x: drag.box.x + drag.action.sx * (width - drag.box.width) / 2,
+        y: drag.box.y + drag.action.sy * (height - drag.box.height) / 2 };
+      Object.assign(state.source, sourceFromBox(anchored, size, aspect));
+    }
+    update();
+  },
+  outsideTap: (point, size) => { state.source.x = point.x / size.width; state.source.y = point.y / size.height; update(); }
+});
+syncControls();
 render();
