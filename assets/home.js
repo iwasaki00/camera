@@ -3,8 +3,8 @@ const APP_DETAILS = {
     number: "034",
     type: "FACE COMPOSITE",
     title: "顔パーツ当て込みアプリ",
-    description: "人物写真の口元に、自分のカメラ映像を切り抜いて合成します。写真とカメラの枠を直接ドラッグして位置やサイズを調整でき、写真側は回転にも対応。合成結果をPNGで保存できます。画像と映像は端末内だけで処理します。",
-    tech: "Canvas 2D · Touch Editor · Camera API · PNG Export · v0.1.1",
+    description: "人物写真の口元に、自分のカメラ映像を切り抜いて合成します。枠の直接編集に加え、ピンチズームと口元拡大鏡で細部を調整できます。合成結果をPNGで保存でき、画像と映像は端末内だけで処理します。",
+    tech: "Canvas 2D · Pinch Zoom · Magnifier · PNG Export · v0.1.2",
     icon: "./assets/app-icons/portrait-face-parts.svg"
   },
   "something-behind-you": {

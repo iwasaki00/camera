@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
@@ -10,13 +10,17 @@
 </head>
 <body>
   <main>
-    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.1.1</span></p><h1>顔パーツ当て込みアプリ</h1></header>
+    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.1.2</span></p><h1>顔パーツ当て込みアプリ</h1></header>
     <section class="preview-panel" aria-labelledby="preview-title">
-      <div class="panel-heading"><h2 id="preview-title">写真側 / 口の表示位置</h2><label class="toggle"><input id="guide" type="checkbox" checked> 編集モード</label></div>
+      <div class="panel-heading"><h2 id="preview-title">絵画側 / 口の表示位置</h2><select id="interaction-mode" aria-label="操作モード"><option value="edit">枠を編集</option><option value="pan">画像を移動</option><option value="view">鑑賞</option></select></div>
       <div class="workspace">
         <div>
           <div class="stage"><canvas id="composition" width="900" height="1200" aria-label="画像と口元の合成結果。枠の内側で移動、四隅でサイズ変更、上の丸で回転"></canvas><p id="empty-hint">人物画像を読み込んでください。<br>画像・映像は端末内だけで処理します。</p></div>
-          <p class="help editor-help">水色：内側で移動 · 四隅でサイズ · 上の丸で回転</p>
+          <div class="view-tools" aria-label="絵画側の表示設定">
+            <input id="photo-view-zoom" type="range" min="50" max="400" value="100" aria-label="絵画側の表示倍率"><output id="photo-view-value">100%</output>
+            <button id="photo-view-reset" aria-label="絵画側の倍率と表示位置をリセット">戻す</button>
+            <label class="toggle"><input id="photo-guide" type="checkbox" checked>枠</label><label class="toggle"><input id="photo-loupe" type="checkbox" checked>拡大鏡</label>
+          </div>
           <div class="actions">
             <label class="button primary" for="image-file">画像を読み込む</label><input id="image-file" class="file-input" type="file" accept="image/*">
             <button id="start" class="primary">カメラ開始</button><button id="stop" disabled>カメラ停止</button>
@@ -28,12 +32,16 @@
           </div>
         </div>
         <section class="camera-panel" aria-labelledby="camera-title">
-          <div class="panel-heading"><h2 id="camera-title">カメラ側 / 切り抜く範囲</h2><span id="camera-state">停止中</span></div>
+          <div class="panel-heading"><h2 id="camera-title">カメラ側 / 切り抜く範囲</h2><label class="toggle"><input id="mirror" type="checkbox" checked>左右反転</label><span id="camera-state">停止中</span></div>
           <div class="camera-stage"><video id="camera" autoplay muted playsinline aria-hidden="true"></video><canvas id="camera-preview" width="480" height="360" aria-label="切り抜き枠の内側で移動、四隅でサイズ変更"></canvas><p id="camera-hint">カメラを開始してください</p></div>
-          <div class="camera-tools"><label class="toggle"><input id="mirror" type="checkbox" checked> 左右反転</label><span class="help">オレンジ：移動・四隅で拡縮</span></div>
+          <div class="view-tools" aria-label="カメラ側の表示設定">
+            <input id="camera-view-zoom" type="range" min="100" max="400" value="100" aria-label="カメラ側の表示倍率"><output id="camera-view-value">100%</output>
+            <button id="camera-view-reset" aria-label="カメラ側の倍率と表示位置をリセット">戻す</button>
+            <label class="toggle"><input id="camera-guide" type="checkbox" checked>枠</label><label class="toggle"><input id="camera-loupe" type="checkbox" checked>拡大鏡</label>
+          </div>
         </section>
       </div>
-      <p id="status" role="status" aria-live="polite">画像を読み込み、枠を直接動かして合わせてください。</p>
+      <p id="status" role="status" aria-live="polite">枠の内側で移動、四隅で拡縮、上の丸で回転。2本指で表示を拡大できます。</p>
       <details id="advanced"><summary>詳細設定 / 数値で微調整</summary>
         <p class="help">写真側のX・Yは中心位置、幅・高さは画像に対する割合です。ガイドは保存されません。</p>
         <div id="part-controls"></div>
@@ -42,7 +50,7 @@
       </details>
       <div id="export-result" hidden><p>PNGを作成しました。画像を長押しして保存することもできます。</p><a id="download" class="button" download="portrait-mouth.png">PNGをダウンロード</a><img id="export-image" alt="保存用の合成画像"></div>
     </section>
-    <footer>Version 0.1.1 — DIRECT TOUCH EDITOR · カメラは HTTPS / localhost で利用できます。</footer>
+    <footer>Version 0.1.2 — ZOOM &amp; MAGNIFIER · カメラは HTTPS / localhost で利用できます。</footer>
   </main>
 </body>
 </html>

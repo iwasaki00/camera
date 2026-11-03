@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { checkZoom } from './zoom-check.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const server = createServer(async (req, res) => {
@@ -161,9 +162,9 @@ try {
   newSource = await evaluate('window.cameraBox()');
   assert.ok(Math.abs(newSource.x-source.x+8)<1);
   assert.ok(Math.abs(newSource.y-source.y-5)<1);
-  await evaluate("document.querySelector('#guide').click()");
-  assert.equal(await evaluate("getComputedStyle(document.querySelector('[data-editor=composition]')).pointerEvents"), 'none');
-  await evaluate("document.querySelector('#guide').click()");
+  await evaluate("document.querySelector('#photo-guide').click()");
+  assert.equal(await evaluate("document.querySelector('#photo-guide').checked"), false);
+  await evaluate("document.querySelector('#photo-guide').click()");
   console.log('PASS: camera touch move/resize, mirror on/off coordinates, display mode');
   const before = await evaluate("document.querySelector('#composition').toDataURL()");
   await evaluate(`(() => {
@@ -186,8 +187,9 @@ try {
   console.log('PASS: image decode/draw, fake camera start, adjustment controls and mirror');
   // Freeze the source frame to compare exported pixels with the clean live composite.
   await evaluate("(async()=>{document.querySelector('#camera').pause();await new Promise(r=>requestAnimationFrame(r));})()");
+  await checkZoom({ evaluate, command, touchDrag, waitFor });
   await evaluate("document.querySelector('#save').click()");
-  await waitFor("!document.querySelector('#export-result').hidden");
+  await waitFor("!document.querySelector('#save').disabled && !document.querySelector('#export-result').hidden");
   assert.equal(await evaluate("(async()=>{const r=await fetch(document.querySelector('#export-image').src);const b=await r.blob();const a=new Uint8Array(await b.arrayBuffer());return b.type==='image/png' && a[0]===137 && a[1]===80;})()"), true);
   assert.equal(await evaluate(`(async()=>{const img=document.querySelector('#export-image');await img.decode();const source=document.querySelector('#composition');const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;const x=c.getContext('2d');x.drawImage(img,0,0);const a=x.getImageData(0,0,c.width,c.height).data,b=source.getContext('2d').getImageData(0,0,c.width,c.height).data;return a.every((value,i)=>value===b[i]);})()`),true);
   await evaluate("window.testStream=document.querySelector('#camera').srcObject; document.querySelector('#stop').click()");
@@ -197,6 +199,14 @@ try {
   assert.equal(await evaluate(`(async()=>{const img=document.querySelector('#export-image');await img.decode();const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;const x=c.getContext('2d');x.drawImage(img,0,0);const p=x.getImageData(0,0,c.width,c.height).data;for(let i=0;i<p.length;i+=4)if(p[i]!==160||p[i+1]!==64||p[i+2]!==48||p[i+3]!==255)return false;return true;})()`), true);
   assert.deepEqual(errors, []);
   console.log('PASS: PNG signature, guide excluded from PNG, camera tracks stopped, no runtime errors');
+  await evaluate("document.querySelector('#camera-loupe').checked=false;document.querySelector('#camera-loupe').dispatchEvent(new Event('change'));document.querySelector('#start').click()");
+  await waitFor("document.querySelector('#camera-state').textContent === '使用中' && document.querySelector('#camera').readyState >= 2");
+  await evaluate("document.querySelector('#camera-preview').scrollIntoView({block:'center',behavior:'instant'})");
+  const restarted = await evaluate('window.cameraBox()');
+  await touchDrag(restarted,{x:restarted.x+6,y:restarted.y-3});
+  assert.ok(Math.abs((await evaluate('window.cameraBox()')).x-restarted.x-6)<1);
+  await evaluate("document.querySelector('#stop').click()");
+  console.log('PASS: camera stop/restart preserves working view and edit gestures');
   await evaluate(`navigator.mediaDevices.getUserMedia = async () => { throw new DOMException('denied', 'NotAllowedError'); }; document.querySelector('#start').click()`);
   await waitFor("document.querySelector('#status').dataset.error === 'true'");
   assert.deepEqual(await evaluate("[document.querySelector('#start').disabled,document.querySelector('#stop').disabled,document.querySelector('#camera').srcObject,document.querySelector('#status').textContent.includes('許可')]"), [false,true,null,true]);

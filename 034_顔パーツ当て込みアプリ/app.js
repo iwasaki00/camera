@@ -1,17 +1,29 @@
 import { Camera } from './camera.js';
 import { PartRenderer, sourceRect } from './renderer.js';
 import { TouchEditor, sourceFromBox } from './editor.js';
+import { Viewport } from './viewport.js';
+import { Magnifier } from './magnifier.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('composition'), ctx = canvas.getContext('2d');
 const video = $('camera'), camera = new Camera(video), renderer = new PartRenderer();
-const state = { image: null, running: false, mirror: true, guide: true,
+const state = { image: null, running: false, mirror: true, photoGuide: true, cameraGuide: true, mode: 'edit',
   parts: [{ id: 'mouth', x: 50, y: 65, width: 24, height: 10, rotation: 0, feather: 20, shape: 'oval' }],
   source: { x: .5, y: .65, zoom: 1.5 } };
 let frame = 0, imageGeneration = 0, exportUrl = null;
 let photoEditor, cameraEditor;
+let photoMagnifier, cameraMagnifier;
+const photoView = new Viewport(canvas, { min: .5, changed: () => { syncViewControls(); render(); } });
+const cameraView = new Viewport($('camera-preview'), { changed: () => { syncViewControls(); render(); } });
 const controls = [];
 const message = (text, error = false) => { $('status').textContent = text; $('status').dataset.error = String(error); };
+
+function syncViewControls() {
+  for (const [id, viewport] of [['photo', photoView], ['camera', cameraView]]) {
+    $(`${id}-view-zoom`).value = Math.round(viewport.view.scale * 100);
+    $(`${id}-view-value`).value = `${Math.round(viewport.view.scale * 100)}%`;
+  }
+}
 
 function syncControls() {
   for (const { key, input, output, unit } of controls) {
@@ -58,14 +70,16 @@ function renderComposite(target, guide) {
 function render() {
   renderComposite(ctx, false);
   photoEditor?.draw();
+  photoMagnifier?.draw();
   const preview = $('camera-preview'), c = preview.getContext('2d');
   c.clearRect(0, 0, preview.width, preview.height);
-  if (!state.running || video.readyState < 2 || !video.videoWidth) { cameraEditor?.draw(); return; }
+  if (!state.running || video.readyState < 2 || !video.videoWidth) { cameraEditor?.draw(); cameraMagnifier?.draw(); return; }
   const height = Math.round(preview.width * video.videoHeight / video.videoWidth);
   if (preview.height !== height) preview.height = height;
   c.save(); if (state.mirror) { c.translate(preview.width, 0); c.scale(-1, 1); }
   c.drawImage(video, 0, 0, preview.width, preview.height); c.restore();
   cameraEditor?.draw();
+  cameraMagnifier?.draw();
 }
 function tick() { render(); frame = state.running ? requestAnimationFrame(tick) : 0; }
 function stopCamera(text = 'カメラを停止しました。再開するには「カメラ開始」を押してください。') {
@@ -96,7 +110,18 @@ $('start').addEventListener('click', async () => {
 });
 $('stop').addEventListener('click', () => stopCamera());
 $('mirror').addEventListener('change', event => { cameraEditor.cancel(); state.mirror = event.target.checked; render(); });
-$('guide').addEventListener('change', event => { photoEditor.cancel(); cameraEditor.cancel(); state.guide = event.target.checked; render(); });
+for (const [id, viewport] of [['photo', photoView], ['camera', cameraView]]) {
+  $(`${id}-guide`).addEventListener('change', event => {
+    photoEditor.cancel(); cameraEditor.cancel(); state[`${id}Guide`] = event.target.checked; render();
+  });
+  $(`${id}-view-zoom`).addEventListener('input', event => {
+    photoEditor.cancel(); cameraEditor.cancel(); viewport.zoom(Number(event.target.value) / 100);
+  });
+  $(`${id}-view-reset`).addEventListener('click', () => { photoEditor.cancel(); cameraEditor.cancel(); viewport.reset(); });
+}
+$('interaction-mode').addEventListener('change', event => {
+  photoEditor.cancel(); cameraEditor.cancel(); state.mode = event.target.value; render();
+});
 $('shape').addEventListener('change', event => { state.parts[0].shape = event.target.value; render(); });
 $('source-zoom').addEventListener('input', event => {
   state.source.zoom = Number(event.target.value); update();
@@ -122,7 +147,7 @@ $('image-file').addEventListener('change', async event => {
     background.getContext('2d').drawImage(image, 0, 0, background.width, background.height);
     photoEditor.cancel(); cameraEditor.cancel();
     state.image = background; canvas.width = background.width; canvas.height = background.height;
-    $('empty-hint').hidden = true; $('save').disabled = false; clearExport(); render();
+    $('empty-hint').hidden = true; $('save').disabled = false; clearExport(); photoView.reset();
     message('画像を読み込みました。口領域の位置・大きさを合わせてください。');
   } catch {
     if (generation === imageGeneration) message('画像を読み込めませんでした。JPEG・PNGなどSafariで開ける画像を選んでください。', true);
@@ -151,7 +176,8 @@ $('save').addEventListener('click', async () => {
 document.addEventListener('visibilitychange', () => { if (document.hidden) { photoEditor.cancel(); stopCamera(); } });
 window.addEventListener('pagehide', () => { photoEditor.cancel(); stopCamera(); clearExport(); });
 photoEditor = new TouchEditor(canvas, {
-  color: '#24e3cd', enabled: () => state.guide && !!state.image,
+  color: '#24e3cd', enabled: () => state.photoGuide && !!state.image, viewport: photoView, mode: () => state.mode,
+  snapshot: () => ({ ...state.parts[0] }), restore: saved => { Object.assign(state.parts[0], saved); update(); },
   getBox: size => { const p = state.parts[0]; return { x: p.x / 100 * size.width, y: p.y / 100 * size.height,
     width: p.width / 100 * size.width, height: p.height / 100 * size.height, angle: p.rotation * Math.PI / 180 }; },
   change: (box, size) => {
@@ -162,7 +188,8 @@ photoEditor = new TouchEditor(canvas, {
 });
 cameraEditor = new TouchEditor($('camera-preview'), {
   color: '#ffba69', rotation: false,
-  enabled: () => state.guide && state.running && video.readyState >= 2,
+  enabled: () => state.cameraGuide && state.running && video.readyState >= 2, viewport: cameraView, mode: () => state.mode,
+  snapshot: () => ({ ...state.source }), restore: saved => { Object.assign(state.source, saved); update(); },
   getBox: size => {
     if (!video.videoWidth) return null;
     const p = state.parts[0], crop = sourceRect(video.videoWidth, video.videoHeight,
@@ -188,8 +215,23 @@ cameraEditor = new TouchEditor($('camera-preview'), {
       Object.assign(state.source, sourceFromBox(anchored, size, aspect));
     }
     update();
-  },
-  outsideTap: (point, size) => { state.source.x = point.x / size.width; state.source.y = point.y / size.height; update(); }
+  }
+});
+photoMagnifier = new Magnifier(canvas.parentElement, {
+  id: 'photo', label: '絵画側', color: '#24e3cd', getSource: () => state.image ? {
+    image: canvas, x: canvas.width * state.parts[0].x / 100, y: canvas.height * state.parts[0].y / 100,
+    fit: photoView.geometry().width / canvas.width
+  } : null
+});
+cameraMagnifier = new Magnifier($('camera-preview').parentElement, {
+  id: 'camera', label: 'カメラ側', color: '#ffba69', getSource: () => {
+    if (!state.running || video.readyState < 2 || !video.videoWidth) return null;
+    const part = state.parts[0], crop = sourceRect(video.videoWidth, video.videoHeight,
+      canvas.width * part.width / (canvas.height * part.height), state.source, state.mirror);
+    return { image: video, x: crop.x + crop.width / 2, y: crop.y + crop.height / 2,
+      fit: cameraView.geometry().width / video.videoWidth, mirror: state.mirror };
+  }
 });
 syncControls();
+syncViewControls();
 render();

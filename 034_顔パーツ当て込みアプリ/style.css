@@ -1,4 +1,4 @@
-﻿:root { color-scheme: light; --ink: #172c2b; --muted: #596c68; --accent: #087f76; --line: #d6dfda; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); background: #f1f4ef; }
+:root { color-scheme: light; --ink: #172c2b; --muted: #596c68; --accent: #087f76; --line: #d6dfda; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); background: #f1f4ef; }
 * { box-sizing: border-box; }
 body { margin: 0; }
 main { max-width: 1120px; margin: auto; padding: 18px 20px max(18px, env(safe-area-inset-bottom)); }
@@ -42,7 +42,8 @@ input[type=range] { width: 100%; height: 36px; margin: 2px 0; accent-color: var(
 .quick-controls label:last-child { flex: 1; }
 .quick-controls input { width: 100%; min-width: 40px; }
 .quick-controls output { min-width: 32px; }
-select { font: inherit; border: 1px solid var(--line); background: white; border-radius: 8px; padding: 8px; min-height: 44px; }
+select { font: inherit; font-size: 16px; border: 1px solid var(--line); background: white; border-radius: 8px; padding: 8px; min-height: 44px; }
+button, .button, select, .toggle { touch-action: manipulation; }
 details { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 4px; }
 summary { min-height: 44px; padding: 12px 0; cursor: pointer; font-size: 13px; font-weight: 600; }
 footer { font-size: 10px; color: var(--muted); line-height: 1.8; margin-top: 12px; }
@@ -53,9 +54,23 @@ footer { font-size: 10px; color: var(--muted); line-height: 1.8; margin-top: 12p
   main { padding: 10px 10px max(16px, env(safe-area-inset-bottom)); }
   .workspace { grid-template-columns: 1fr; gap: 10px; }
   .preview-panel { padding: 10px; border-radius: 12px; }
-  #composition { max-height: 40vh; }
+  #composition { max-height: 37vh; }
   #camera-preview { max-height: 20vh; }
   header { margin-bottom: 8px; }
   .actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .actions .file-input { position: absolute; }
 }
+.view-tools { display: flex; align-items: center; gap: 7px; min-height: 44px; }
+.view-tools input[type=range] { flex: 1; min-width: 35px; width: 65px; }
+.view-tools output { min-width: 36px; font-size: 11px; text-align: right; }
+.view-tools button { padding: 6px; font-size: 11px; min-height: 36px; }
+.view-tools .toggle { font-size: 11px; gap: 3px; }
+.view-tools input[type=checkbox] { width: 18px; height: 18px; margin: 0; }
+#interaction-mode { font-size: 16px; padding: 6px; }
+.magnifier { position: absolute; z-index: 2; width: 132px; border: 2px solid; border-radius: 9px; overflow: hidden; background: #172c2b; color: white; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; box-shadow: 0 2px 8px #0004; }
+.magnifier-heading { display: flex; align-items: center; justify-content: space-between; height: 28px; cursor: move; padding-left: 5px; font-size: 10px; }
+.magnifier-heading select { min-height: 28px; height: 28px; padding: 0 1px; font-size: 16px; border-radius: 3px; }
+.magnifier-heading button { min-height: 26px; height: 26px; padding: 0 6px; font-size: 17px; border: 0; border-radius: 0; }
+.magnifier canvas { display: block; width: 128px; height: 84px; cursor: move; }
+#camera-magnifier { width: 104px; }
+#camera-magnifier canvas { width: 100px; height: 65.625px; }

@@ -1,4 +1,5 @@
 import { clamp } from './renderer.js';
+import { toContent, toScreen, zoomAt, midpoint, distance } from './viewport.js';
 
 export const rotate = (p, angle) => ({ x: p.x * Math.cos(angle) - p.y * Math.sin(angle), y: p.x * Math.sin(angle) + p.y * Math.cos(angle) });
 const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
@@ -42,46 +43,81 @@ export function sourceFromBox(box, bounds, aspect) {
 
 // Overlay uses CSS pixels, keeping handles finger-sized at any image resolution.
 export class TouchEditor {
-  constructor(target, { getBox, change, enabled, color, rotation = true, outsideTap }) {
-    Object.assign(this, { target, getBox, change, enabled, color, rotation, outsideTap });
+  constructor(target, { getBox, change, enabled, color, rotation = true, viewport, mode = () => 'edit', snapshot, restore }) {
+    Object.assign(this, { target, getBox, change, enabled, color, rotation, viewport, mode, snapshot, restore });
+    this.pointers = new Map();
     this.overlay = document.createElement('canvas'); this.overlay.className = 'touch-editor';
     this.overlay.dataset.editor = target.id;
     this.overlay.setAttribute('aria-hidden', 'true'); target.parentElement.append(this.overlay);
-    this.overlay.addEventListener('pointerdown', event => {
-      if (!this.enabled() || this.drag || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
-      const point = this.point(event), box = this.getBox(this.size);
-      if (!box) return;
-      const action = hitTest(point, box, this.rotation);
-      if (!action) { this.outsideTap?.(point, this.size); return; }
-      event.preventDefault();
-      this.drag = { id: event.pointerId, from: point, box: { ...box }, action, size: { ...this.size } };
-      this.overlay.setPointerCapture(event.pointerId); this.draw();
-    });
+    this.overlay.addEventListener('pointerdown', event => this.down(event));
     this.overlay.addEventListener('pointermove', event => {
-      if (!this.drag || this.drag.id !== event.pointerId) return;
+      if (!this.pointers.has(event.pointerId)) return;
       event.preventDefault();
-      this.change(dragBox(this.drag.box, this.drag.from, this.point(event), this.drag.action, this.drag.size), this.drag.size, this.drag);
+      this.pointers.set(event.pointerId, this.point(event));
+      if (this.pinch && this.pointers.size === 2) {
+        const [a, b] = [...this.pointers.values()];
+        const scale = clamp(this.pinch.view.scale * distance(a, b) / this.pinch.distance, this.viewport.min, this.viewport.max);
+        this.viewport.set(zoomAt(this.pinch.view, this.pinch.origin, this.pinch.center, midpoint(a, b), scale));
+      } else if (!this.blocked && this.pan) {
+        const point = this.point(event);
+        this.viewport.set({ ...this.pan.view, x: this.pan.view.x + point.x - this.pan.from.x, y: this.pan.view.y + point.y - this.pan.from.y });
+      } else if (!this.blocked && this.drag?.id === event.pointerId) {
+        const point = toContent(this.point(event), this.viewport.view, this.viewport.geometry().origin);
+        this.change(dragBox(this.drag.box, this.drag.from, point, this.drag.action, this.drag.size), this.drag.size, this.drag);
+      }
     });
-    const end = event => { if (this.drag?.id === event.pointerId) { this.cancel(); this.draw(); } };
+    const end = event => {
+      if (!this.pointers.has(event.pointerId)) return;
+      this.pointers.delete(event.pointerId); this.drag = this.pan = this.pinch = null;
+      this.blocked = this.pointers.size > 0;
+      if (this.overlay.hasPointerCapture(event.pointerId)) this.overlay.releasePointerCapture(event.pointerId);
+      this.draw();
+    };
     for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) this.overlay.addEventListener(type, end);
     new ResizeObserver(() => { this.cancel(); this.draw(); }).observe(target);
   }
+  down(event) {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    event.preventDefault();
+    const point = this.point(event); this.pointers.set(event.pointerId, point); this.overlay.setPointerCapture(event.pointerId);
+    if (this.pointers.size === 2 && !this.blocked) {
+      // The first finger may have moved slightly before the second arrived.
+      // Switching to a pinch must not leave that accidental edit in the model.
+      if (this.drag && this.restore) this.restore(this.drag.snapshot);
+      const [a, b] = [...this.pointers.values()]; this.drag = this.pan = null;
+      this.pinch = { view: { ...this.viewport.view }, origin: this.viewport.geometry().origin, center: midpoint(a, b), distance: Math.max(1, distance(a, b)) };
+      return;
+    }
+    if (this.pointers.size > 1 || this.blocked) { this.drag = this.pan = this.pinch = null; this.blocked = true; return; }
+    if (this.mode() === 'pan') { this.pan = { from: point, view: { ...this.viewport.view } }; return; }
+    if (this.mode() !== 'edit' || !this.enabled()) return;
+    const box = this.getBox(this.size); if (!box) return;
+    const screen = this.screenBox(box), action = hitTest(point, screen, this.rotation);
+    // Empty-space taps do not mutate coordinates: the next finger may start a pinch.
+    if (!action) return;
+    this.drag = { id: event.pointerId, from: toContent(point, this.viewport.view, this.viewport.geometry().origin), box: { ...box }, action, size: { ...this.size }, snapshot: this.snapshot?.() };
+    this.draw();
+  }
   point(event) { const rect = this.overlay.getBoundingClientRect(); return { x: event.clientX - rect.left, y: event.clientY - rect.top }; }
+  screenBox(box) {
+    const center = toScreen(box, this.viewport.view, this.viewport.geometry().origin);
+    return { ...box, ...center, width: box.width * this.viewport.view.scale, height: box.height * this.viewport.view.scale };
+  }
   cancel() {
-    const id = this.drag?.id; this.drag = null;
-    if (id !== undefined && this.overlay.hasPointerCapture(id)) this.overlay.releasePointerCapture(id);
+    const ids = [...this.pointers.keys()]; this.pointers.clear(); this.drag = this.pan = this.pinch = null; this.blocked = false;
+    for (const id of ids) if (this.overlay.hasPointerCapture(id)) this.overlay.releasePointerCapture(id);
   }
   draw() {
-    const rect = this.target.getBoundingClientRect(), parent = this.target.parentElement.getBoundingClientRect();
-    this.size = { width: rect.width, height: rect.height };
-    Object.assign(this.overlay.style, { left: `${rect.left - parent.left}px`, top: `${rect.top - parent.top}px`, width: `${rect.width}px`, height: `${rect.height}px` });
+    const { width, height, surface } = this.viewport.geometry();
+    this.size = { width, height };
+    Object.assign(this.overlay.style, { left: '0px', top: '0px', width: `${surface.width}px`, height: `${surface.height}px` });
     const dpr = window.devicePixelRatio || 1;
-    const w = Math.round(rect.width * dpr), h = Math.round(rect.height * dpr);
+    const w = Math.round(surface.width * dpr), h = Math.round(surface.height * dpr);
     if (this.overlay.width !== w || this.overlay.height !== h) { this.overlay.width = w; this.overlay.height = h; }
-    const c = this.overlay.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, rect.width, rect.height);
-    const active = this.enabled(); this.overlay.style.pointerEvents = active ? 'auto' : 'none';
-    if (!active) { this.cancel(); return; }
-    const box = this.getBox(this.size); if (!box) return;
+    const c = this.overlay.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, surface.width, surface.height);
+    if (!this.enabled() || this.mode() === 'view') return;
+    const contentBox = this.getBox(this.size); if (!contentBox) return;
+    const box = this.screenBox(contentBox);
     c.save(); c.translate(box.x, box.y); c.rotate(box.angle);
     c.strokeStyle = this.color; c.lineWidth = this.drag ? 3 : 2;
     c.fillStyle = this.drag ? this.color + '30' : this.color + '12';
