@@ -1,8 +1,8 @@
-import { Camera } from './camera.js';
-import { PartRenderer, sourceRect } from './renderer.js';
-import { TouchEditor, sourceFromBox } from './editor.js';
-import { Viewport } from './viewport.js';
-import { Magnifier } from './magnifier.js';
+import { Camera } from './camera.js?v=0.1.2-imagefix1';
+import { PartRenderer, sourceRect } from './renderer.js?v=0.1.2-imagefix1';
+import { TouchEditor, sourceFromBox } from './editor.js?v=0.1.2-imagefix1';
+import { Viewport } from './viewport.js?v=0.1.2-imagefix1';
+import { Magnifier } from './magnifier.js?v=0.1.2-imagefix1';
 
 const $ = id => document.getElementById(id);
 const canvas = $('composition'), ctx = canvas.getContext('2d');
@@ -235,3 +235,6 @@ cameraMagnifier = new Magnifier($('camera-preview').parentElement, {
 syncControls();
 syncViewControls();
 render();
+$('image-file').disabled = false;
+$('image-trigger').removeAttribute('aria-disabled');
+message('画像を読み込み、枠を直接動かして合わせてください。2本指で表示を拡大できます。');

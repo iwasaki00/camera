@@ -20,6 +20,7 @@ h2 { font-size: 14px; margin: 0; }
 button, .button { font: inherit; font-size: 13px; font-weight: 600; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: #f4f7f3; color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 button.primary, .button.primary { background: var(--accent); color: white; border-color: var(--accent); }
 button:disabled { opacity: .45; cursor: default; }
+label[aria-disabled=true] { opacity: .45; cursor: wait; }
 .file-input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, a:focus-visible { outline: 3px solid #36b8aa; outline-offset: 3px; }
 body:has(.file-input:focus-visible) label[for=image-file] { outline: 3px solid #36b8aa; }

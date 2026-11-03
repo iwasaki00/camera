@@ -11,11 +11,17 @@ import { checkZoom } from './zoom-check.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const server = createServer(async (req, res) => {
   try {
-    const name = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    const url = new URL(req.url, 'http://localhost');
+    const name = decodeURIComponent(url.pathname);
     const target = path.resolve(root, '.' + (name === '/' ? '/index.html' : name));
     if (!target.startsWith(root)) { res.writeHead(403).end(); return; }
+    if (process.env.SIMULATE_STALE_CACHE === '1' && name === '/app.js') await new Promise(resolve => setTimeout(resolve, 1000));
     const content = await readFile(target);
     res.setHeader('Content-Type', ({ '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' })[path.extname(target)] || 'application/octet-stream');
+    if (process.env.SIMULATE_STALE_CACHE === '1' && name === '/app.js' && !url.search) {
+      // v0.1.1 accessed #guide; v0.1.2 replaced it with independent controls.
+      res.end("document.querySelector('#guide').addEventListener('change', () => {});"); return;
+    }
     res.end(content);
   } catch { res.writeHead(404).end(); }
 });
@@ -39,7 +45,7 @@ try {
   socket.onmessage = event => {
     const message = JSON.parse(event.data);
     if (message.id) { const request = pending.get(message.id); pending.delete(message.id); message.error ? request.reject(message.error) : request.resolve(message.result); }
-    if (message.method === 'Runtime.exceptionThrown') errors.push(message.params.exceptionDetails.text);
+    if (message.method === 'Runtime.exceptionThrown') errors.push(message.params.exceptionDetails.exception?.description || message.params.exceptionDetails.text);
   };
   const call = (method, params = {}, sessionId) => new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error('CDP timed out: ' + method)), 12000);
@@ -60,10 +66,16 @@ try {
   };
   const waitFor = async expression => {
     for (let i = 0; i < 80; i++) { if (await evaluate(expression)) return; await new Promise(r => setTimeout(r, 100)); }
-    throw new Error(`Timed out: ${expression}`);
+    throw new Error(`Timed out: ${expression}; runtime errors: ${JSON.stringify(errors)}`);
   };
   await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` });
+  if (process.env.SIMULATE_STALE_CACHE === '1') {
+    await waitFor("!!document.querySelector('#image-file')");
+    assert.equal(await evaluate("document.querySelector('#image-file').disabled"), true);
+    console.log('PASS: image selection waits for app initialization');
+  }
   await waitFor("!!document.querySelector('#part-x')");
+  await waitFor("!document.querySelector('#image-file').disabled");
   assert.deepEqual(await evaluate("[document.querySelector('#save').disabled, !document.querySelector('#empty-hint').hidden, document.documentElement.scrollWidth <= innerWidth]"), [true, true, true]);
   console.log(`PASS: empty state and ${viewportWidth}x${viewportHeight} layout`);
   assert.equal(await evaluate("document.querySelector('#advanced').open"), false);
