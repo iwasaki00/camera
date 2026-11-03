@@ -1,5 +1,5 @@
-import { clamp } from './renderer.js?v=0.3.0';
-import { toContent, toScreen, zoomAt, midpoint, distance } from './viewport.js?v=0.3.0';
+import { clamp } from './renderer.js?v=0.4.0';
+import { toContent, toScreen, zoomAt, midpoint, distance } from './viewport.js?v=0.4.0';
 
 export const rotate = (p, angle) => ({ x: p.x * Math.cos(angle) - p.y * Math.sin(angle), y: p.x * Math.sin(angle) + p.y * Math.cos(angle) });
 const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
@@ -43,8 +43,8 @@ export function sourceFromBox(box, bounds, aspect) {
 
 // Overlay uses CSS pixels, keeping handles finger-sized at any image resolution.
 export class TouchEditor {
-  constructor(target, { getBox, change, enabled, color, rotation = true, viewport, mode = () => 'edit', snapshot, restore }) {
-    Object.assign(this, { target, getBox, change, enabled, color, rotation, viewport, mode, snapshot, restore });
+  constructor(target, { getBox, change, enabled, editable = () => true, color, rotation = true, viewport, mode = () => 'edit', snapshot, restore }) {
+    Object.assign(this, { target, getBox, change, enabled, editable, color, rotation, viewport, mode, snapshot, restore });
     this.pointers = new Map();
     this.overlay = document.createElement('canvas'); this.overlay.className = 'touch-editor';
     this.overlay.dataset.editor = target.id;
@@ -90,7 +90,7 @@ export class TouchEditor {
     }
     if (this.pointers.size > 1 || this.blocked) { this.drag = this.pan = this.pinch = null; this.blocked = true; return; }
     if (this.mode() === 'pan') { this.pan = { from: point, view: { ...this.viewport.view } }; return; }
-    if (this.mode() !== 'edit' || !this.enabled()) return;
+    if (this.mode() !== 'edit' || !this.enabled() || !this.editable()) return;
     const box = this.getBox(this.size); if (!box) return;
     const screen = this.screenBox(box), action = hitTest(point, screen, this.rotation);
     // Empty-space taps do not mutate coordinates: the next finger may start a pinch.
@@ -123,8 +123,9 @@ export class TouchEditor {
     c.fillStyle = this.drag ? this.color + '30' : this.color + '12';
     c.fillRect(-box.width / 2, -box.height / 2, box.width, box.height);
     c.strokeRect(-box.width / 2, -box.height / 2, box.width, box.height);
-    if (this.rotation) { c.beginPath(); c.moveTo(0, -box.height / 2); c.lineTo(0, -box.height / 2 - 30); c.stroke(); }
+    if (this.rotation && this.editable()) { c.beginPath(); c.moveTo(0, -box.height / 2); c.lineTo(0, -box.height / 2 - 30); c.stroke(); }
     c.restore();
+    if(!this.editable())return;
     for (const point of handles(box, this.rotation)) {
       c.beginPath(); c.arc(point.x, point.y, point.type === 'rotate' ? 8 : 6, 0, Math.PI * 2);
       c.fillStyle = this.color; c.fill(); c.strokeStyle = '#173631'; c.lineWidth = 2; c.stroke();

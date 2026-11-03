@@ -1,7 +1,7 @@
-import { TemplateStore, storageMessage } from './template-store.js?v=0.3.0';
-import { validateDocument, newId, validName } from './template-schema.js?v=0.3.0';
-import { canvasBlob, thumbnail, decodeBackground } from './template-images.js?v=0.3.0';
-import { exportTemplate, importTemplate } from './template-zip.js?v=0.3.0';
+import { TemplateStore, storageMessage } from './template-store.js?v=0.4.0';
+import { validateDocument, newId, validName } from './template-schema.js?v=0.4.0';
+import { canvasBlob, thumbnail, decodeBackground } from './template-images.js?v=0.4.0';
+import { exportTemplate, importTemplate } from './template-zip.js?v=0.4.0';
 
 const $ = id => document.getElementById(id);
 const element = (tag,text,className) => {const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(className)e.className=className;return e;};
@@ -31,7 +31,7 @@ export class TemplateUI {
     for(const [id,value]of [['template-confirm-no','no'],['template-confirm-yes','yes']])$(id).addEventListener('click',()=>$('template-confirm').close(value));
     this.init();this.changed();
   }
-  fingerprint(){const d=this.adapter.read();return JSON.stringify({image:d.revision,parts:d.parts,mirror:d.mirror});}
+  fingerprint(){const d=this.adapter.read();return JSON.stringify({image:d.revision,parts:d.parts,mirror:d.mirror,trackingEnabled:d.trackingEnabled});}
   get dirty(){return this.baseline!==this.fingerprint();}
   changed(){
     $('templates-open').textContent=this.dirty?'保存・読込 ●':'保存・読込';
@@ -58,11 +58,11 @@ export class TemplateUI {
   async confirmDiscard(){return !this.dirty||await this.confirm('未保存の変更があります。変更を破棄して読み込みますか？');}
   async capture(name,asNew=false){
     const draft=this.adapter.read();if(!draft.canvas)throw new Error('背景画像を読み込んでください。');
-    const parts=structuredClone(draft.parts),mirror=draft.mirror,metadata={...draft.metadata};
+    const parts=structuredClone(draft.parts),mirror=draft.mirror,trackingEnabled=draft.trackingEnabled,metadata={...draft.metadata};
     const background=await canvasBlob(draft.canvas),thumb=await thumbnail(draft.canvas);
     const now=new Date(Math.max(Date.now(),this.active?Date.parse(this.active.updatedAt)+1:0)).toISOString();
-    const doc=validateDocument({schemaVersion:1,id:!asNew&&this.active?this.active.id:newId(),name,createdAt:!asNew&&this.active?this.active.createdAt:now,updatedAt:now,
-      background:{path:'background.png',name:metadata.name||'background.png',mime:metadata.mime||'',size:metadata.size||0,storedMime:'image/png',storedSize:background.size,width:draft.canvas.width,height:draft.canvas.height},parts,mirror});
+    const doc=validateDocument({schemaVersion:2,id:!asNew&&this.active?this.active.id:newId(),name,createdAt:!asNew&&this.active?this.active.createdAt:now,updatedAt:now,
+      background:{path:'background.png',name:metadata.name||'background.png',mime:metadata.mime||'',size:metadata.size||0,storedMime:'image/png',storedSize:background.size,width:draft.canvas.width,height:draft.canvas.height},parts,mirror,trackingEnabled});
     return {doc,background,thumbnail:thumb};
   }
   async save(name,asNew){const fingerprint=this.fingerprint(),record=await this.capture(name,asNew);await this.store.put(record);this.active=record.doc;this.suggestedName=name;this.baseline=fingerprint;await this.refresh();this.notify('テンプレートを保存しました。');}

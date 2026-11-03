@@ -86,6 +86,11 @@ footer { font-size: 10px; color: var(--muted); line-height: 1.8; margin-top: 12p
 #part-delete { padding: 7px; font-size: 12px; }
 .layer-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 12px; }
 .layer-controls button { font-size: 12px; }
+.tracking-bar { display: flex; align-items: center; gap: 7px; min-height: 44px; }
+.tracking-bar output { flex: 1; font-size: 11px; font-weight: 500; }
+.tracking-bar button { padding: 6px; font-size: 11px; }
+#tracking-status[data-state=error] { color: #a52e25; }
+#tracking-settings summary { padding: 8px 0; }
 .title-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
 .title-row h1 { min-width: 0; }
 #templates-open { flex-shrink: 0; padding: 8px; font-size: 12px; }

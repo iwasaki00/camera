@@ -28,7 +28,7 @@ test('explicit allowlist excludes camera frames, streams, view and unknown prope
   assert.ok(r.bytes>image.length*2);
 });
 const invalidCases=[
-  ['unsupported schema',d=>d.schemaVersion=2],['missing image',d=>delete d.background],['invalid type',d=>d.parts[0].partType='ear'],
+  ['unsupported schema',d=>d.schemaVersion=3],['missing image',d=>delete d.background],['invalid type',d=>d.parts[0].partType='ear'],
   ['duplicate type',d=>d.parts[1].partType='mouth'],['duplicate id',d=>d.parts[1].id='mouth'],['duplicate layer',d=>d.parts[1].zIndex=0],
   ['invalid name',d=>d.name='  '],['invalid timestamp',d=>d.updatedAt='yesterday'],['invalid mirror',d=>d.mirror=1],
   ['negative coordinate',d=>d.parts[0].targetRect.x=-1],['zero size',d=>d.parts[0].targetRect.width=0],['non-finite size',d=>d.parts[0].targetRect.height=NaN],
@@ -80,4 +80,29 @@ test('IndexedDB unavailable is explicit and quota errors describe atomic failure
 test('record rejects missing thumbnails and incorrect image byte size',()=>{
   assert.throws(()=>cleanRecord({...record(),thumbnail:null}));
   assert.throws(()=>cleanRecord({...record(),background:new Blob(['wrong'])}));
+});
+test('schema 1 migrates to manual mode and default corrections without changing source/target',()=>{
+  const input=doc();input.trackingEnabled=true;input.parts[0].tracking={offsetX:1,offsetY:1,widthScale:2,heightScale:2,rotation:30};
+  const result=validateDocument(input);assert.equal(result.schemaVersion,2);assert.equal(result.trackingEnabled,false);
+  assert.deepEqual(result.parts[0].tracking,{offsetX:0,offsetY:0,widthScale:1,heightScale:1,rotation:0});
+  assert.deepEqual(result.parts[0].sourceRect,input.parts[0].sourceRect);assert.deepEqual(result.parts[0].targetRect,input.parts[0].targetRect);
+});
+test('schema 2 ZIP roundtrip preserves auto mode and independent corrections',async()=>{
+  const input=record();input.doc.schemaVersion=2;input.doc.trackingEnabled=true;
+  input.doc.parts[0].tracking={offsetX:.2,offsetY:-.3,widthScale:1.2,heightScale:1.5,rotation:-20};
+  const restored=await importTemplate(await exportTemplate(input));assert.deepEqual(restored.doc,validateDocument(input.doc));
+  assert.notDeepEqual(restored.doc.parts[0].tracking,restored.doc.parts[1].tracking);
+});
+test('schema 2 refuses absent auto preference or corrections',()=>{
+  const input=doc();input.schemaVersion=2;assert.throws(()=>validateDocument(input));input.trackingEnabled=false;
+  delete input.parts[0].tracking;assert.throws(()=>validateDocument(input));
+});
+test('schema 2 rejects nonfinite or out-of-range relative corrections',()=>{
+  for(const [key,value]of [['offsetX',NaN],['offsetY',2],['widthScale',0],['heightScale',4],['rotation',100]]){
+    const input=doc();input.schemaVersion=2;input.trackingEnabled=true;input.parts[0].tracking[key]=value;assert.throws(()=>validateDocument(input));
+  }
+});
+test('schema 2 allowlist strips transient landmarks, detections and face frames',()=>{
+  const input=doc();input.schemaVersion=2;input.trackingEnabled=true;input.landmarks='private';input.detectedCrops='private';input.parts[0].tracking.frame='private';
+  assert.equal(JSON.stringify(validateDocument(input)).includes('private'),false);
 });

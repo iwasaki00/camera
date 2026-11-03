@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { checkZoom } from './zoom-check.mjs';
 import { checkMultiParts } from './multi-parts-check.mjs';
 import { checkTemplates } from './template-check.mjs';
+import { checkTracking } from './tracking-check.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const server = createServer(async (req, res) => {
@@ -19,7 +20,7 @@ const server = createServer(async (req, res) => {
     if (!target.startsWith(root)) { res.writeHead(403).end(); return; }
     if (process.env.SIMULATE_STALE_CACHE === '1' && name === '/app.js') await new Promise(resolve => setTimeout(resolve, 1000));
     const content = await readFile(target);
-    res.setHeader('Content-Type', ({ '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' })[path.extname(target)] || 'application/octet-stream');
+    res.setHeader('Content-Type', ({ '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.css': 'text/css' })[path.extname(target)] || 'application/octet-stream');
     if (process.env.SIMULATE_STALE_CACHE === '1' && name === '/app.js' && !url.search) {
       // v0.1.1 accessed #guide; v0.1.2 replaced it with independent controls.
       res.end("document.querySelector('#guide').addEventListener('change', () => {});"); return;
@@ -66,11 +67,16 @@ try {
     if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails));
     return result.result.value;
   };
-  const waitFor = async expression => {
-    for (let i = 0; i < 80; i++) { if (await evaluate(expression)) return; await new Promise(r => setTimeout(r, 100)); }
-    throw new Error(`Timed out: ${expression}; runtime errors: ${JSON.stringify(errors)}`);
+  const waitFor = async (expression, attempts = 80) => {
+    for (let i = 0; i < attempts; i++) { if (await evaluate(expression)) return; await new Promise(r => setTimeout(r, 100)); }
+    const state=await evaluate("JSON.stringify({status:document.querySelector('#status')?.textContent,camera:document.querySelector('#camera-state')?.textContent,tracking:document.querySelector('#tracking-status')?.textContent,template:document.querySelector('#template-message')?.textContent,visibility:document.visibilityState,startDisabled:document.querySelector('#start')?.disabled})");
+    throw new Error(`Timed out: ${expression}; state: ${state}; runtime errors: ${JSON.stringify(errors)}`);
   };
   await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` });
+  if(process.env.TRACKING_ONLY==='1') {
+    await waitFor("!!document.querySelector('#image-file')&&!document.querySelector('#image-file').disabled");
+    await checkTracking({evaluate,command,waitFor});assert.deepEqual(errors,[]);
+  } else {
   if (process.env.SIMULATE_STALE_CACHE === '1') {
     await waitFor("!!document.querySelector('#image-file')");
     assert.equal(await evaluate("document.querySelector('#image-file').disabled"), true);
@@ -223,11 +229,13 @@ try {
   await evaluate("document.querySelector('#stop').click()");
   console.log('PASS: camera stop/restart preserves working view and edit gestures');
   await checkTemplates({ evaluate, command, waitFor });
+  await checkTracking({ evaluate, command, waitFor });
   assert.deepEqual(errors, []);
   await evaluate(`navigator.mediaDevices.getUserMedia = async () => { throw new DOMException('denied', 'NotAllowedError'); }; document.querySelector('#start').click()`);
   await waitFor("document.querySelector('#status').dataset.error === 'true'");
   assert.deepEqual(await evaluate("[document.querySelector('#start').disabled,document.querySelector('#stop').disabled,document.querySelector('#camera').srcObject,document.querySelector('#status').textContent.includes('許可')]"), [false,true,null,true]);
   console.log('PASS: camera permission denial is shown and controls recover');
+  }
 } finally {
   socket?.close(); browser.kill();
   await new Promise(resolve => server.close(resolve));

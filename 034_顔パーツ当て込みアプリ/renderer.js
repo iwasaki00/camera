@@ -1,4 +1,4 @@
-import { orderedParts, sourceForDisplay } from './parts.js?v=0.3.0';
+import { orderedParts, sourceForDisplay } from './parts.js?v=0.4.0';
 
 export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
@@ -51,10 +51,13 @@ export class PartRenderer {
       this.prepareMask(width, height, part);
       const patch = this.patch.getContext('2d');
       patch.clearRect(0, 0, width, height);
-      const crop = sourceRect(video.videoWidth, video.videoHeight, width / height, source, mirror);
+      const crop = source.crop || sourceRect(video.videoWidth, video.videoHeight, width / height, source, mirror);
       patch.save();
       if (mirror) { patch.translate(width, 0); patch.scale(-1, 1); }
-      patch.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, width, height);
+      if(source.crop) {
+        patch.translate(width/2,height/2);patch.scale(width/crop.width,height/crop.height);
+        patch.rotate(-crop.angle);patch.drawImage(video,-crop.x,-crop.y);
+      } else patch.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, width, height);
       patch.restore();
       patch.globalCompositeOperation = 'destination-in';
       patch.drawImage(this.mask, 0, 0);
@@ -75,16 +78,17 @@ export class PartRenderer {
 
 export class CompositeRenderer {
   constructor(createRenderer = () => new PartRenderer()) { this.renderers = new Map(); this.createRenderer = createRenderer; }
-  draw(ctx, video, parts, mirror) {
+  draw(ctx, video, parts, mirror, trackedCrops = null) {
     for (const [id, renderer] of this.renderers) if (!parts.some(p => p.id === id)) {
       if (renderer.patch) renderer.patch.width = renderer.patch.height = renderer.mask.width = renderer.mask.height = 0;
       this.renderers.delete(id);
     }
     for (const part of orderedParts(parts)) {
+      if(trackedCrops && !trackedCrops[part.id])continue;
       if (!this.renderers.has(part.id)) this.renderers.set(part.id, this.createRenderer());
       this.renderers.get(part.id).draw(ctx, video,
         { ...part.targetRect, rotation: part.rotation, shape: part.shape, feather: part.feather },
-        sourceForDisplay(part, mirror), mirror, false);
+        { ...sourceForDisplay(part, mirror), ...(trackedCrops ? {crop:trackedCrops[part.id]} : {}) }, mirror, false);
     }
   }
 }

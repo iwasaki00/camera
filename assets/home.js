@@ -3,8 +3,8 @@ const APP_DETAILS = {
     number: "034",
     type: "FACE COMPOSITE",
     title: "顔パーツ当て込みアプリ",
-    description: "人物写真に、口・左目・右目・鼻のカメラ映像を同時合成します。直接編集・ピンチズーム・拡大鏡で調整し、背景と全設定をテンプレート保存。ZIPでの持ち出しやPNG保存にも対応し、処理は端末内で完結します。",
-    tech: "Canvas 2D · Multi Face Parts · IndexedDB Templates · ZIP · v0.3.0",
+    description: "口・左右の目・鼻のカメラ映像を人物写真に同時合成。顔の移動や傾きに自動追従し、パーツ別の補正と手動編集も使えます。背景と設定のテンプレート保存、ZIP入出力、PNG保存に対応。顔検出も端末内で処理します。",
+    tech: "MediaPipe Face Landmarker · Multi Face Parts · Templates · ZIP · v0.4.0",
     icon: "./assets/app-icons/portrait-face-parts.svg"
   },
   "something-behind-you": {

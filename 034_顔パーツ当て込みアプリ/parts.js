@@ -1,3 +1,4 @@
+import { DEFAULT_CORRECTION } from './tracking-geometry.js?v=0.4.0';
 export const PART_TYPES = Object.freeze({ mouth: '口', leftEye: '左目', rightEye: '右目', nose: '鼻' });
 const defaults = {
   mouth: { width: 24, height: 10, x: .5, y: .65, zoom: 1.5 },
@@ -13,7 +14,7 @@ export function createPart(partType, zIndex = 0) {
     targetRect: { x: 50, y: 50, width: d.width, height: d.height },
     // Normalized center in the original, unmirrored video; zoom defines crop extent.
     sourceRect: { x: d.x, y: d.y, zoom: d.zoom }, rotation: 0, shape: 'oval', feather: 20, zIndex,
-    guides: { photo: true, camera: true } };
+    guides: { photo: true, camera: true }, tracking: { ...DEFAULT_CORRECTION } };
 }
 
 export function migrateMouth(legacy = { x: 50, y: 65, width: 24, height: 10, rotation: 0, shape: 'oval', feather: 20 },

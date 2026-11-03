@@ -1,4 +1,5 @@
-export const SCHEMA_VERSION = 1;
+import { DEFAULT_CORRECTION } from './tracking-geometry.js?v=0.4.0';
+export const SCHEMA_VERSION = 2;
 export const LIMITS = Object.freeze({ zip: 25 * 1024 * 1024, image: 20 * 1024 * 1024, json: 128 * 1024, thumbnail: 256 * 1024, edge: 2048, entries: 32 });
 export const newId = () => globalThis.crypto?.randomUUID?.() || `template-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const fail = message => { throw new Error(message); };
@@ -13,7 +14,9 @@ export function validName(value) {
 
 // Copy an explicit allowlist. No streams, camera canvases, image frames or view state can enter a document.
 export function validateDocument(input) {
-  if (!object(input) || input.schemaVersion !== SCHEMA_VERSION) fail('対応していないテンプレート形式・スキーマバージョンです。');
+  if (!object(input) || ![1, SCHEMA_VERSION].includes(input.schemaVersion)) fail('対応していないテンプレート形式・スキーマバージョンです。');
+  const legacy=input.schemaVersion===1;
+  if(!legacy && typeof input.trackingEnabled!=='boolean')fail('自動追従の設定が不正です。');
   if (!string(input.id, 100) || !/^[a-zA-Z0-9_-]+$/.test(input.id) || !date(input.createdAt) || !date(input.updatedAt) || input.updatedAt < input.createdAt) fail('テンプレートIDまたは日時が不正です。');
   const b = input.background;
   if (!object(b) || !['background.png', 'background.jpg', 'background.jpeg'].includes(b.path) || !string(b.name, 255)
@@ -36,12 +39,15 @@ export function validateDocument(input) {
     layers.add(p.zIndex);
     const guides = p.guides ?? { photo: true, camera: true };
     if (!object(guides) || typeof guides.photo !== 'boolean' || typeof guides.camera !== 'boolean') fail('枠表示の情報が不正です。');
+    const tracking=legacy?DEFAULT_CORRECTION:p.tracking;
+    if(!object(tracking) || !number(tracking.offsetX,-1.5,1.5) || !number(tracking.offsetY,-1.5,1.5)
+      || !number(tracking.widthScale,.5,3) || !number(tracking.heightScale,.5,3) || !number(tracking.rotation,-90,90))fail('自動追従の補正値が不正です。');
     return { id: p.id, partType: p.partType, enabled: p.enabled, targetRect: { x:t.x, y:t.y, width:t.width, height:t.height },
       sourceRect: { x:s.x, y:s.y, zoom:s.zoom }, rotation:p.rotation, shape:p.shape, feather:p.feather, zIndex:p.zIndex,
-      guides: { photo:guides.photo, camera:guides.camera } };
+      guides: { photo:guides.photo, camera:guides.camera }, tracking: {offsetX:tracking.offsetX,offsetY:tracking.offsetY,widthScale:tracking.widthScale,heightScale:tracking.heightScale,rotation:tracking.rotation} };
   });
-  return { schemaVersion: SCHEMA_VERSION, appVersion: '0.3.0', id:input.id, name:validName(input.name), createdAt:input.createdAt, updatedAt:input.updatedAt,
-    background: { path:b.path, name:b.name, mime:b.mime, size:b.size, storedMime:b.storedMime, storedSize:b.storedSize, width:b.width, height:b.height }, parts, mirror:input.mirror };
+  return { schemaVersion: SCHEMA_VERSION, appVersion: '0.4.0', id:input.id, name:validName(input.name), createdAt:input.createdAt, updatedAt:input.updatedAt,
+    background: { path:b.path, name:b.name, mime:b.mime, size:b.size, storedMime:b.storedMime, storedSize:b.storedSize, width:b.width, height:b.height }, parts, mirror:input.mirror, trackingEnabled:legacy?false:input.trackingEnabled };
 }
 
 export const documentBytes = doc => new TextEncoder().encode(JSON.stringify(doc)).length;

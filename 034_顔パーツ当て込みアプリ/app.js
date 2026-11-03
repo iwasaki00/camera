@@ -1,16 +1,18 @@
-import { Camera } from './camera.js?v=0.3.0';
-import { CompositeRenderer, sourceRect } from './renderer.js?v=0.3.0';
-import { TouchEditor, sourceFromBox } from './editor.js?v=0.3.0';
-import { Viewport } from './viewport.js?v=0.3.0';
-import { Magnifier } from './magnifier.js?v=0.3.0';
-import { PartCollection, PART_TYPES, sourceForDisplay, setDisplaySource } from './parts.js?v=0.3.0';
-import { TemplateUI } from './template-ui.js?v=0.3.0';
+import { Camera } from './camera.js?v=0.4.0';
+import { CompositeRenderer, sourceRect } from './renderer.js?v=0.4.0';
+import { TouchEditor, sourceFromBox } from './editor.js?v=0.4.0';
+import { Viewport } from './viewport.js?v=0.4.0';
+import { Magnifier } from './magnifier.js?v=0.4.0';
+import { PartCollection, PART_TYPES, sourceForDisplay, setDisplaySource } from './parts.js?v=0.4.0';
+import { TemplateUI } from './template-ui.js?v=0.4.0';
+import { FaceTracker } from './tracking.js?v=0.4.0';
+import { correctionFor, DEFAULT_CORRECTION, displayCrop } from './tracking-geometry.js?v=0.4.0';
 
 const $ = id => document.getElementById(id);
 const canvas = $('composition'), ctx = canvas.getContext('2d');
 const video = $('camera'), camera = new Camera(video), renderer = new CompositeRenderer();
 const collection = new PartCollection();
-const state = { image: null, imageMetadata: null, backgroundRevision: 0, running: false, mirror: true, mode: 'edit',
+const state = { image: null, imageMetadata: null, backgroundRevision: 0, running: false, mirror: true, mode: 'edit', trackingEnabled: false,
   parts: collection.parts };
 const selected = () => collection.selected;
 const selectedSource = () => selected() ? sourceForDisplay(selected(), state.mirror) : { x: .5, y: .5, zoom: 1.5 };
@@ -20,14 +22,31 @@ function writeValue(key, value) {
   const part = selected(); if (!part) return;
   if (Object.prototype.hasOwnProperty.call(part.targetRect, key)) part.targetRect[key] = value; else part[key] = value;
 }
-let frame = 0, imageGeneration = 0, exportUrl = null;
+let frame = 0, imageGeneration = 0, exportUrl = null, lastDraw = -Infinity;
 let photoEditor, cameraEditor;
 let photoMagnifier, cameraMagnifier;
 let templates;
 const photoView = new Viewport(canvas, { min: .5, changed: () => { syncViewControls(); render(); } });
 const cameraView = new Viewport($('camera-preview'), { changed: () => { syncViewControls(); render(); } });
 const controls = [];
+const trackingControls = [];
 const message = (text, error = false) => { $('status').textContent = text; $('status').dataset.error = String(error); };
+const tracker = new FaceTracker({ video, changed: () => syncTrackingUI(), failed: () => {
+  state.trackingEnabled = false; cancelEditors(); update();
+  message('自動追従を利用できません。手動に戻しました。再度ONにするとモデルの読込を再試行します。', true);
+} });
+const trackedCrop = () => state.trackingEnabled && selected() ? tracker.crops(state.parts, video.videoWidth, video.videoHeight)[selected().id] : null;
+
+function syncTrackingUI() {
+  const status = tracker.state.status;
+  const labels = { idle: '未検出', detecting: '検出中', tracking: '追従中', lost: '一時的に見失った', notFound: '未検出', error: '利用不可／エラー' };
+  $('tracking-toggle').checked = state.trackingEnabled;
+  $('tracking-manual').hidden = !state.trackingEnabled;
+  $('tracking-status').textContent = status === 'error' ? labels.error : !state.trackingEnabled ? '手動' : !state.running ? 'カメラ停止中' : labels[status];
+  $('tracking-status').dataset.state = status; $('tracking-status').dataset.backend = tracker.metrics.backend;
+  $('tracking-status').dataset.count = tracker.metrics.count;
+  $('tracking-metrics').textContent = tracker.active && tracker.metrics.count ? `検出 ${tracker.metrics.ms.toFixed(1)}ms / 約${(1000/tracker.metrics.interval).toFixed(1)}回/秒` : '';
+}
 
 function syncViewControls() {
   for (const [id, viewport] of [['photo', photoView], ['camera', cameraView]]) {
@@ -71,6 +90,14 @@ function syncControls() {
   }
   photoMagnifier?.setLabel(part ? PART_TYPES[part.partType] : '未選択');
   cameraMagnifier?.setLabel(part ? PART_TYPES[part.partType] : '未選択');
+  $('tracking-part-name').textContent = part ? PART_TYPES[part.partType] : '未選択';
+  const correction = part ? correctionFor(part) : DEFAULT_CORRECTION;
+  for(const {key,input,output,scale,unit} of trackingControls) {
+    input.disabled = !part; input.value = correction[key]*scale; output.value = `${Number(input.value).toFixed(key==='rotation'?0:1)}${unit}`;
+  }
+  $('tracking-correction-reset').disabled = !part;
+  for(const id of ['source-x','source-y','source-zoom'])$(id).disabled = !part || state.trackingEnabled;
+  syncTrackingUI();
 }
 function update() { syncControls(); render(); templates?.changed(); }
 
@@ -95,11 +122,31 @@ for (const [key, title] of [['x', 'カメラ側 / X'], ['y', 'カメラ側 / Y']
   label.append(title, output); $('source-controls').append(label, input);
   input.addEventListener('input', () => { setSource({ ...selectedSource(), [key]: Number(input.value) / 100 }); update(); });
 }
+for(const [key,title,min,max,step,scale,unit] of [
+  ['offsetX','X補正',-150,150,1,100,'%'],['offsetY','Y補正',-150,150,1,100,'%'],
+  ['widthScale','幅の倍率',.5,3,.01,1,'×'],['heightScale','高さの倍率',.5,3,.01,1,'×'],['rotation','回転補正',-90,90,1,1,'°']
+]) {
+  const label=document.createElement('label');label.className='slider-label';label.htmlFor=`tracking-${key}`;label.textContent=title;
+  const output=document.createElement('output'),input=document.createElement('input');
+  Object.assign(input,{id:label.htmlFor,type:'range',min,max,step});label.append(output);$('tracking-controls').append(label,input);
+  input.addEventListener('input',()=>{if(selected())selected().tracking={...correctionFor(selected()),[key]:Number(input.value)/scale};update();});
+  trackingControls.push({key,input,output,scale,unit});
+}
+$('tracking-correction-reset').addEventListener('click',()=>{if(selected())selected().tracking={...DEFAULT_CORRECTION};update();});
+function setTracking(enabled) {
+  cancelEditors(); state.trackingEnabled=enabled;
+  if(enabled && state.running)tracker.start();else tracker.stop();
+  update();
+}
+$('tracking-toggle').addEventListener('change',event=>setTracking(event.target.checked));
+$('tracking-manual').addEventListener('click',()=>setTracking(false));
 
 function renderComposite(target) {
   target.clearRect(0, 0, target.canvas.width, target.canvas.height);
   if (state.image) target.drawImage(state.image, 0, 0, target.canvas.width, target.canvas.height);
-  renderer.draw(target, state.running ? video : null, state.parts, state.mirror);
+  renderer.draw(target, state.running ? video : null, state.parts, state.mirror,
+    state.trackingEnabled ? tracker.crops(state.parts, video.videoWidth, video.videoHeight) : null);
+  if(state.trackingEnabled && $('tracking-status').dataset.state!==tracker.state.status)syncTrackingUI();
 }
 function render() {
   renderComposite(ctx);
@@ -115,13 +162,18 @@ function render() {
   cameraEditor?.draw();
   cameraMagnifier?.draw();
 }
-function tick() { render(); frame = state.running ? requestAnimationFrame(tick) : 0; }
+function tick(time = performance.now()) {
+  if(time-lastDraw>=1000/30-1){render();lastDraw=time;}
+  frame = state.running ? requestAnimationFrame(tick) : 0;
+}
 function stopCamera(text = 'カメラを停止しました。再開するには「カメラ開始」を押してください。') {
   cameraEditor?.cancel();
+  tracker.stop();
   camera.stop(); state.running = false; cancelAnimationFrame(frame); frame = 0;
   $('start').disabled = false; $('stop').disabled = true;
   $('camera-state').textContent = '停止中'; $('camera-hint').hidden = false;
   render(); message(text);
+  syncTrackingUI();
 }
 $('start').addEventListener('click', async () => {
   $('start').disabled = true; $('stop').disabled = false; $('camera-state').textContent = '接続中';
@@ -130,6 +182,7 @@ $('start').addEventListener('click', async () => {
     if (!window.isSecureContext) throw new Error('UNSUPPORTED');
     if (!await camera.start()) return;
     state.running = true; $('camera-state').textContent = '使用中'; $('camera-hint').hidden = true;
+    if(state.trackingEnabled)tracker.start();
     camera.stream.getVideoTracks().forEach(track => track.addEventListener('ended', () => {
       if (state.running) stopCamera('カメラとの接続が終了しました。再度開始してください。');
     }, { once: true }));
@@ -232,10 +285,17 @@ photoEditor = new TouchEditor(canvas, {
 });
 cameraEditor = new TouchEditor($('camera-preview'), {
   color: '#ffba69', rotation: false,
+  editable: () => !state.trackingEnabled,
   enabled: () => !!selected()?.guides.camera && state.running && video.readyState >= 2, viewport: cameraView, mode: () => state.mode,
   snapshot: () => ({ ...selected().sourceRect }), restore: saved => { selected().sourceRect = { ...saved }; update(); },
   getBox: size => {
     if (!video.videoWidth || !selected()) return null;
+    if(state.trackingEnabled) {
+      const raw=trackedCrop();if(!raw)return null;
+      const crop=displayCrop(raw,video.videoWidth,state.mirror);
+      return {x:crop.x/video.videoWidth*size.width,y:crop.y/video.videoHeight*size.height,
+        width:crop.width/video.videoWidth*size.width,height:crop.height/video.videoHeight*size.height,angle:crop.angle};
+    }
     const p = selected().targetRect, crop = sourceRect(video.videoWidth, video.videoHeight,
       canvas.width * p.width / (canvas.height * p.height), selectedSource(), state.mirror);
     return { x: (crop.visualX + crop.width / 2) / video.videoWidth * size.width,
@@ -270,6 +330,9 @@ photoMagnifier = new Magnifier(canvas.parentElement, {
 cameraMagnifier = new Magnifier($('camera-preview').parentElement, {
   id: 'camera', label: 'カメラ側', color: '#ffba69', getSource: () => {
     if (!state.running || video.readyState < 2 || !video.videoWidth || !selected()) return null;
+    if(state.trackingEnabled) {
+      const crop=trackedCrop();return crop?{image:video,x:crop.x,y:crop.y,fit:cameraView.geometry().width/video.videoWidth,mirror:state.mirror}:null;
+    }
     const part = selected().targetRect, crop = sourceRect(video.videoWidth, video.videoHeight,
       canvas.width * part.width / (canvas.height * part.height), selectedSource(), state.mirror);
     return { image: video, x: crop.x + crop.width / 2, y: crop.y + crop.height / 2,
@@ -277,7 +340,7 @@ cameraMagnifier = new Magnifier($('camera-preview').parentElement, {
   }
 });
 templates = new TemplateUI({
-  read: () => ({ canvas: state.image, metadata: state.imageMetadata, revision: state.backgroundRevision, parts: state.parts, mirror: state.mirror }),
+  read: () => ({ canvas: state.image, metadata: state.imageMetadata, revision: state.backgroundRevision, parts: state.parts, mirror: state.mirror, trackingEnabled:state.trackingEnabled }),
   message,
   apply: async (doc, background) => {
     imageGeneration++; cancelEditors(); stopCamera();
@@ -287,6 +350,7 @@ templates = new TemplateUI({
     collection.parts.splice(0, collection.parts.length, ...structuredClone(doc.parts));
     collection.selectedId = collection.parts.find(p => p.partType === 'mouth')?.id ?? collection.parts[0]?.id ?? null;
     state.mirror = doc.mirror; $('mirror').checked = doc.mirror;
+    state.trackingEnabled = doc.trackingEnabled;
     state.mode = 'edit'; $('interaction-mode').value = 'edit';
     $('empty-hint').hidden = true; $('save').disabled = false; clearExport();
     photoView.reset(); cameraView.reset(); photoMagnifier.reset(); cameraMagnifier.reset();
