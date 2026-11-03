@@ -86,3 +86,28 @@ footer { font-size: 10px; color: var(--muted); line-height: 1.8; margin-top: 12p
 #part-delete { padding: 7px; font-size: 12px; }
 .layer-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 12px; }
 .layer-controls button { font-size: 12px; }
+.title-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.title-row h1 { min-width: 0; }
+#templates-open { flex-shrink: 0; padding: 8px; font-size: 12px; }
+dialog { color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 14px; width: min(600px, calc(100% - 20px)); max-height: calc(100dvh - 32px); padding: 16px; overflow-y: auto; overscroll-behavior: contain; }
+dialog::backdrop { background: #102b2ba0; }
+#template-name-dialog, #template-confirm { width: min(400px, calc(100% - 24px)); }
+#template-current { overflow-wrap: anywhere; font-size: 13px; }
+.template-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.template-tools > button, .template-tools > .button { flex: 1 1 130px; }
+#template-retry { font-size: 11px; flex: 0 1 auto; }
+#template-message, #template-name-error { font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+#template-message[data-error=true], #template-name-error { color: #a52e25; }
+.template-card { display: grid; grid-template-columns: 80px minmax(0, 1fr) auto; gap: 8px; align-items: center; border-top: 1px solid var(--line); padding: 10px 0; }
+.template-card > img { width: 80px; height: 76px; object-fit: contain; background: #f1f4ef; border-radius: 7px; grid-row: span 2; }
+.template-card-info { min-width: 0; overflow-wrap: anywhere; }
+.template-card-info strong { font-size: 14px; }
+.template-card-menu { margin: 0; padding: 0; border: 0; grid-column: 2 / 4; }
+.template-card-menu summary { padding: 10px 0; }
+.template-card-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.template-card-actions button { padding: 8px; font-size: 12px; }
+.name-label { display: block; margin: 16px 0 6px; font-size: 13px; }
+#template-name { width: 100%; min-height: 44px; font: inherit; font-size: 16px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; }
+.dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
+#template-download { max-width: 100%; overflow-wrap: anywhere; font-size: 12px; }
+@media (max-width: 400px) { .title-row h1 { font-size: 18px; } dialog { padding: 12px; } }

@@ -1,15 +1,16 @@
-import { Camera } from './camera.js?v=0.2.0';
-import { CompositeRenderer, sourceRect } from './renderer.js?v=0.2.0';
-import { TouchEditor, sourceFromBox } from './editor.js?v=0.2.0';
-import { Viewport } from './viewport.js?v=0.2.0';
-import { Magnifier } from './magnifier.js?v=0.2.0';
-import { PartCollection, PART_TYPES, sourceForDisplay, setDisplaySource } from './parts.js?v=0.2.0';
+import { Camera } from './camera.js?v=0.3.0';
+import { CompositeRenderer, sourceRect } from './renderer.js?v=0.3.0';
+import { TouchEditor, sourceFromBox } from './editor.js?v=0.3.0';
+import { Viewport } from './viewport.js?v=0.3.0';
+import { Magnifier } from './magnifier.js?v=0.3.0';
+import { PartCollection, PART_TYPES, sourceForDisplay, setDisplaySource } from './parts.js?v=0.3.0';
+import { TemplateUI } from './template-ui.js?v=0.3.0';
 
 const $ = id => document.getElementById(id);
 const canvas = $('composition'), ctx = canvas.getContext('2d');
 const video = $('camera'), camera = new Camera(video), renderer = new CompositeRenderer();
 const collection = new PartCollection();
-const state = { image: null, running: false, mirror: true, mode: 'edit',
+const state = { image: null, imageMetadata: null, backgroundRevision: 0, running: false, mirror: true, mode: 'edit',
   parts: collection.parts };
 const selected = () => collection.selected;
 const selectedSource = () => selected() ? sourceForDisplay(selected(), state.mirror) : { x: .5, y: .5, zoom: 1.5 };
@@ -22,6 +23,7 @@ function writeValue(key, value) {
 let frame = 0, imageGeneration = 0, exportUrl = null;
 let photoEditor, cameraEditor;
 let photoMagnifier, cameraMagnifier;
+let templates;
 const photoView = new Viewport(canvas, { min: .5, changed: () => { syncViewControls(); render(); } });
 const cameraView = new Viewport($('camera-preview'), { changed: () => { syncViewControls(); render(); } });
 const controls = [];
@@ -70,7 +72,7 @@ function syncControls() {
   photoMagnifier?.setLabel(part ? PART_TYPES[part.partType] : '未選択');
   cameraMagnifier?.setLabel(part ? PART_TYPES[part.partType] : '未選択');
 }
-function update() { syncControls(); render(); }
+function update() { syncControls(); render(); templates?.changed(); }
 
 for (const [key, title, min, max, step, unit] of [
   ['x', 'X座標', 0, 100, .1, '%'], ['y', 'Y座標', 0, 100, .1, '%'],
@@ -144,7 +146,7 @@ $('stop').addEventListener('click', () => stopCamera());
 $('mirror').addEventListener('change', event => { cameraEditor.cancel(); state.mirror = event.target.checked; update(); });
 for (const [id, viewport] of [['photo', photoView], ['camera', cameraView]]) {
   $(`${id}-guide`).addEventListener('change', event => {
-    photoEditor.cancel(); cameraEditor.cancel(); if (selected()) selected().guides[id] = event.target.checked; render();
+    photoEditor.cancel(); cameraEditor.cancel(); if (selected()) selected().guides[id] = event.target.checked; render(); templates?.changed();
   });
   $(`${id}-view-zoom`).addEventListener('input', event => {
     photoEditor.cancel(); cameraEditor.cancel(); viewport.zoom(Number(event.target.value) / 100);
@@ -154,7 +156,7 @@ for (const [id, viewport] of [['photo', photoView], ['camera', cameraView]]) {
 $('interaction-mode').addEventListener('change', event => {
   photoEditor.cancel(); cameraEditor.cancel(); state.mode = event.target.value; render();
 });
-$('shape').addEventListener('change', event => { if (selected()) selected().shape = event.target.value; render(); });
+$('shape').addEventListener('change', event => { if (selected()) selected().shape = event.target.value; update(); });
 $('source-zoom').addEventListener('input', event => {
   setSource({ ...selectedSource(), zoom: Number(event.target.value) }); update();
 });
@@ -186,7 +188,9 @@ $('image-file').addEventListener('change', async event => {
     background.getContext('2d').drawImage(image, 0, 0, background.width, background.height);
     photoEditor.cancel(); cameraEditor.cancel();
     state.image = background; canvas.width = background.width; canvas.height = background.height;
+    state.imageMetadata = { name: file.name, mime: file.type || '', size: file.size }; state.backgroundRevision++;
     $('empty-hint').hidden = true; $('save').disabled = false; clearExport(); photoView.reset();
+    templates?.changed();
     message('画像を読み込みました。パーツを選び、枠を直接動かして合わせてください。');
   } catch {
     if (generation === imageGeneration) message('画像を読み込めませんでした。JPEG・PNGなどSafariで開ける画像を選んでください。', true);
@@ -270,6 +274,23 @@ cameraMagnifier = new Magnifier($('camera-preview').parentElement, {
       canvas.width * part.width / (canvas.height * part.height), selectedSource(), state.mirror);
     return { image: video, x: crop.x + crop.width / 2, y: crop.y + crop.height / 2,
       fit: cameraView.geometry().width / video.videoWidth, mirror: state.mirror };
+  }
+});
+templates = new TemplateUI({
+  read: () => ({ canvas: state.image, metadata: state.imageMetadata, revision: state.backgroundRevision, parts: state.parts, mirror: state.mirror }),
+  message,
+  apply: async (doc, background) => {
+    imageGeneration++; cancelEditors(); stopCamera();
+    state.image = background; state.backgroundRevision++;
+    state.imageMetadata = { name: doc.background.name, mime: doc.background.mime, size: doc.background.size };
+    canvas.width = background.width; canvas.height = background.height;
+    collection.parts.splice(0, collection.parts.length, ...structuredClone(doc.parts));
+    collection.selectedId = collection.parts.find(p => p.partType === 'mouth')?.id ?? collection.parts[0]?.id ?? null;
+    state.mirror = doc.mirror; $('mirror').checked = doc.mirror;
+    state.mode = 'edit'; $('interaction-mode').value = 'edit';
+    $('empty-hint').hidden = true; $('save').disabled = false; clearExport();
+    photoView.reset(); cameraView.reset(); photoMagnifier.reset(); cameraMagnifier.reset();
+    syncControls(); syncViewControls(); render();
   }
 });
 syncControls();

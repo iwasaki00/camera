@@ -1,4 +1,4 @@
-import { orderedParts, sourceForDisplay } from './parts.js?v=0.2.0';
+import { orderedParts, sourceForDisplay } from './parts.js?v=0.3.0';
 
 export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 

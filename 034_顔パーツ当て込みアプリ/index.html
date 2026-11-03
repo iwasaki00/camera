@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#172c2b">
   <title>顔パーツ当て込みアプリ / Portrait Face Parts Player</title>
-  <link rel="stylesheet" href="style.css?v=0.2.0">
+  <link rel="stylesheet" href="style.css?v=0.3.0">
   <script type="module">
-    import('./app.js?v=0.2.0').catch(error => {
+    import('./app.js?v=0.3.0').catch(error => {
       const status = document.getElementById('status');
       status.textContent = 'アプリの起動に失敗しました。ページを再読み込みしてください。';
       status.dataset.error = 'true';
@@ -17,7 +17,7 @@
 </head>
 <body>
   <main>
-    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.2.0</span></p><h1>顔パーツ当て込みアプリ</h1></header>
+    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.3.0</span></p><div class="title-row"><h1>顔パーツ当て込みアプリ</h1><button id="templates-open" type="button">保存・読込</button></div></header>
     <section class="preview-panel" aria-labelledby="preview-title">
       <div class="panel-heading"><h2 id="preview-title">絵画側 / <span id="selected-part-name">口</span></h2><select id="interaction-mode" aria-label="操作モード"><option value="edit">枠を編集</option><option value="pan">画像を移動</option><option value="view">鑑賞</option></select></div>
       <div class="part-bar" aria-label="顔パーツの追加と選択">
@@ -63,7 +63,19 @@
       </details>
       <div id="export-result" hidden><p>PNGを作成しました。画像を長押しして保存することもできます。</p><a id="download" class="button" download="portrait-mouth.png">PNGをダウンロード</a><img id="export-image" alt="保存用の合成画像"></div>
     </section>
-    <footer>Version 0.2.0 — MULTI FACE PARTS · カメラは HTTPS / localhost で利用できます。</footer>
+    <footer>Version 0.3.0 — MULTI PARTS TEMPLATE · カメラは HTTPS / localhost で利用できます。</footer>
   </main>
+  <dialog id="template-manager" aria-labelledby="template-title">
+    <div class="panel-heading"><h2 id="template-title">テンプレート / 保存・読込</h2><button id="templates-close" type="button">閉じる</button></div>
+    <p id="template-current"></p><p id="template-storage" class="help">保存機能を準備しています…</p>
+    <div class="template-tools"><button id="template-save" class="primary" disabled>保存 / 上書き</button><button id="template-save-as" disabled>別名保存</button><button id="template-export" disabled>現在のZIP出力</button><label class="button" for="template-import">ZIP読込</label><input id="template-import" class="file-input" type="file" accept=".zip,application/zip"><button id="template-retry">保存機能を再試行</button></div>
+    <p id="template-message" role="status" aria-live="polite"></p><a id="template-download" class="button" hidden download="portrait-template.zip">ZIPを保存</a>
+    <p id="template-usage" class="help">0件</p><div id="template-list"></div>
+  </dialog>
+  <dialog id="template-name-dialog" aria-labelledby="template-name-title"><form id="template-name-form">
+    <h2 id="template-name-title">保存</h2><label class="name-label" for="template-name">テンプレート名</label><input id="template-name" type="text" maxlength="80" required autocomplete="off">
+    <p id="template-name-error" role="alert"></p><div class="dialog-actions"><button id="template-name-cancel" type="button">キャンセル</button><button id="template-name-submit" class="primary" type="submit">決定</button></div>
+  </form></dialog>
+  <dialog id="template-confirm" aria-labelledby="template-confirm-text"><p id="template-confirm-text"></p><div class="dialog-actions"><button id="template-confirm-no" type="button">キャンセル</button><button id="template-confirm-yes" class="primary" type="button">続ける</button></div></dialog>
 </body>
 </html>

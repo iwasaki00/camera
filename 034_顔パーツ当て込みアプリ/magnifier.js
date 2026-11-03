@@ -1,4 +1,4 @@
-import { clamp } from './renderer.js?v=0.2.0';
+import { clamp } from './renderer.js?v=0.3.0';
 
 export class Magnifier {
   constructor(parent, { id, label, color, getSource }) {
@@ -31,6 +31,12 @@ export class Magnifier {
       if (this.drag?.id === e.pointerId) { this.drag = null; if (this.window.hasPointerCapture(e.pointerId)) this.window.releasePointerCapture(e.pointerId); }
     });
     this.id = id;
+  }
+  reset() {
+    const pointerId = this.drag?.id; this.drag = null;
+    if (pointerId !== undefined && this.window.hasPointerCapture(pointerId)) this.window.releasePointerCapture(pointerId);
+    this.zoom = 3; this.select.value = '3'; this.toggle.checked = true;
+    this.left = undefined; this.top = undefined;
   }
   setLabel(partLabel) {
     this.grip.textContent = partLabel;

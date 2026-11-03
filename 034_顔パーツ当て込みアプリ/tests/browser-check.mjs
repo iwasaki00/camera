@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { checkZoom } from './zoom-check.mjs';
 import { checkMultiParts } from './multi-parts-check.mjs';
+import { checkTemplates } from './template-check.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const server = createServer(async (req, res) => {
@@ -221,6 +222,8 @@ try {
   assert.ok(Math.abs((await evaluate('window.cameraBox()')).x-restarted.x-6)<1);
   await evaluate("document.querySelector('#stop').click()");
   console.log('PASS: camera stop/restart preserves working view and edit gestures');
+  await checkTemplates({ evaluate, command, waitFor });
+  assert.deepEqual(errors, []);
   await evaluate(`navigator.mediaDevices.getUserMedia = async () => { throw new DOMException('denied', 'NotAllowedError'); }; document.querySelector('#start').click()`);
   await waitFor("document.querySelector('#status').dataset.error === 'true'");
   assert.deepEqual(await evaluate("[document.querySelector('#start').disabled,document.querySelector('#stop').disabled,document.querySelector('#camera').srcObject,document.querySelector('#status').textContent.includes('許可')]"), [false,true,null,true]);
