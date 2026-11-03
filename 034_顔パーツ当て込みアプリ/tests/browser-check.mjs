@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { checkZoom } from './zoom-check.mjs';
+import { checkMultiParts } from './multi-parts-check.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const server = createServer(async (req, res) => {
@@ -200,6 +201,7 @@ try {
   // Freeze the source frame to compare exported pixels with the clean live composite.
   await evaluate("(async()=>{document.querySelector('#camera').pause();await new Promise(r=>requestAnimationFrame(r));})()");
   await checkZoom({ evaluate, command, touchDrag, waitFor });
+  await checkMultiParts({ evaluate, command, touchDrag, waitFor });
   await evaluate("document.querySelector('#save').click()");
   await waitFor("!document.querySelector('#save').disabled && !document.querySelector('#export-result').hidden");
   assert.equal(await evaluate("(async()=>{const r=await fetch(document.querySelector('#export-image').src);const b=await r.blob();const a=new Uint8Array(await b.arrayBuffer());return b.type==='image/png' && a[0]===137 && a[1]===80;})()"), true);

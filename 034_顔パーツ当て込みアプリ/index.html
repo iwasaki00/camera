@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#172c2b">
   <title>顔パーツ当て込みアプリ / Portrait Face Parts Player</title>
-  <link rel="stylesheet" href="style.css?v=0.1.2-imagefix1">
+  <link rel="stylesheet" href="style.css?v=0.2.0">
   <script type="module">
-    import('./app.js?v=0.1.2-imagefix1').catch(error => {
+    import('./app.js?v=0.2.0').catch(error => {
       const status = document.getElementById('status');
       status.textContent = 'アプリの起動に失敗しました。ページを再読み込みしてください。';
       status.dataset.error = 'true';
@@ -17,9 +17,13 @@
 </head>
 <body>
   <main>
-    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.1.2</span></p><h1>顔パーツ当て込みアプリ</h1></header>
+    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.2.0</span></p><h1>顔パーツ当て込みアプリ</h1></header>
     <section class="preview-panel" aria-labelledby="preview-title">
-      <div class="panel-heading"><h2 id="preview-title">絵画側 / 口の表示位置</h2><select id="interaction-mode" aria-label="操作モード"><option value="edit">枠を編集</option><option value="pan">画像を移動</option><option value="view">鑑賞</option></select></div>
+      <div class="panel-heading"><h2 id="preview-title">絵画側 / <span id="selected-part-name">口</span></h2><select id="interaction-mode" aria-label="操作モード"><option value="edit">枠を編集</option><option value="pan">画像を移動</option><option value="view">鑑賞</option></select></div>
+      <div class="part-bar" aria-label="顔パーツの追加と選択">
+        <div class="part-tabs"><button id="select-mouth" type="button">口 ●</button><button id="select-leftEye" type="button">＋左目</button><button id="select-rightEye" type="button">＋右目</button><button id="select-nose" type="button">＋鼻</button></div>
+        <label class="toggle"><input id="part-enabled" type="checkbox" checked>合成</label><button id="part-delete" type="button" aria-label="選択パーツを削除">削除</button>
+      </div>
       <div class="workspace">
         <div>
           <div class="stage"><canvas id="composition" width="900" height="1200" aria-label="画像と口元の合成結果。枠の内側で移動、四隅でサイズ変更、上の丸で回転"></canvas><p id="empty-hint">人物画像を読み込んでください。<br>画像・映像は端末内だけで処理します。</p></div>
@@ -39,25 +43,27 @@
           </div>
         </div>
         <section class="camera-panel" aria-labelledby="camera-title">
-          <div class="panel-heading"><h2 id="camera-title">カメラ側 / 切り抜く範囲</h2><label class="toggle"><input id="mirror" type="checkbox" checked>左右反転</label><span id="camera-state">停止中</span></div>
+          <div class="panel-heading"><h2 id="camera-title">カメラ側 / <span id="camera-part-name">口</span></h2><label class="toggle"><input id="mirror" type="checkbox" checked>左右反転</label><span id="camera-state">停止中</span></div>
           <div class="camera-stage"><video id="camera" autoplay muted playsinline aria-hidden="true"></video><canvas id="camera-preview" width="480" height="360" aria-label="切り抜き枠の内側で移動、四隅でサイズ変更"></canvas><p id="camera-hint">カメラを開始してください</p></div>
           <div class="view-tools" aria-label="カメラ側の表示設定">
             <input id="camera-view-zoom" type="range" min="100" max="400" value="100" aria-label="カメラ側の表示倍率"><output id="camera-view-value">100%</output>
             <button id="camera-view-reset" aria-label="カメラ側の倍率と表示位置をリセット">戻す</button>
             <label class="toggle"><input id="camera-guide" type="checkbox" checked>枠</label><label class="toggle"><input id="camera-loupe" type="checkbox" checked>拡大鏡</label>
           </div>
+          <p id="eye-convention" class="help">左右は映る本人基準。反転ON：本人の左目は画面左。</p>
         </section>
       </div>
       <p id="status" role="status" aria-live="polite">アプリを準備しています…</p>
       <details id="advanced"><summary>詳細設定 / 数値で微調整</summary>
         <p class="help">写真側のX・Yは中心位置、幅・高さは画像に対する割合です。ガイドは保存されません。</p>
+        <div class="layer-controls"><span>重なり順 <output id="part-order-value">1 / 1</output></span><button id="part-back" type="button">背面へ</button><button id="part-front" type="button">前面へ</button></div>
         <div id="part-controls"></div>
         <label class="slider-label" for="source-zoom">カメラ側 / 切り抜き倍率 <output id="source-zoom-value">1.5×</output></label><input id="source-zoom" type="range" min="1" max="6" step="0.01" value="1.5">
         <div id="source-controls"></div>
       </details>
       <div id="export-result" hidden><p>PNGを作成しました。画像を長押しして保存することもできます。</p><a id="download" class="button" download="portrait-mouth.png">PNGをダウンロード</a><img id="export-image" alt="保存用の合成画像"></div>
     </section>
-    <footer>Version 0.1.2 — ZOOM &amp; MAGNIFIER · カメラは HTTPS / localhost で利用できます。</footer>
+    <footer>Version 0.2.0 — MULTI FACE PARTS · カメラは HTTPS / localhost で利用できます。</footer>
   </main>
 </body>
 </html>

@@ -1,3 +1,5 @@
+import { orderedParts, sourceForDisplay } from './parts.js?v=0.2.0';
+
 export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 export function sourceRect(videoWidth, videoHeight, aspect, source, mirror) {
@@ -10,7 +12,7 @@ export function sourceRect(videoWidth, videoHeight, aspect, source, mirror) {
     visualX };
 }
 
-// A reusable part renderer: the state holds a single mouth in v0.1.0.
+// One reusable mask/patch pair per part; model and viewport state stay separate.
 export class PartRenderer {
   constructor(createCanvas = () => document.createElement('canvas')) {
     this.patch = createCanvas(); this.mask = createCanvas(); this.maskKey = '';
@@ -68,5 +70,21 @@ export class PartRenderer {
       ctx.stroke();
     }
     ctx.restore();
+  }
+}
+
+export class CompositeRenderer {
+  constructor(createRenderer = () => new PartRenderer()) { this.renderers = new Map(); this.createRenderer = createRenderer; }
+  draw(ctx, video, parts, mirror) {
+    for (const [id, renderer] of this.renderers) if (!parts.some(p => p.id === id)) {
+      if (renderer.patch) renderer.patch.width = renderer.patch.height = renderer.mask.width = renderer.mask.height = 0;
+      this.renderers.delete(id);
+    }
+    for (const part of orderedParts(parts)) {
+      if (!this.renderers.has(part.id)) this.renderers.set(part.id, this.createRenderer());
+      this.renderers.get(part.id).draw(ctx, video,
+        { ...part.targetRect, rotation: part.rotation, shape: part.shape, feather: part.feather },
+        sourceForDisplay(part, mirror), mirror, false);
+    }
   }
 }

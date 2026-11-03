@@ -75,3 +75,14 @@ footer { font-size: 10px; color: var(--muted); line-height: 1.8; margin-top: 12p
 .magnifier canvas { display: block; width: 128px; height: 84px; cursor: move; }
 #camera-magnifier { width: 104px; }
 #camera-magnifier canvas { width: 100px; height: 65.625px; }
+.part-bar { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+.part-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; flex: 1; min-width: 0; }
+.part-tabs button { padding: 4px 2px; font-size: 12px; white-space: nowrap; border-style: dashed; }
+.part-tabs button[data-exists=true] { border-style: solid; }
+.part-tabs button[data-exists=true][data-enabled=false] { color: var(--muted); background: #e8ece9; }
+.part-tabs button[aria-pressed=true] { border: 2px solid var(--accent); background: #def5ec; color: var(--ink); }
+.part-bar .toggle { font-size: 11px; gap: 3px; }
+.part-bar input { margin: 0; }
+#part-delete { padding: 7px; font-size: 12px; }
+.layer-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 12px; }
+.layer-controls button { font-size: 12px; }

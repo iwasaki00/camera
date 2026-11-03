@@ -1,4 +1,4 @@
-import { clamp } from './renderer.js?v=0.1.2-imagefix1';
+import { clamp } from './renderer.js?v=0.2.0';
 
 export class Magnifier {
   constructor(parent, { id, label, color, getSource }) {
@@ -13,6 +13,7 @@ export class Magnifier {
     const close = document.createElement('button'); close.type = 'button'; close.textContent = '×'; close.setAttribute('aria-label', `${label}の拡大鏡を閉じる`);
     close.addEventListener('click', () => { this.toggle.checked = false; this.draw(); });
     header.append(grip, select, close);
+    Object.assign(this, { grip, select, close, label });
     this.canvas = document.createElement('canvas'); this.canvas.width = 256; this.canvas.height = 168;
     this.canvas.setAttribute('aria-label', `${label}の口元拡大表示`);
     this.window.append(header, this.canvas); parent.append(this.window);
@@ -30,6 +31,12 @@ export class Magnifier {
       if (this.drag?.id === e.pointerId) { this.drag = null; if (this.window.hasPointerCapture(e.pointerId)) this.window.releasePointerCapture(e.pointerId); }
     });
     this.id = id;
+  }
+  setLabel(partLabel) {
+    this.grip.textContent = partLabel;
+    this.canvas.setAttribute('aria-label', `${this.label}の${partLabel}拡大表示`);
+    this.select.setAttribute('aria-label', `${this.label}の${partLabel}拡大鏡倍率`);
+    this.close.setAttribute('aria-label', `${this.label}の拡大鏡を閉じる`);
   }
   place(left, top) {
     this.left = clamp(left, 0, Math.max(0, this.parent.clientWidth - this.window.offsetWidth));

@@ -1,15 +1,24 @@
-import { Camera } from './camera.js?v=0.1.2-imagefix1';
-import { PartRenderer, sourceRect } from './renderer.js?v=0.1.2-imagefix1';
-import { TouchEditor, sourceFromBox } from './editor.js?v=0.1.2-imagefix1';
-import { Viewport } from './viewport.js?v=0.1.2-imagefix1';
-import { Magnifier } from './magnifier.js?v=0.1.2-imagefix1';
+import { Camera } from './camera.js?v=0.2.0';
+import { CompositeRenderer, sourceRect } from './renderer.js?v=0.2.0';
+import { TouchEditor, sourceFromBox } from './editor.js?v=0.2.0';
+import { Viewport } from './viewport.js?v=0.2.0';
+import { Magnifier } from './magnifier.js?v=0.2.0';
+import { PartCollection, PART_TYPES, sourceForDisplay, setDisplaySource } from './parts.js?v=0.2.0';
 
 const $ = id => document.getElementById(id);
 const canvas = $('composition'), ctx = canvas.getContext('2d');
-const video = $('camera'), camera = new Camera(video), renderer = new PartRenderer();
-const state = { image: null, running: false, mirror: true, photoGuide: true, cameraGuide: true, mode: 'edit',
-  parts: [{ id: 'mouth', x: 50, y: 65, width: 24, height: 10, rotation: 0, feather: 20, shape: 'oval' }],
-  source: { x: .5, y: .65, zoom: 1.5 } };
+const video = $('camera'), camera = new Camera(video), renderer = new CompositeRenderer();
+const collection = new PartCollection();
+const state = { image: null, running: false, mirror: true, mode: 'edit',
+  parts: collection.parts };
+const selected = () => collection.selected;
+const selectedSource = () => selected() ? sourceForDisplay(selected(), state.mirror) : { x: .5, y: .5, zoom: 1.5 };
+const setSource = source => { if (selected()) setDisplaySource(selected(), source, state.mirror); };
+const readValue = key => selected() ? (selected().targetRect[key] ?? selected()[key]) : 0;
+function writeValue(key, value) {
+  const part = selected(); if (!part) return;
+  if (Object.prototype.hasOwnProperty.call(part.targetRect, key)) part.targetRect[key] = value; else part[key] = value;
+}
 let frame = 0, imageGeneration = 0, exportUrl = null;
 let photoEditor, cameraEditor;
 let photoMagnifier, cameraMagnifier;
@@ -26,17 +35,40 @@ function syncViewControls() {
 }
 
 function syncControls() {
+  const part = selected(), source = selectedSource();
   for (const { key, input, output, unit } of controls) {
-    input.value = Number(state.parts[0][key].toFixed(1)); output.value = `${input.value}${unit}`;
+    input.disabled = !part; input.value = Number(readValue(key).toFixed(1)); output.value = part ? `${input.value}${unit}` : '—';
   }
-  $('quick-feather').value = state.parts[0].feather;
-  $('quick-feather-value').value = `${Math.round(state.parts[0].feather)}%`;
-  $('source-zoom').value = state.source.zoom;
-  $('source-zoom-value').value = `${state.source.zoom.toFixed(2)}×`;
+  for (const id of ['quick-feather', 'shape', 'source-zoom', 'part-enabled', 'part-delete', 'part-front', 'part-back']) $(id).disabled = !part;
+  $('quick-feather').value = part?.feather ?? 20;
+  $('quick-feather-value').value = part ? `${Math.round(part.feather)}%` : '—';
+  $('shape').value = part?.shape ?? 'oval';
+  $('source-zoom').value = source.zoom;
+  $('source-zoom-value').value = part ? `${source.zoom.toFixed(2)}×` : '—';
+  $('part-enabled').checked = part?.enabled ?? false;
+  for (const id of ['photo', 'camera']) { $(`${id}-guide`).disabled = !part; $(`${id}-guide`).checked = part?.guides[id] ?? false; }
+  $('selected-part-name').textContent = part ? `${PART_TYPES[part.partType]}${part.enabled ? '' : ' / 合成OFF'}` : '未選択';
+  $('camera-part-name').textContent = part ? PART_TYPES[part.partType] : '未選択';
+  canvas.setAttribute('aria-label', `絵画側の${part ? PART_TYPES[part.partType] : '未選択'}。枠内で移動、四隅で拡縮、上の丸で回転`);
+  const order = [...state.parts].sort((a, b) => a.zIndex - b.zIndex);
+  $('part-order-value').value = part ? `${order.indexOf(part) + 1} / ${order.length}` : '—';
+  $('part-back').disabled = !part || order[0] === part;
+  $('part-front').disabled = !part || order[order.length - 1] === part;
+  for (const [type, label] of Object.entries(PART_TYPES)) {
+    const button = $(`select-${type}`), existing = state.parts.find(p => p.partType === type);
+    button.textContent = existing ? `${label} ${existing.enabled ? '●' : '○'}` : `＋${label}`;
+    button.dataset.exists = String(!!existing); button.dataset.enabled = String(existing?.enabled ?? false);
+    button.setAttribute('aria-pressed', String(existing?.id === collection.selectedId));
+    button.setAttribute('aria-label', `${label}を${existing ? '選択' : '追加'}`);
+  }
+  $('eye-convention').textContent = `左右は映る本人基準。反転${state.mirror ? 'ON：本人の左目は画面左' : 'OFF：本人の左目は画面右'}。`;
   for (const key of ['x', 'y']) {
-    $(`source-${key}`).value = (state.source[key] * 100).toFixed(1);
-    $(`source-${key}-value`).value = `${(state.source[key] * 100).toFixed(1)}%`;
+    $(`source-${key}`).disabled = !part;
+    $(`source-${key}`).value = (source[key] * 100).toFixed(1);
+    $(`source-${key}-value`).value = part ? `${(source[key] * 100).toFixed(1)}%` : '—';
   }
+  photoMagnifier?.setLabel(part ? PART_TYPES[part.partType] : '未選択');
+  cameraMagnifier?.setLabel(part ? PART_TYPES[part.partType] : '未選択');
 }
 function update() { syncControls(); render(); }
 
@@ -48,9 +80,9 @@ for (const [key, title, min, max, step, unit] of [
   const label = document.createElement('label'); label.className = 'slider-label'; label.htmlFor = `part-${key}`;
   const output = document.createElement('output'); output.htmlFor = `part-${key}`;
   const input = document.createElement('input'); input.id = `part-${key}`; input.type = 'range';
-  Object.assign(input, { min, max, step, value: state.parts[0][key] });
+  Object.assign(input, { min, max, step, value: readValue(key) });
   output.value = `${input.value}${unit}`; label.append(title, output);
-  input.addEventListener('input', () => { state.parts[0][key] = Number(input.value); update(); });
+  input.addEventListener('input', () => { writeValue(key, Number(input.value)); update(); });
   controls.push({ key, input, output, unit });
   $('part-controls').append(label, input);
 }
@@ -59,16 +91,16 @@ for (const [key, title] of [['x', 'カメラ側 / X'], ['y', 'カメラ側 / Y']
   const output = document.createElement('output'); output.id = `source-${key}-value`; output.htmlFor = label.htmlFor;
   const input = document.createElement('input'); Object.assign(input, { id: label.htmlFor, type: 'range', min: 0, max: 100, step: .1 });
   label.append(title, output); $('source-controls').append(label, input);
-  input.addEventListener('input', () => { state.source[key] = Number(input.value) / 100; update(); });
+  input.addEventListener('input', () => { setSource({ ...selectedSource(), [key]: Number(input.value) / 100 }); update(); });
 }
 
-function renderComposite(target, guide) {
+function renderComposite(target) {
   target.clearRect(0, 0, target.canvas.width, target.canvas.height);
   if (state.image) target.drawImage(state.image, 0, 0, target.canvas.width, target.canvas.height);
-  for (const part of state.parts) renderer.draw(target, state.running ? video : null, part, state.source, state.mirror, guide);
+  renderer.draw(target, state.running ? video : null, state.parts, state.mirror);
 }
 function render() {
-  renderComposite(ctx, false);
+  renderComposite(ctx);
   photoEditor?.draw();
   photoMagnifier?.draw();
   const preview = $('camera-preview'), c = preview.getContext('2d');
@@ -109,10 +141,10 @@ $('start').addEventListener('click', async () => {
   }
 });
 $('stop').addEventListener('click', () => stopCamera());
-$('mirror').addEventListener('change', event => { cameraEditor.cancel(); state.mirror = event.target.checked; render(); });
+$('mirror').addEventListener('change', event => { cameraEditor.cancel(); state.mirror = event.target.checked; update(); });
 for (const [id, viewport] of [['photo', photoView], ['camera', cameraView]]) {
   $(`${id}-guide`).addEventListener('change', event => {
-    photoEditor.cancel(); cameraEditor.cancel(); state[`${id}Guide`] = event.target.checked; render();
+    photoEditor.cancel(); cameraEditor.cancel(); if (selected()) selected().guides[id] = event.target.checked; render();
   });
   $(`${id}-view-zoom`).addEventListener('input', event => {
     photoEditor.cancel(); cameraEditor.cancel(); viewport.zoom(Number(event.target.value) / 100);
@@ -122,13 +154,20 @@ for (const [id, viewport] of [['photo', photoView], ['camera', cameraView]]) {
 $('interaction-mode').addEventListener('change', event => {
   photoEditor.cancel(); cameraEditor.cancel(); state.mode = event.target.value; render();
 });
-$('shape').addEventListener('change', event => { state.parts[0].shape = event.target.value; render(); });
+$('shape').addEventListener('change', event => { if (selected()) selected().shape = event.target.value; render(); });
 $('source-zoom').addEventListener('input', event => {
-  state.source.zoom = Number(event.target.value); update();
+  setSource({ ...selectedSource(), zoom: Number(event.target.value) }); update();
 });
 $('quick-feather').addEventListener('input', event => {
-  state.parts[0].feather = Number(event.target.value); update();
+  if (selected()) selected().feather = Number(event.target.value); update();
 });
+function cancelEditors() { photoEditor?.cancel(); cameraEditor?.cancel(); }
+for (const type of Object.keys(PART_TYPES)) $(`select-${type}`).addEventListener('click', () => {
+  cancelEditors(); collection.add(type); update();
+});
+$('part-enabled').addEventListener('change', event => { if (selected()) selected().enabled = event.target.checked; update(); });
+$('part-delete').addEventListener('click', () => { cancelEditors(); collection.removeSelected(); update(); });
+for (const [id, direction] of [['part-front', 1], ['part-back', -1]]) $(id).addEventListener('click', () => { collection.reorder(direction); update(); });
 
 $('image-file').addEventListener('change', async event => {
   const file = event.target.files?.[0]; if (!file) return;
@@ -148,7 +187,7 @@ $('image-file').addEventListener('change', async event => {
     photoEditor.cancel(); cameraEditor.cancel();
     state.image = background; canvas.width = background.width; canvas.height = background.height;
     $('empty-hint').hidden = true; $('save').disabled = false; clearExport(); photoView.reset();
-    message('画像を読み込みました。口領域の位置・大きさを合わせてください。');
+    message('画像を読み込みました。パーツを選び、枠を直接動かして合わせてください。');
   } catch {
     if (generation === imageGeneration) message('画像を読み込めませんでした。JPEG・PNGなどSafariで開ける画像を選んでください。', true);
   } finally { URL.revokeObjectURL(url); event.target.value = ''; }
@@ -162,7 +201,7 @@ $('save').addEventListener('click', async () => {
   $('save').disabled = true;
   try {
     const output = document.createElement('canvas'); output.width = canvas.width; output.height = canvas.height;
-    renderComposite(output.getContext('2d'), false);
+    renderComposite(output.getContext('2d'));
     const blob = await new Promise((resolve, reject) => output.toBlob(value => value ? resolve(value) : reject(new Error('PNG_FAILED')), 'image/png'));
     clearExport(); exportUrl = URL.createObjectURL(blob);
     const filename = `portrait-mouth-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
@@ -176,24 +215,25 @@ $('save').addEventListener('click', async () => {
 document.addEventListener('visibilitychange', () => { if (document.hidden) { photoEditor.cancel(); stopCamera(); } });
 window.addEventListener('pagehide', () => { photoEditor.cancel(); stopCamera(); clearExport(); });
 photoEditor = new TouchEditor(canvas, {
-  color: '#24e3cd', enabled: () => state.photoGuide && !!state.image, viewport: photoView, mode: () => state.mode,
-  snapshot: () => ({ ...state.parts[0] }), restore: saved => { Object.assign(state.parts[0], saved); update(); },
-  getBox: size => { const p = state.parts[0]; return { x: p.x / 100 * size.width, y: p.y / 100 * size.height,
-    width: p.width / 100 * size.width, height: p.height / 100 * size.height, angle: p.rotation * Math.PI / 180 }; },
+  color: '#24e3cd', enabled: () => !!selected()?.guides.photo && !!state.image, viewport: photoView, mode: () => state.mode,
+  snapshot: () => ({ targetRect: { ...selected().targetRect }, rotation: selected().rotation }), restore: saved => { Object.assign(selected(), saved); update(); },
+  getBox: size => { if (!selected()) return null; const p = selected().targetRect; return { x: p.x / 100 * size.width, y: p.y / 100 * size.height,
+    width: p.width / 100 * size.width, height: p.height / 100 * size.height, angle: selected().rotation * Math.PI / 180 }; },
   change: (box, size) => {
-    Object.assign(state.parts[0], { x: box.x / size.width * 100, y: box.y / size.height * 100,
-      width: box.width / size.width * 100, height: box.height / size.height * 100, rotation: box.angle * 180 / Math.PI });
+    Object.assign(selected().targetRect, { x: box.x / size.width * 100, y: box.y / size.height * 100,
+      width: box.width / size.width * 100, height: box.height / size.height * 100 });
+    selected().rotation = box.angle * 180 / Math.PI;
     update();
   }
 });
 cameraEditor = new TouchEditor($('camera-preview'), {
   color: '#ffba69', rotation: false,
-  enabled: () => state.cameraGuide && state.running && video.readyState >= 2, viewport: cameraView, mode: () => state.mode,
-  snapshot: () => ({ ...state.source }), restore: saved => { Object.assign(state.source, saved); update(); },
+  enabled: () => !!selected()?.guides.camera && state.running && video.readyState >= 2, viewport: cameraView, mode: () => state.mode,
+  snapshot: () => ({ ...selected().sourceRect }), restore: saved => { selected().sourceRect = { ...saved }; update(); },
   getBox: size => {
-    if (!video.videoWidth) return null;
-    const p = state.parts[0], crop = sourceRect(video.videoWidth, video.videoHeight,
-      canvas.width * p.width / (canvas.height * p.height), state.source, state.mirror);
+    if (!video.videoWidth || !selected()) return null;
+    const p = selected().targetRect, crop = sourceRect(video.videoWidth, video.videoHeight,
+      canvas.width * p.width / (canvas.height * p.height), selectedSource(), state.mirror);
     return { x: (crop.visualX + crop.width / 2) / video.videoWidth * size.width,
       y: (crop.y + crop.height / 2) / video.videoHeight * size.height,
       width: crop.width / video.videoWidth * size.width, height: crop.height / video.videoHeight * size.height, angle: 0 };
@@ -201,33 +241,33 @@ cameraEditor = new TouchEditor($('camera-preview'), {
   change: (box, size, drag) => {
     if (drag.action.type === 'move') {
       // Use the visible crop center at drag start, avoiding a jump after edge clamping.
-      const p = state.parts[0], aspect = canvas.width * p.width / (canvas.height * p.height);
+      const p = selected().targetRect, aspect = canvas.width * p.width / (canvas.height * p.height);
       const result = sourceFromBox({ ...box, width: drag.box.width, height: drag.box.height }, size, aspect);
-      state.source.x = result.x; state.source.y = result.y;
+      setSource({ ...selectedSource(), x: result.x, y: result.y });
     } else {
-      const p = state.parts[0], aspect = canvas.width * p.width / (canvas.height * p.height);
+      const p = selected().targetRect, aspect = canvas.width * p.width / (canvas.height * p.height);
       const next = sourceFromBox(box, size, aspect);
       const width = Math.min(size.width * .6 / next.zoom, size.height * aspect), height = width / aspect;
       // Keep the opposite corner fixed while preserving the source aspect ratio.
       const anchored = { ...box, width, height,
         x: drag.box.x + drag.action.sx * (width - drag.box.width) / 2,
         y: drag.box.y + drag.action.sy * (height - drag.box.height) / 2 };
-      Object.assign(state.source, sourceFromBox(anchored, size, aspect));
+      setSource(sourceFromBox(anchored, size, aspect));
     }
     update();
   }
 });
 photoMagnifier = new Magnifier(canvas.parentElement, {
-  id: 'photo', label: '絵画側', color: '#24e3cd', getSource: () => state.image ? {
-    image: canvas, x: canvas.width * state.parts[0].x / 100, y: canvas.height * state.parts[0].y / 100,
+  id: 'photo', label: '絵画側', color: '#24e3cd', getSource: () => state.image && selected() ? {
+    image: canvas, x: canvas.width * selected().targetRect.x / 100, y: canvas.height * selected().targetRect.y / 100,
     fit: photoView.geometry().width / canvas.width
   } : null
 });
 cameraMagnifier = new Magnifier($('camera-preview').parentElement, {
   id: 'camera', label: 'カメラ側', color: '#ffba69', getSource: () => {
-    if (!state.running || video.readyState < 2 || !video.videoWidth) return null;
-    const part = state.parts[0], crop = sourceRect(video.videoWidth, video.videoHeight,
-      canvas.width * part.width / (canvas.height * part.height), state.source, state.mirror);
+    if (!state.running || video.readyState < 2 || !video.videoWidth || !selected()) return null;
+    const part = selected().targetRect, crop = sourceRect(video.videoWidth, video.videoHeight,
+      canvas.width * part.width / (canvas.height * part.height), selectedSource(), state.mirror);
     return { image: video, x: crop.x + crop.width / 2, y: crop.y + crop.height / 2,
       fit: cameraView.geometry().width / video.videoWidth, mirror: state.mirror };
   }
