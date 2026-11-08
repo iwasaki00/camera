@@ -105,7 +105,7 @@ test('controller never overlaps inferences and discards results after stop',asyn
 });
 test('late model initialization is released when camera/tracking is stopped',async()=>{
   let resolveModel,closed=0;const {tracker}=setupTracker(()=>new Promise(r=>resolveModel=r));
-  const start=tracker.start();tracker.stop();resolveModel({close:()=>closed++});await start;assert.equal(closed,1);assert.equal(tracker.active,false);
+  const start=tracker.start();await flush();tracker.stop();resolveModel({close:()=>closed++});await start;assert.equal(closed,1);assert.equal(tracker.active,false);
 });
 test('model loading failure reports error and leaves manual fallback possible',async()=>{
   let errors=0;const {tracker}=setupTracker(async()=>{throw new Error('model unavailable');},{failed:()=>errors++});

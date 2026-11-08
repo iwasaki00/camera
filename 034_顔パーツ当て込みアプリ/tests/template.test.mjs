@@ -106,3 +106,7 @@ test('schema 2 allowlist strips transient landmarks, detections and face frames'
   const input=doc();input.schemaVersion=2;input.trackingEnabled=true;input.landmarks='private';input.detectedCrops='private';input.parts[0].tracking.frame='private';
   assert.equal(JSON.stringify(validateDocument(input)).includes('private'),false);
 });
+test('v0.4.0 schema 2 remains compatible and diagnostics are excluded from saved documents',()=>{
+  const input=doc();input.schemaVersion=2;input.appVersion='0.4.0';input.trackingEnabled=true;input.diagnostics={drawFps:30,history:['private']};
+  const restored=validateDocument(input);assert.equal(restored.trackingEnabled,true);assert.equal(restored.appVersion,'0.4.1');assert.equal('diagnostics' in restored,false);
+});

@@ -4,7 +4,7 @@ const APP_DETAILS = {
     type: "FACE COMPOSITE",
     title: "顔パーツ当て込みアプリ",
     description: "口・左右の目・鼻のカメラ映像を人物写真に同時合成。顔の移動や傾きに自動追従し、パーツ別の補正と手動編集も使えます。背景と設定のテンプレート保存、ZIP入出力、PNG保存に対応。顔検出も端末内で処理します。",
-    tech: "MediaPipe Face Landmarker · Multi Face Parts · Templates · ZIP · v0.4.0",
+    tech: "MediaPipe Face Landmarker · Tracking Diagnostics · Templates · ZIP · v0.4.1",
     icon: "./assets/app-icons/portrait-face-parts.svg"
   },
   "something-behind-you": {

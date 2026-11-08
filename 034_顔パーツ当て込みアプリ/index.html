@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#172c2b">
   <title>顔パーツ当て込みアプリ / Portrait Face Parts Player</title>
-  <link rel="stylesheet" href="style.css?v=0.4.0">
+  <link rel="stylesheet" href="style.css?v=0.4.1">
   <script type="module">
-    import('./app.js?v=0.4.0').catch(error => {
+    import('./app.js?v=0.4.1').catch(error => {
       const status = document.getElementById('status');
       status.textContent = 'アプリの起動に失敗しました。ページを再読み込みしてください。';
       status.dataset.error = 'true';
@@ -17,7 +17,7 @@
 </head>
 <body>
   <main>
-    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.4.0</span></p><div class="title-row"><h1>顔パーツ当て込みアプリ</h1><button id="templates-open" type="button">保存・読込</button></div></header>
+    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.4.1</span></p><div class="title-row"><h1>顔パーツ当て込みアプリ</h1><button id="templates-open" type="button">保存・読込</button></div></header>
     <section class="preview-panel" aria-labelledby="preview-title">
       <div class="panel-heading"><h2 id="preview-title">絵画側 / <span id="selected-part-name">口</span></h2><select id="interaction-mode" aria-label="操作モード"><option value="edit">枠を編集</option><option value="pan">画像を移動</option><option value="view">鑑賞</option></select></div>
       <div class="part-bar" aria-label="顔パーツの追加と選択">
@@ -55,6 +55,7 @@
           <details id="tracking-settings"><summary>追従の補正 / <span id="tracking-part-name">口</span></summary><p class="help">自動中は補正で調整します。手動に戻すと枠を直接編集できます。位置は反転前の部位基準で、幅・高さに対する割合です。</p><div id="tracking-controls"></div><button id="tracking-correction-reset" type="button">このパーツの補正を戻す</button><p id="tracking-metrics" class="help"></p></details>
         </section>
       </div>
+      <details id="diagnostics"><summary>追従の診断（初期OFF）</summary><p class="help">直近5秒の移動窓。開いた直後は経過秒数で計算します。成功率は品質・鮮度判定を通った採用結果／完了した検出です。</p><pre id="diagnostic-values"></pre><button id="diagnostic-copy" type="button">診断テキストをコピー</button><p id="diagnostic-copy-status" class="help" role="status"></p><textarea id="diagnostic-text" readonly hidden aria-label="コピー用診断テキスト"></textarea></details>
       <p id="status" role="status" aria-live="polite">アプリを準備しています…</p>
       <details id="advanced"><summary>詳細設定 / 数値で微調整</summary>
         <p class="help">写真側のX・Yは中心位置、幅・高さは画像に対する割合です。ガイドは保存されません。</p>
@@ -65,7 +66,7 @@
       </details>
       <div id="export-result" hidden><p>PNGを作成しました。画像を長押しして保存することもできます。</p><a id="download" class="button" download="portrait-mouth.png">PNGをダウンロード</a><img id="export-image" alt="保存用の合成画像"></div>
     </section>
-    <footer>Version 0.4.0 — AUTO FACE TRACKING · カメラは HTTPS / localhost で利用できます。</footer>
+    <footer>Version 0.4.1 — TRACKING STABILITY · カメラは HTTPS / localhost で利用できます。</footer>
   </main>
   <dialog id="template-manager" aria-labelledby="template-title">
     <div class="panel-heading"><h2 id="template-title">テンプレート / 保存・読込</h2><button id="templates-close" type="button">閉じる</button></div>

@@ -1,4 +1,4 @@
-import { validateDocument, newId, validName, documentBytes, LIMITS } from './template-schema.js?v=0.4.0';
+import { validateDocument, newId, validName, documentBytes, LIMITS } from './template-schema.js?v=0.4.1';
 export const DATABASE_NAME = 'portrait-face-parts-templates';
 export function storageMessage(error) {
   return error?.name==='QuotaExceededError' ? '保存容量が不足しています。保存は完了していません。既存データは変更されていません。'

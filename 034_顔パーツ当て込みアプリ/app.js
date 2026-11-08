@@ -1,12 +1,13 @@
-import { Camera } from './camera.js?v=0.4.0';
-import { CompositeRenderer, sourceRect } from './renderer.js?v=0.4.0';
-import { TouchEditor, sourceFromBox } from './editor.js?v=0.4.0';
-import { Viewport } from './viewport.js?v=0.4.0';
-import { Magnifier } from './magnifier.js?v=0.4.0';
-import { PartCollection, PART_TYPES, sourceForDisplay, setDisplaySource } from './parts.js?v=0.4.0';
-import { TemplateUI } from './template-ui.js?v=0.4.0';
-import { FaceTracker } from './tracking.js?v=0.4.0';
-import { correctionFor, DEFAULT_CORRECTION, displayCrop } from './tracking-geometry.js?v=0.4.0';
+import { Camera } from './camera.js?v=0.4.1';
+import { CompositeRenderer, sourceRect } from './renderer.js?v=0.4.1';
+import { TouchEditor, sourceFromBox } from './editor.js?v=0.4.1';
+import { Viewport } from './viewport.js?v=0.4.1';
+import { Magnifier } from './magnifier.js?v=0.4.1';
+import { PartCollection, PART_TYPES, sourceForDisplay, setDisplaySource } from './parts.js?v=0.4.1';
+import { TemplateUI } from './template-ui.js?v=0.4.1';
+import { FaceTracker } from './tracking.js?v=0.4.1';
+import { correctionFor, DEFAULT_CORRECTION, displayCrop } from './tracking-geometry.js?v=0.4.1';
+import { Diagnostics, DiagnosticPanel } from './diagnostics.js?v=0.4.1';
 
 const $ = id => document.getElementById(id);
 const canvas = $('composition'), ctx = canvas.getContext('2d');
@@ -31,21 +32,26 @@ const cameraView = new Viewport($('camera-preview'), { changed: () => { syncView
 const controls = [];
 const trackingControls = [];
 const message = (text, error = false) => { $('status').textContent = text; $('status').dataset.error = String(error); };
-const tracker = new FaceTracker({ video, changed: () => syncTrackingUI(), failed: () => {
+const diagnostics = new Diagnostics();
+const tracker = new FaceTracker({ video, diagnostics, changed: () => syncTrackingUI(), failed: () => {
   state.trackingEnabled = false; cancelEditors(); update();
   message('自動追従を利用できません。手動に戻しました。再度ONにするとモデルの読込を再試行します。', true);
 } });
 const trackedCrop = () => state.trackingEnabled && selected() ? tracker.crops(state.parts, video.videoWidth, video.videoHeight)[selected().id] : null;
+const diagnosticPanel = new DiagnosticPanel({details:$('diagnostics'),output:$('diagnostic-values'),copy:$('diagnostic-copy'),fallback:$('diagnostic-text'),status:$('diagnostic-copy-status'),metrics:diagnostics,
+  sample:()=>diagnostics.snapshot(performance.now(),{status:tracker.state.status,backend:tracker.active?(tracker.metrics.backend||'初期化中'):'未使用',
+    videoWidth:video.videoWidth,videoHeight:video.videoHeight,inputWidth:tracker.active?(tracker.metrics.inputWidth||0):0,inputHeight:tracker.active?(tracker.metrics.inputHeight||0):0,
+    lastCapture:tracker.metrics.lastCapture,lastGoodAgeMs:Number.isFinite(tracker.state.lastGood)?performance.now()-tracker.state.lastGood:null,interval:tracker.metrics.interval})});
+const setText=(element,text)=>{if(element.textContent!==text)element.textContent=text;};
 
 function syncTrackingUI() {
   const status = tracker.state.status;
-  const labels = { idle: '未検出', detecting: '検出中', tracking: '追従中', lost: '一時的に見失った', notFound: '未検出', error: '利用不可／エラー' };
+  const labels = { stopped: '停止中', initializing:'初期化中', detecting: '検出中', tracking: '追従中', lost: '一時的な未検出', notFound: '顔消失', error: '利用不可／エラー' };
   $('tracking-toggle').checked = state.trackingEnabled;
   $('tracking-manual').hidden = !state.trackingEnabled;
-  $('tracking-status').textContent = status === 'error' ? labels.error : !state.trackingEnabled ? '手動' : !state.running ? 'カメラ停止中' : labels[status];
+  setText($('tracking-status'),status === 'error' ? labels.error : !state.trackingEnabled ? '手動' : !state.running ? 'カメラ停止中' : labels[status]);
   $('tracking-status').dataset.state = status; $('tracking-status').dataset.backend = tracker.metrics.backend;
   $('tracking-status').dataset.count = tracker.metrics.count;
-  $('tracking-metrics').textContent = tracker.active && tracker.metrics.count ? `検出 ${tracker.metrics.ms.toFixed(1)}ms / 約${(1000/tracker.metrics.interval).toFixed(1)}回/秒` : '';
 }
 
 function syncViewControls() {
@@ -149,6 +155,7 @@ function renderComposite(target) {
   if(state.trackingEnabled && $('tracking-status').dataset.state!==tracker.state.status)syncTrackingUI();
 }
 function render() {
+  diagnostics.frame(performance.now());
   renderComposite(ctx);
   photoEditor?.draw();
   photoMagnifier?.draw();
@@ -163,7 +170,7 @@ function render() {
   cameraMagnifier?.draw();
 }
 function tick(time = performance.now()) {
-  if(time-lastDraw>=1000/30-1){render();lastDraw=time;}
+  if(time-lastDraw>=1000/30-1){const start=performance.now();render();tracker.observeDraw(performance.now()-start);lastDraw=time;}
   frame = state.running ? requestAnimationFrame(tick) : 0;
 }
 function stopCamera(text = 'カメラを停止しました。再開するには「カメラ開始」を押してください。') {
@@ -269,8 +276,8 @@ $('save').addEventListener('click', async () => {
   } catch { message('PNGの作成に失敗しました。再度お試しください。', true); }
   finally { $('save').disabled = !state.image; }
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden) { photoEditor.cancel(); stopCamera(); } });
-window.addEventListener('pagehide', () => { photoEditor.cancel(); stopCamera(); clearExport(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { diagnosticPanel.pause();photoEditor.cancel(); stopCamera(); } else diagnosticPanel.resume(); });
+window.addEventListener('pagehide', () => { diagnosticPanel.pause();photoEditor.cancel(); stopCamera(); clearExport(); });
 photoEditor = new TouchEditor(canvas, {
   color: '#24e3cd', enabled: () => !!selected()?.guides.photo && !!state.image, viewport: photoView, mode: () => state.mode,
   snapshot: () => ({ targetRect: { ...selected().targetRect }, rotation: selected().rotation }), restore: saved => { Object.assign(selected(), saved); update(); },

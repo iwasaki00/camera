@@ -1,5 +1,5 @@
-import { clamp } from './renderer.js?v=0.4.0';
-import { toContent, toScreen, zoomAt, midpoint, distance } from './viewport.js?v=0.4.0';
+import { clamp } from './renderer.js?v=0.4.1';
+import { toContent, toScreen, zoomAt, midpoint, distance } from './viewport.js?v=0.4.1';
 
 export const rotate = (p, angle) => ({ x: p.x * Math.cos(angle) - p.y * Math.sin(angle), y: p.x * Math.sin(angle) + p.y * Math.cos(angle) });
 const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];

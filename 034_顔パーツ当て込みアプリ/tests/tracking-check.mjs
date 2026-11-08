@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
+import { checkDiagnosticPanel } from './diagnostic-check.mjs';
 
 // Integration: actual shipped Face Landmarker + WASM + model, using a public-domain face image.
 export async function checkTracking({evaluate,command,waitFor}) {
@@ -22,6 +23,7 @@ export async function checkTracking({evaluate,command,waitFor}) {
     };window.facePose={};window.drawFace=pose=>{window.facePose=pose||{};renderFace(window.facePose)};window.drawFace();
     window.faceTimer=setInterval(()=>renderFace(window.facePose),33);
     window.originalGetUserMedia=navigator.mediaDevices.getUserMedia;
+    window.nativeTrackingWorker=window.Worker;window.Worker=class extends window.nativeTrackingWorker {constructor(...args){super(...args);window.testTrackingWorker=this;}};
     navigator.mediaDevices.getUserMedia=async()=>{window.faceStream=window.faceCanvas.captureStream(30);return window.faceStream;};
   })()`);
   await waitFor("!document.querySelector('#save').disabled");
@@ -39,10 +41,11 @@ export async function checkTracking({evaluate,command,waitFor}) {
   assert.equal(await evaluate("document.querySelector('#tracking-status').dataset.backend"),'worker');
   assert.equal(await evaluate("document.querySelector('#source-x').disabled"),true);
   console.log('PASS REAL MODEL: local VIDEO-mode Worker/WASM inference detects the face and enables live tracking');
+  await checkDiagnosticPanel({evaluate,waitFor});
 
   // Inspect raw model geometry directly as a separate integration assertion, without injecting app state.
-  await evaluate(`(async()=>{const {createFaceDetector}=await import('./face-detector.js?v=0.4.0');window.checkDetector=await createFaceDetector();
-    const {landmarksToCrops}=await import('./tracking-geometry.js?v=0.4.0');window.realCrops=()=>landmarksToCrops(window.checkDetector.detect(window.faceCanvas,performance.now()),640,480);
+  await evaluate(`(async()=>{const {createFaceDetector}=await import('./face-detector.js?v=0.4.1');window.checkDetector=await createFaceDetector();
+    const {landmarksToCrops}=await import('./tracking-geometry.js?v=0.4.1');window.realCrops=()=>landmarksToCrops(window.checkDetector.detect(window.faceCanvas,performance.now()),640,480);
     window.baseCrops=window.realCrops();})()`);
   const base=await evaluate('window.baseCrops');assert.deepEqual(Object.keys(base),['mouth','leftEye','rightEye','nose']);assert.ok(base.leftEye.x>base.rightEye.x);
   await evaluate('window.drawFace({dx:32})');const moved=await evaluate('window.realCrops()');assert.ok(moved.mouth.x-base.mouth.x>.025);
@@ -98,13 +101,14 @@ export async function checkTracking({evaluate,command,waitFor}) {
   // New schema retains preference/corrections but never serializes dynamic detections.
   await click('templates-open');await waitFor("document.querySelector('#template-manager').getAttribute('aria-busy')==='false'");
   await click('template-export');await waitFor("document.querySelector('#template-manager').getAttribute('aria-busy')==='false'&&!document.querySelector('#template-download').hidden");
-  await evaluate(`(async()=>{const {importTemplate}=await import('./template-zip.js?v=0.4.0');window.trackingZIP=await (await fetch(document.querySelector('#template-download').href)).blob();window.trackingDoc=(await importTemplate(window.trackingZIP)).doc;})()`);
+  await evaluate(`(async()=>{const {importTemplate}=await import('./template-zip.js?v=0.4.1');window.trackingZIP=await (await fetch(document.querySelector('#template-download').href)).blob();window.trackingDoc=(await importTemplate(window.trackingZIP)).doc;})()`);
   const saved=await evaluate('window.trackingDoc');assert.equal(saved.schemaVersion,2);assert.equal(saved.trackingEnabled,true);
   assert.equal(saved.parts.find(p=>p.partType==='mouth').tracking.offsetX,.2);
   assert.equal(JSON.stringify(saved).includes('landmarks'),false);assert.equal(JSON.stringify(saved).includes('baseCrops'),false);
+  assert.equal(JSON.stringify(saved).includes('drawFps'),false);assert.equal(JSON.stringify(saved).includes('inferenceAverageMs'),false);
   await click('template-save-as');await evaluate("document.querySelector('#template-name').value='自動追従';document.querySelector('#template-name-form').requestSubmit()");
   await waitFor("!document.querySelector('#template-name-dialog').open&&document.querySelector('#template-manager').getAttribute('aria-busy')==='false'");
-  assert.equal(await evaluate(`(async()=>{const {TemplateStore}=await import('./template-store.js?v=0.4.0'),store=new TemplateStore();
+  assert.equal(await evaluate(`(async()=>{const {TemplateStore}=await import('./template-store.js?v=0.4.1'),store=new TemplateStore();
     const record=(await store.list()).find(r=>r.doc.name==='自動追従');store.close();return record.doc.trackingEnabled&&record.doc.parts.find(p=>p.partType==='mouth').tracking.offsetX===.2;})()`),true);
   await click('templates-close');await click('tracking-manual');await click('templates-open');
   await waitFor("document.querySelector('#template-manager').getAttribute('aria-busy')==='false'");
@@ -115,7 +119,11 @@ export async function checkTracking({evaluate,command,waitFor}) {
   console.log('PASS TRACKING TEMPLATE: schema 2 ZIP retains auto preference, per-part correction and manual sources; loading starts no camera/model');
 
   await click('start');await waitFor("document.querySelector('#camera-state').textContent==='使用中'");
-  await waitFor("document.querySelector('#tracking-status').dataset.state==='tracking'",300);await click('stop');
+  await waitFor("document.querySelector('#tracking-status').dataset.state==='tracking'",300);
+  await evaluate("window.testTrackingWorker.dispatchEvent(new ErrorEvent('error',{message:'simulated worker failure',cancelable:true}))");
+  await waitFor("document.querySelector('#tracking-status').dataset.state==='error'");assert.equal(await evaluate("document.querySelector('#tracking-toggle').checked"),false);await verifyManual();
+  await click('tracking-toggle');await waitFor("document.querySelector('#tracking-status').dataset.state==='tracking'",300);await click('stop');
+  console.log('PASS STABILITY: simulated Worker error during real tracking returns to manual; tracking can be started again');
   assert.equal(await evaluate("document.querySelector('#tracking-status').textContent"),'カメラ停止中');
   console.log('PASS REAL MODEL: camera stop and explicit restart maintain configuration and restart inference');
 
@@ -133,13 +141,13 @@ export async function checkTracking({evaluate,command,waitFor}) {
   await click('start');await waitFor("document.querySelector('#tracking-status').dataset.state==='error'",300);
   assert.equal(await evaluate("document.querySelector('#tracking-toggle').checked"),false);assert.equal(await evaluate("document.querySelector('#source-x').disabled"),false);
   await verifyManual();await command('Network.setBlockedURLs',{urls:[]});await click('stop');await evaluate('window.Worker=window.originalWorker');
-  await evaluate('clearInterval(window.faceTimer);window.faceStream.getTracks().forEach(t=>t.stop());navigator.mediaDevices.getUserMedia=window.originalGetUserMedia');
+  await evaluate('clearInterval(window.faceTimer);window.faceStream.getTracks().forEach(t=>t.stop());navigator.mediaDevices.getUserMedia=window.originalGetUserMedia;window.Worker=window.nativeTrackingWorker');
   assert.equal(await evaluate("performance.getEntriesByType('resource').filter(r=>/^https?:/.test(r.name)).every(r=>new URL(r.name).origin===location.origin)"),true);
   console.log('PASS TRACKING UI: model-load failure returns to preserved manual settings; page resources are all same-origin');
   // Actual old ZIP format, not just a mocked schema validator. Old auto fields must not activate detection.
   await click('templates-open');await waitFor("document.querySelector('#template-manager').getAttribute('aria-busy')==='false'");
   await evaluate(`(async()=>{
-    const {importTemplate}=await import('./template-zip.js?v=0.4.0'),{zipSync,strToU8}=await import('./vendor/fflate-0.8.2.js');
+    const {importTemplate}=await import('./template-zip.js?v=0.4.1'),{zipSync,strToU8}=await import('./vendor/fflate-0.8.2.js');
     const r=await importTemplate(window.trackingZIP),old=structuredClone(r.doc);old.schemaVersion=1;old.appVersion='0.3.0';delete old.trackingEnabled;for(const p of old.parts)delete p.tracking;
     const archive=zipSync({'template.json':strToU8(JSON.stringify(old)),[old.background.path]:new Uint8Array(await r.background.arrayBuffer())});
     const dt=new DataTransfer();dt.items.add(new File([archive],'legacy.zip',{type:'application/zip'}));const e=document.querySelector('#template-import');e.files=dt.files;e.dispatchEvent(new Event('change'));

@@ -1,0 +1,56 @@
+{
+  "conditions": {
+    "frame": "640x480",
+    "output": "400x600",
+    "parts": 4,
+    "feather": 10,
+    "delegate": "CPU",
+    "backend": "worker",
+    "warmupSeconds": 2.5,
+    "sampleSeconds": 5,
+    "order": "baseline,candidate,candidate,baseline",
+    "diagnostics": false
+  },
+  "reports": [
+    {
+      "variant": "baseline",
+      "backend": "worker",
+      "seconds": 5.0000999999046325,
+      "drawFps": 29.999400012571943,
+      "detectionFps": 9.399812003939209,
+      "inferenceMeanMs": 47.42978723252073,
+      "inferenceMaxMs": 83.80000007152557,
+      "samples": 47
+    },
+    {
+      "variant": "candidate",
+      "backend": "worker",
+      "seconds": 5.000399999976159,
+      "drawFps": 29.797616190846817,
+      "detectionFps": 9.399248060200003,
+      "inferenceMeanMs": 37.99148936474577,
+      "inferenceMaxMs": 75.20000004768372,
+      "samples": 47
+    },
+    {
+      "variant": "candidate",
+      "backend": "worker",
+      "seconds": 5.0005,
+      "drawFps": 29.997000299970004,
+      "detectionFps": 7.3992600739926,
+      "inferenceMeanMs": 53.55135134426323,
+      "inferenceMaxMs": 96.60000002384186,
+      "samples": 37
+    },
+    {
+      "variant": "baseline",
+      "backend": "worker",
+      "seconds": 5.000399999976159,
+      "drawFps": 29.99760019212767,
+      "detectionFps": 9.599232061480855,
+      "inferenceMeanMs": 45.564583326379456,
+      "inferenceMaxMs": 87.70000004768372,
+      "samples": 48
+    }
+  ]
+}

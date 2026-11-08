@@ -10,14 +10,19 @@ import { checkZoom } from './zoom-check.mjs';
 import { checkMultiParts } from './multi-parts-check.mjs';
 import { checkTemplates } from './template-check.mjs';
 import { checkTracking } from './tracking-check.mjs';
+import { comparePerformance } from './performance-check.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
     const name = decodeURIComponent(url.pathname);
-    const target = path.resolve(root, '.' + (name === '/' ? '/index.html' : name));
-    if (!target.startsWith(root)) { res.writeHead(403).end(); return; }
+    let target = path.resolve(root, '.' + (name === '/' ? '/index.html' : name));
+    if(name.startsWith('/baseline/') && process.env.BASELINE_DIR) {
+      const relative=name.slice('/baseline/'.length),baseline=path.resolve(process.env.BASELINE_DIR),candidate=path.resolve(baseline,relative);
+      if(!candidate.startsWith(baseline+path.sep)){res.writeHead(403).end();return;}
+      try{await readFile(candidate);target=candidate;}catch{target=path.resolve(root,relative);}
+    } else if (!target.startsWith(root)) { res.writeHead(403).end(); return; }
     if (process.env.SIMULATE_STALE_CACHE === '1' && name === '/app.js') await new Promise(resolve => setTimeout(resolve, 1000));
     const content = await readFile(target);
     res.setHeader('Content-Type', ({ '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.wasm': 'application/wasm', '.css': 'text/css' })[path.extname(target)] || 'application/octet-stream');
@@ -73,7 +78,10 @@ try {
     throw new Error(`Timed out: ${expression}; state: ${state}; runtime errors: ${JSON.stringify(errors)}`);
   };
   await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` });
-  if(process.env.TRACKING_ONLY==='1') {
+  if(process.env.PERFORMANCE_COMPARE==='1') {
+    await waitFor("!!document.querySelector('#image-file')&&!document.querySelector('#image-file').disabled");
+    await comparePerformance({evaluate,waitFor});assert.deepEqual(errors,[]);
+  } else if(process.env.TRACKING_ONLY==='1') {
     await waitFor("!!document.querySelector('#image-file')&&!document.querySelector('#image-file').disabled");
     await checkTracking({evaluate,command,waitFor});assert.deepEqual(errors,[]);
   } else {

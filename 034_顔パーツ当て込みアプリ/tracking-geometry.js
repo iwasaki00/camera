@@ -1,9 +1,10 @@
-import { LANDMARK_GROUPS } from './face-landmarks.js?v=0.4.0';
+import { LANDMARK_GROUPS } from './face-landmarks.js?v=0.4.1';
 
 export const DEFAULT_CORRECTION = Object.freeze({ offsetX: 0, offsetY: 0, widthScale: 1, heightScale: 1, rotation: 0 });
 export const TRACKING_CONFIG = Object.freeze({
   inputEdge: 480, fallbackEdge: 320, interval: 100, fallbackInterval: 200, maxInterval: 500,
   holdMs: 650, positionTau: 45, sizeTau: 60, rotationTau: 60,
+  positionDeadband: .0006, sizeDeadband: .006, angleDeadband: .002, mouthGrowthTau: 6,
   maxRoll: 75, maxDepthRatio: .95, maxJump: .22, maxScaleJump: 2.8
 });
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
@@ -66,32 +67,51 @@ export function displayCrop(crop, width, mirror) {
 // Only the last accepted crops are retained. No frame, landmark history or identity data is stored.
 export class TrackingState {
   constructor(config=TRACKING_CONFIG) {this.config=config;this.clear();}
-  clear() {this.crops=null;this.lastGood=-Infinity;this.lastRaw=null;this.status='idle';}
+  clear() {this.crops=null;this.lastGood=-Infinity;this.lastRaw=null;this.pending=null;this.status='stopped';}
   accept(landmarks,width,height,time) {
     const next=landmarksToCrops(landmarks,width,height,this.config);
     if(!next){this.miss(time);return false;}
+    const raw=Object.fromEntries(Object.entries(next).map(([type,crop])=>[type,{...crop}]));
     const fresh=this.crops && time-this.lastGood<=this.config.holdMs;
+    const dt=Math.max(1,time-this.lastGood);
     if(fresh && Object.keys(next).some(type=>{
-      const a=next[type],b=this.lastRaw[type],ratio=a.width/b.width;
-      return Math.hypot(a.x-b.x,a.y-b.y)>this.config.maxJump || ratio>this.config.maxScaleJump || ratio<1/this.config.maxScaleJump
+      const a=next[type],b=this.lastRaw[type],ratio=a.width/b.width,heightRatio=a.height/b.height;
+      return Math.hypot(a.x-b.x,a.y-b.y)>Math.min(.45,this.config.maxJump*Math.max(1,dt/150)) || ratio>this.config.maxScaleJump || ratio<1/this.config.maxScaleJump
+        || (type!=='mouth' && (heightRatio>this.config.maxScaleJump || heightRatio<1/this.config.maxScaleJump))
         || Math.abs(angleDelta(a.angle,b.angle))>Math.PI/3;
     })) {this.miss(time);return false;}
-    const dt=Math.max(1,time-this.lastGood);
+    // Do not interpolate an old, hidden face across the image. Confirm a distant reacquisition twice.
+    if(!fresh && this.crops && Math.hypot(next.nose.x-this.crops.nose.x,next.nose.y-this.crops.nose.y)>this.config.maxJump) {
+      const stable=this.pending && time-this.pending.time<=this.config.holdMs && Object.keys(next).every(type=>{
+        const a=next[type],b=this.pending.crops[type];return Math.hypot(a.x-b.x,a.y-b.y)<.04 && Math.abs(Math.log(a.width/b.width))<.25 && Math.abs(angleDelta(a.angle,b.angle))<.25;
+      });
+      if(!stable){this.pending={crops:raw,time};this.status='detecting';return false;}
+    }
+    this.pending=null;
     for(const [type,crop] of Object.entries(next)) {
-      if(!fresh)continue;
+      if(!fresh){if(this.crops)crop.angle=this.crops[type].angle+angleDelta(crop.angle,this.crops[type].angle);continue;}
       const before=this.crops[type];
       for(const key of ['x','y','width','height']) {
         const tau=['x','y'].includes(key)?this.config.positionTau:this.config.sizeTau;
-        const alpha=type==='mouth' && key==='height' && crop.height>before.height ? .92 : 1-Math.exp(-dt/tau);
-        crop[key]=before[key]+(crop[key]-before[key])*alpha;
+        const position=['x','y'].includes(key);
+        const delta=position?crop[key]-before[key]:Math.log(crop[key]/before[key]);
+        const band=position?this.config.positionDeadband:this.config.sizeDeadband;
+        const adjusted=Math.sign(delta)*Math.max(0,Math.abs(delta)-band);
+        const effectiveTau=type==='mouth' && key==='height' && delta>0?this.config.mouthGrowthTau:tau;
+        const step=adjusted*(1-Math.exp(-dt/effectiveTau));
+        crop[key]=position?before[key]+step:before[key]*Math.exp(step);
       }
-      crop.angle=before.angle+angleDelta(crop.angle,before.angle)*(1-Math.exp(-dt/this.config.rotationTau));
+      const delta=angleDelta(crop.angle,before.angle),band=this.config.angleDeadband;
+      crop.angle=before.angle+Math.sign(delta)*Math.max(0,Math.abs(delta)-band)*(1-Math.exp(-dt/this.config.rotationTau));
     }
-    this.lastRaw=landmarksToCrops(landmarks,width,height,this.config);
+    this.lastRaw=raw;
     this.crops=next;this.lastGood=time;this.status='tracking';return true;
   }
-  miss(time) {this.status=this.crops && time-this.lastGood<=this.config.holdMs?'lost':'notFound';}
-  visible(time) {if(time-this.lastGood>this.config.holdMs){if(this.crops)this.status='notFound';return null;}return this.crops;}
+  miss(time) {this.pending=null;this.status=this.crops && time-this.lastGood<=this.config.holdMs?'lost':'notFound';}
+  visible(time) {
+    if(this.pending && time-this.pending.time>this.config.holdMs)this.pending=null;
+    if(time-this.lastGood>this.config.holdMs){if(this.crops && !this.pending)this.status='notFound';return null;}return this.crops;
+  }
   resolve(parts,width,height,time) {
     const crops=this.visible(time),result={};if(!crops)return result;
     for(const part of parts)if(crops[part.partType])result[part.id]=correctedCrop(crops[part.partType],part.tracking,width,height);
