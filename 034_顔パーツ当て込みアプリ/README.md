@@ -1,6 +1,50 @@
 # 顔パーツ当て込みアプリ / Portrait Face Parts Player
 
-**Version 0.4.1 — TRACKING STABILITY**
+**Version 0.4.2 — IMAGE PICKER HOTFIX**
+
+## v0.4.2 画像・ZIPの選択修正
+
+画像読込とZIP読込は、ボタン全体に重ねた透明なネイティブ `input type=file` を直接タップする方式です。labelから1×1pxの入力への起動委譲を廃止しました。入力は `opacity: 0` のみで透明化し、44px以上の実際の入力領域とキーボードフォーカス・フォーカス枠を維持します。JavaScriptの `.click()` や非同期の選択画面起動は使用しません。[透明化とアクセシビリティの参考（MDN）](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/file)
+
+「画像を選べない場合 / 標準入力」を開くと、通常表示のファイル入力を使えます。保存・読込パネルにもZIPの標準入力があります。どちらも通常ボタンと同じ読込処理を通ります。片方だけ動く場合は、使用した入力・iOS/Safariの版・表示メッセージを記録すると切り分けできます。キャンセルや読込失敗では、既存の画像・テンプレートを保持します。同じ画像を再選択できます。
+
+初期化中・初期化失敗・画像読込中・非対応形式・デコード失敗・完了を区別します。既知の画像以外のMIMEは非対応形式、画像として選択してもブラウザで復号できなかった場合はデコード失敗と表示します。MIMEが空または汎用バイナリの場合は画像デコードを試みます。タップだけで選択画面の表示成功とは判定しません。初期化失敗時は、選択できない理由と再読み込みの案内を表示します。
+
+### 調査で確認できたこと・未確認のこと
+
+- 修正前v0.4.1のローカルChromeでは初期化が最後まで完了し、画像入力のdisabledが解除され、labelへの実クリックからブラウザの `fileChooserOpened` が発生しました。入力そのものは幅・高さとも1pxでした。**この環境では不具合は再現していません。label方式だけを根本原因と断定していません。**
+- 修正後は入力がボタンのタップ対象となり、中央のヒットテスト、マウスクリック・タッチ・キーボードによるファイル選択を確認しました。ZIPも同じCSS方式です。
+- ローカルのHTML・JSモジュール・CSSのキャッシュ識別子を `v=0.4.2` に統一しました。古い未バージョンJSを返す条件と初期化遅延のテストも通過しました。ただし、公開先のキャッシュ不一致や、問題が起きたiPhoneの実際のDOM・イベント・初期化状態は未確認です。
+- 4パーツ合成、検出・追従、診断、座標系、IndexedDB、ZIPスキーマ（2）、PNG生成の処理は変更していません。既存保存データの削除・初期化は行いません。関連モジュールの差分はキャッシュ識別子・製品版表記だけです。
+
+### テストと再実行
+
+Windows / Chrome headlessで、CDPの実クリック・タッチ → [`Page.fileChooserOpened`](https://chromedevtools.github.io/devtools-protocol/tot/Page/#event-fileChooserOpened) → ファイル選択を検証します。新規の選択テストはDataTransferや手動changeイベントを使用しません。ネイティブOSの写真選択画面は自動操作せず、ブラウザの選択要求を捕捉してファイルを返しています。
+
+```powershell
+npm test
+npm run test:picker
+$env:BROWSER_WIDTH='375'; $env:SIMULATE_STALE_CACHE='1'; npm run test:picker
+Remove-Item Env:BROWSER_WIDTH, Env:SIMULATE_STALE_CACHE
+npm run test:browser
+# 任意: インストール済みの対応するPlaywright Coreを使う場合
+$env:PLAYWRIGHT_MODULE='インストール済みplaywright-coreのディレクトリ'
+npm run test:picker:webkit
+```
+
+- 既存単体テスト **124/124 PASS**。
+- 新規Chrome選択テスト: **390px 13項目、375px＋初期化遅延・旧キャッシュ条件14項目、すべてPASS**。PNG/JPEG、表示、キャンセル、再選択、不正画像と非対応形式の区別、標準入力、キーボード、タッチ、ZIP実選択と復元・不正ZIP拒否、初期化失敗・再読込復帰、ヒット領域・横はみ出しを確認しました。
+- 既存関連ブラウザテスト **46グループ PASS**。4パーツ・ズーム・拡大鏡・PNG・保存復元・ZIP往復・実モデルのWorker/メイン代替・診断・停止再開を確認しました。疑似カメラ映像／検証画像を用いる自動テストです。
+- Windows版WebKit 26.4（Playwright対応revision 2287）: **5グループ PASS**。375px/390pxの実タップからPNG表示、キャンセル・同一画像再選択、標準画像入力、通常/標準ZIP選択を確認しました。最初に試した別のPlaywrightは対応WebKitが未導入だったため起動できず、導入済みrevisionに対応するランタイムで実行しました。新しい依存は追加していません。
+
+**iPhone Safari実機は未確認です。** 公開後に画面上のv0.4.2表示を確認し、写真ライブラリが開くこと、PNG/JPEG選択後の表示、キャンセルと同一画像再選択、通常/標準入力の両方、ファイルAppからのZIP選択を確認してください。HEIC等は端末のデコード対応に依存します。WebKit自動テスト成功を実機成功とは扱いません。
+
+### v0.4.2変更ファイル
+
+- 機能修正: `index.html`、`style.css`、`app.js`、`template-ui.js`。
+- 新規テスト: `tests/picker-check.mjs`、`tests/webkit-picker.mjs`。テスト起動・版整合: `package.json`、`tests/browser-check.mjs`、`tests/diagnostic-check.mjs`、`tests/template-check.mjs`、`tests/template.test.mjs`、`tests/tracking-check.mjs`。
+- キャッシュ識別子・版表記のみ: `diagnostics.js`、`editor.js`、`magnifier.js`、`parts.js`、`renderer.js`、`template-images.js`、`template-schema.js`、`template-store.js`、`template-zip.js`、`tracking-geometry.js`、`tracking-worker.js`、`tracking.js`、`viewport.js`。
+- 文書・メニューの版表記: `README.md`、リポジトリの `assets/home.js`。
 
 v0.4.1では折りたたみ診断、周期に依存しにくい平滑化、小さな揺れの抑制、再検出の確認、負荷制御と初期化・停止処理の安定化を追加しました。MediaPipe・WASM・モデル・保存スキーマはv0.4.0と同じです。
 
@@ -224,4 +268,4 @@ iPhone Safari実機と実カメラは未確認です。実機ではWorker経路�
 
 AIによる顔全体生成、3D顔変形、表情誇張、複数人物同時追従、動画・音声保存、自動肌色補正、クラウド推論は未実装です。自動保存・未保存編集のページ終了時の復元・複数タブの同時編集競合解決も対象外です。照明・顔の向き・遮蔽等によってランドマーク精度は変わります。650ms以内の短時間保持中には直前の範囲を使うため、急に顔を動かすと一時的に背景を切り取る場合があります。必要なら自動OFFで手動へ戻してください。
 
-次の候補は **Version 0.4.2 — DEVICE VALIDATION**：今回の診断テキストを使ったiPhone Safari実機の発話・まばたき・長時間負荷の確認と、得られた結果に基づく調整です。
+次の候補は **Version 0.4.3 — DEVICE VALIDATION**：今回の診断テキストを使ったiPhone Safari実機の発話・まばたき・長時間負荷の確認と、得られた結果に基づく調整です。

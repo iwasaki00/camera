@@ -5,19 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#172c2b">
   <title>顔パーツ当て込みアプリ / Portrait Face Parts Player</title>
-  <link rel="stylesheet" href="style.css?v=0.4.1">
+  <link rel="stylesheet" href="style.css?v=0.4.2">
   <script type="module">
-    import('./app.js?v=0.4.1').catch(error => {
+    import('./app.js?v=0.4.2').catch(error => {
       const status = document.getElementById('status');
-      status.textContent = 'アプリの起動に失敗しました。ページを再読み込みしてください。';
+      document.body.dataset.appState = 'error';
+      for (const input of document.querySelectorAll('input[type="file"]')) input.disabled = true;
+      for (const picker of document.querySelectorAll('.file-picker')) picker.setAttribute('aria-disabled', 'true');
+      status.textContent = 'アプリの初期化に失敗したため、画像・ZIPを選択できません。ページを再読み込みしてください。';
+      status.dataset.state = 'initialization-error';
       status.dataset.error = 'true';
       console.error('Portrait Face Parts Player startup failed:', error);
     });
   </script>
 </head>
-<body>
+<body data-app-state="initializing">
   <main>
-    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.4.1</span></p><div class="title-row"><h1>顔パーツ当て込みアプリ</h1><button id="templates-open" type="button">保存・読込</button></div></header>
+    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.4.2</span></p><div class="title-row"><h1>顔パーツ当て込みアプリ</h1><button id="templates-open" type="button">保存・読込</button></div></header>
     <section class="preview-panel" aria-labelledby="preview-title">
       <div class="panel-heading"><h2 id="preview-title">絵画側 / <span id="selected-part-name">口</span></h2><select id="interaction-mode" aria-label="操作モード"><option value="edit">枠を編集</option><option value="pan">画像を移動</option><option value="view">鑑賞</option></select></div>
       <div class="part-bar" aria-label="顔パーツの追加と選択">
@@ -33,7 +37,7 @@
             <label class="toggle"><input id="photo-guide" type="checkbox" checked>枠</label><label class="toggle"><input id="photo-loupe" type="checkbox" checked>拡大鏡</label>
           </div>
           <div class="actions">
-            <label id="image-trigger" class="button primary" for="image-file" aria-disabled="true">画像を読み込む</label><input id="image-file" class="file-input" type="file" accept="image/*" disabled>
+            <div id="image-trigger" class="button primary file-picker" aria-disabled="true"><span aria-hidden="true">画像を読み込む</span><input id="image-file" class="file-input" type="file" accept="image/*" aria-label="画像を読み込む" aria-describedby="status" disabled></div>
             <button id="start" class="primary">カメラ開始</button><button id="stop" disabled>カメラ停止</button>
             <button id="save" disabled>PNG保存</button>
           </div>
@@ -56,7 +60,8 @@
         </section>
       </div>
       <details id="diagnostics"><summary>追従の診断（初期OFF）</summary><p class="help">直近5秒の移動窓。開いた直後は経過秒数で計算します。成功率は品質・鮮度判定を通った採用結果／完了した検出です。</p><pre id="diagnostic-values"></pre><button id="diagnostic-copy" type="button">診断テキストをコピー</button><p id="diagnostic-copy-status" class="help" role="status"></p><textarea id="diagnostic-text" readonly hidden aria-label="コピー用診断テキスト"></textarea></details>
-      <p id="status" role="status" aria-live="polite">アプリを準備しています…</p>
+      <p id="status" data-state="initializing" role="status" aria-live="polite">アプリを初期化しています…</p>
+      <details id="image-picker-help"><summary>画像を選べない場合 / 標準入力</summary><p class="help">下の標準入力からも同じ画像読込ができます。初期化に失敗した場合は、先にページを再読み込みしてください。</p><label for="image-file-native">画像の標準入力</label><input id="image-file-native" class="native-file-input" type="file" accept="image/*" aria-describedby="status" disabled></details>
       <details id="advanced"><summary>詳細設定 / 数値で微調整</summary>
         <p class="help">写真側のX・Yは中心位置、幅・高さは画像に対する割合です。ガイドは保存されません。</p>
         <div class="layer-controls"><span>重なり順 <output id="part-order-value">1 / 1</output></span><button id="part-back" type="button">背面へ</button><button id="part-front" type="button">前面へ</button></div>
@@ -66,12 +71,13 @@
       </details>
       <div id="export-result" hidden><p>PNGを作成しました。画像を長押しして保存することもできます。</p><a id="download" class="button" download="portrait-mouth.png">PNGをダウンロード</a><img id="export-image" alt="保存用の合成画像"></div>
     </section>
-    <footer>Version 0.4.1 — TRACKING STABILITY · カメラは HTTPS / localhost で利用できます。</footer>
+    <footer>Version 0.4.2 — IMAGE PICKER HOTFIX · カメラは HTTPS / localhost で利用できます。</footer>
   </main>
   <dialog id="template-manager" aria-labelledby="template-title">
     <div class="panel-heading"><h2 id="template-title">テンプレート / 保存・読込</h2><button id="templates-close" type="button">閉じる</button></div>
     <p id="template-current"></p><p id="template-storage" class="help">保存機能を準備しています…</p>
-    <div class="template-tools"><button id="template-save" class="primary" disabled>保存 / 上書き</button><button id="template-save-as" disabled>別名保存</button><button id="template-export" disabled>現在のZIP出力</button><label class="button" for="template-import">ZIP読込</label><input id="template-import" class="file-input" type="file" accept=".zip,application/zip"><button id="template-retry">保存機能を再試行</button></div>
+    <div class="template-tools"><button id="template-save" class="primary" disabled>保存 / 上書き</button><button id="template-save-as" disabled>別名保存</button><button id="template-export" disabled>現在のZIP出力</button><div id="template-import-trigger" class="button file-picker" aria-disabled="true"><span aria-hidden="true">ZIP読込</span><input id="template-import" class="file-input" type="file" accept=".zip,application/zip" aria-label="ZIP読込" aria-describedby="template-message" disabled></div><button id="template-retry">保存機能を再試行</button></div>
+    <details id="zip-picker-help"><summary>ZIPを選べない場合 / 標準入力</summary><label for="template-import-native">ZIPの標準入力</label><input id="template-import-native" class="native-file-input" type="file" accept=".zip,application/zip" aria-describedby="template-message" disabled></details>
     <p id="template-message" role="status" aria-live="polite"></p><a id="template-download" class="button" hidden download="portrait-template.zip">ZIPを保存</a>
     <p id="template-usage" class="help">0件</p><div id="template-list"></div>
   </dialog>

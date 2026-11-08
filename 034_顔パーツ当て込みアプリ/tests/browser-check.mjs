@@ -49,11 +49,12 @@ try {
   });
   socket = new WebSocket(endpoint);
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
-  let id = 0; const pending = new Map(); const errors = [];
+  let id = 0; const pending = new Map(); const errors = []; const choosers = [];
   socket.onmessage = event => {
     const message = JSON.parse(event.data);
     if (message.id) { const request = pending.get(message.id); pending.delete(message.id); message.error ? request.reject(message.error) : request.resolve(message.result); }
     if (message.method === 'Runtime.exceptionThrown') errors.push(message.params.exceptionDetails.exception?.description || message.params.exceptionDetails.text);
+    if (message.method === 'Page.fileChooserOpened') choosers.push(message.params);
   };
   const call = (method, params = {}, sessionId) => new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error('CDP timed out: ' + method)), 12000);
@@ -78,7 +79,11 @@ try {
     throw new Error(`Timed out: ${expression}; state: ${state}; runtime errors: ${JSON.stringify(errors)}`);
   };
   await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` });
-  if(process.env.PERFORMANCE_COMPARE==='1') {
+  if(process.env.PICKER_AUDIT==='1'||process.env.PICKER_ONLY==='1'||process.argv.includes('--picker')) {
+    const {checkPicker}=await import('./picker-check.mjs');
+    await checkPicker({evaluate,command,waitFor,choosers,profile,audit:process.env.PICKER_AUDIT==='1'});
+    assert.deepEqual(errors,[]);
+  } else if(process.env.PERFORMANCE_COMPARE==='1') {
     await waitFor("!!document.querySelector('#image-file')&&!document.querySelector('#image-file').disabled");
     await comparePerformance({evaluate,waitFor});assert.deepEqual(errors,[]);
   } else if(process.env.TRACKING_ONLY==='1') {

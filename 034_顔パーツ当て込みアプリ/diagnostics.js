@@ -26,7 +26,7 @@ export class Diagnostics {
 const fixed=(n,d=1)=>Number.isFinite(n)?n.toFixed(d):'—';
 const stateNames={stopped:'停止中',initializing:'初期化中',detecting:'検出中',tracking:'追従中',lost:'一時的な未検出',notFound:'顔消失',error:'エラー'};
 export function diagnosticText(s) {
-  return [`Portrait Face Parts Player v0.4.1`, `計測窓: 直近${s.windowMs/1000}秒（現在${fixed(s.elapsedMs/1000)}秒）`,
+  return [`Portrait Face Parts Player v0.4.2`, `計測窓: 直近${s.windowMs/1000}秒（現在${fixed(s.elapsedMs/1000)}秒）`,
     `描画fps: ${fixed(s.drawFps)}`,`検出/秒: ${fixed(s.detectionFps)} / 完了${s.count}回`,
     `推論ms 直近/平均/最大: ${fixed(s.inferenceLastMs)} / ${fixed(s.inferenceAverageMs)} / ${fixed(s.inferenceMaxMs)}`,
     `最新結果の経過ms（入力フレーム基準）: ${fixed(s.resultAgeMs)}`,`最新採用の経過ms（650msで非表示）: ${fixed(s.lastGoodAgeMs)}`,`採用成功率: ${s.successRate===null?'—':fixed(s.successRate*100)+'%'}`,

@@ -1,7 +1,7 @@
-import { TemplateStore, storageMessage } from './template-store.js?v=0.4.1';
-import { validateDocument, newId, validName } from './template-schema.js?v=0.4.1';
-import { canvasBlob, thumbnail, decodeBackground } from './template-images.js?v=0.4.1';
-import { exportTemplate, importTemplate } from './template-zip.js?v=0.4.1';
+import { TemplateStore, storageMessage } from './template-store.js?v=0.4.2';
+import { validateDocument, newId, validName } from './template-schema.js?v=0.4.2';
+import { canvasBlob, thumbnail, decodeBackground } from './template-images.js?v=0.4.2';
+import { exportTemplate, importTemplate } from './template-zip.js?v=0.4.2';
 
 const $ = id => document.getElementById(id);
 const element = (tag,text,className) => {const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(className)e.className=className;return e;};
@@ -15,7 +15,7 @@ export class TemplateUI {
     $('template-save').addEventListener('click',()=>this.nameForm(this.active?'テンプレートを上書き保存':'テンプレートを保存',this.active?.name||this.suggestedName,name=>this.save(name,false)));
     $('template-save-as').addEventListener('click',()=>this.nameForm('別名で保存',this.active?`${this.active.name} コピー`.slice(0,80):this.suggestedName,name=>this.save(name,true)));
     $('template-export').addEventListener('click',()=>this.run(async()=>this.download(await this.capture(this.active?.name||this.suggestedName))));
-    $('template-import').addEventListener('change',event=>{
+    const importFile=event=>{
       const file=event.target.files?.[0];if(!file)return;
       this.run(async()=>{
         const record=await importTemplate(file),canvas=await decodeBackground(record.background,record.doc.background);
@@ -23,7 +23,8 @@ export class TemplateUI {
         await this.adapter.apply(record.doc,canvas);this.active=null;this.suggestedName=record.doc.name;this.baseline=null;this.changed();
         $('template-manager').close();this.adapter.message('ZIPを読み込みました。「保存・読込」から保存すると、このブラウザの一覧に残ります。');
       }).finally(()=>{event.target.value='';});
-    });
+    };
+    for(const id of ['template-import','template-import-native'])$(id).addEventListener('change',importFile);
     $('template-name-form').addEventListener('submit',event=>{event.preventDefault();if(this.busy)return;this.run(async()=>{
       const name=validName($('template-name').value);await this.nameAction(name);$('template-name-dialog').close();
     });});
@@ -40,7 +41,8 @@ export class TemplateUI {
     const image=!!this.adapter.read().canvas;
     for(const id of ['template-save','template-save-as'])$(id).disabled=this.busy||!this.available||!image;
     $('template-export').disabled=this.busy||!image;
-    $('template-import').disabled=this.busy;
+    for(const id of ['template-import','template-import-native'])$(id).disabled=this.busy;
+    $('template-import-trigger').setAttribute('aria-disabled',String(this.busy));
     $('template-name-submit').disabled=this.busy;$('template-name-cancel').disabled=this.busy;
     $('templates-close').disabled=this.busy;$('template-retry').disabled=this.busy;
     $('template-manager').setAttribute('aria-busy',String(this.busy));

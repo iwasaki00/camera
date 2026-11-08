@@ -1,13 +1,13 @@
-import { Camera } from './camera.js?v=0.4.1';
-import { CompositeRenderer, sourceRect } from './renderer.js?v=0.4.1';
-import { TouchEditor, sourceFromBox } from './editor.js?v=0.4.1';
-import { Viewport } from './viewport.js?v=0.4.1';
-import { Magnifier } from './magnifier.js?v=0.4.1';
-import { PartCollection, PART_TYPES, sourceForDisplay, setDisplaySource } from './parts.js?v=0.4.1';
-import { TemplateUI } from './template-ui.js?v=0.4.1';
-import { FaceTracker } from './tracking.js?v=0.4.1';
-import { correctionFor, DEFAULT_CORRECTION, displayCrop } from './tracking-geometry.js?v=0.4.1';
-import { Diagnostics, DiagnosticPanel } from './diagnostics.js?v=0.4.1';
+import { Camera } from './camera.js?v=0.4.2';
+import { CompositeRenderer, sourceRect } from './renderer.js?v=0.4.2';
+import { TouchEditor, sourceFromBox } from './editor.js?v=0.4.2';
+import { Viewport } from './viewport.js?v=0.4.2';
+import { Magnifier } from './magnifier.js?v=0.4.2';
+import { PartCollection, PART_TYPES, sourceForDisplay, setDisplaySource } from './parts.js?v=0.4.2';
+import { TemplateUI } from './template-ui.js?v=0.4.2';
+import { FaceTracker } from './tracking.js?v=0.4.2';
+import { correctionFor, DEFAULT_CORRECTION, displayCrop } from './tracking-geometry.js?v=0.4.2';
+import { Diagnostics, DiagnosticPanel } from './diagnostics.js?v=0.4.2';
 
 const $ = id => document.getElementById(id);
 const canvas = $('composition'), ctx = canvas.getContext('2d');
@@ -231,11 +231,15 @@ $('part-enabled').addEventListener('change', event => { if (selected()) selected
 $('part-delete').addEventListener('click', () => { cancelEditors(); collection.removeSelected(); update(); });
 for (const [id, direction] of [['part-front', 1], ['part-back', -1]]) $(id).addEventListener('click', () => { collection.reorder(direction); update(); });
 
-$('image-file').addEventListener('change', async event => {
+async function loadImage(event) {
   const file = event.target.files?.[0]; if (!file) return;
-  const generation = ++imageGeneration, url = URL.createObjectURL(file);
-  message('画像を読み込んでいます…');
+  const generation = ++imageGeneration;
+  let url;
+  const imageMessage = (text, error, state) => { message(text, error); $('status').dataset.state = state; };
+  imageMessage('画像を読み込んでいます…', false, 'image-loading');
   try {
+    if (file.type && !file.type.startsWith('image/') && file.type !== 'application/octet-stream') throw new Error('UNSUPPORTED_IMAGE');
+    url = URL.createObjectURL(file);
     const image = new Image();
     await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = url; });
     if (generation !== imageGeneration) return;
@@ -251,11 +255,15 @@ $('image-file').addEventListener('change', async event => {
     state.imageMetadata = { name: file.name, mime: file.type || '', size: file.size }; state.backgroundRevision++;
     $('empty-hint').hidden = true; $('save').disabled = false; clearExport(); photoView.reset();
     templates?.changed();
-    message('画像を読み込みました。パーツを選び、枠を直接動かして合わせてください。');
-  } catch {
-    if (generation === imageGeneration) message('画像を読み込めませんでした。JPEG・PNGなどSafariで開ける画像を選んでください。', true);
-  } finally { URL.revokeObjectURL(url); event.target.value = ''; }
-});
+    imageMessage('画像の読み込みが完了しました。パーツを選び、枠を直接動かして合わせてください。', false, 'image-ready');
+  } catch (error) {
+    if (generation === imageGeneration) {
+      if (error?.message === 'UNSUPPORTED_IMAGE') imageMessage('非対応画像形式です。JPEG・PNGなどの画像を選んでください。', true, 'unsupported-image');
+      else imageMessage('画像のデコードに失敗しました。このブラウザで開けるJPEG・PNGなどの画像を選んでください。', true, 'image-decode-error');
+    }
+  } finally { if (url) URL.revokeObjectURL(url); event.target.value = ''; }
+}
+for (const id of ['image-file', 'image-file-native']) $(id).addEventListener('change', loadImage);
 function clearExport() {
   if (exportUrl) URL.revokeObjectURL(exportUrl);
   exportUrl = null; $('export-result').hidden = true; $('export-image').removeAttribute('src'); $('download').removeAttribute('href');
@@ -367,6 +375,8 @@ templates = new TemplateUI({
 syncControls();
 syncViewControls();
 render();
-$('image-file').disabled = false;
+for (const id of ['image-file', 'image-file-native']) $(id).disabled = false;
 $('image-trigger').removeAttribute('aria-disabled');
+document.body.dataset.appState = 'ready';
+$('status').dataset.state = 'ready';
 message('画像を読み込み、枠を直接動かして合わせてください。2本指で表示を拡大できます。');
