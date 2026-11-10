@@ -37,6 +37,7 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const profile = await mkdtemp(path.join(tmpdir(), 'portrait-browser-'));
 const browser = spawn(process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', [
   '--headless=new', '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=0',
+  ...(process.argv.includes('--recording')?['--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']:[]),
   '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', `--user-data-dir=${profile}`, 'about:blank'
 ], { stdio: ['ignore', 'ignore', 'pipe'] });
 let socket;
@@ -57,7 +58,7 @@ try {
     if (message.method === 'Page.fileChooserOpened') choosers.push(message.params);
   };
   const call = (method, params = {}, sessionId) => new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('CDP timed out: ' + method)), 12000);
+    const timeout = setTimeout(() => reject(new Error('CDP timed out: ' + method)), process.argv.includes('--recording')?45000:12000);
     pending.set(++id, { resolve: result => { clearTimeout(timeout); resolve(result); }, reject: error => { clearTimeout(timeout); reject(error); } }); socket.send(JSON.stringify({ id, method, params, sessionId }));
   });
   const { targetId } = await call('Target.createTarget', { url: 'about:blank' });
@@ -75,7 +76,7 @@ try {
   };
   const waitFor = async (expression, attempts = 80) => {
     for (let i = 0; i < attempts; i++) { if (await evaluate(expression)) return; await new Promise(r => setTimeout(r, 100)); }
-    const state=await evaluate("JSON.stringify({status:document.querySelector('#status')?.textContent,camera:document.querySelector('#camera-state')?.textContent,tracking:document.querySelector('#tracking-status')?.textContent,template:document.querySelector('#template-message')?.textContent,visibility:document.visibilityState,startDisabled:document.querySelector('#start')?.disabled})");
+    const state=await evaluate("JSON.stringify({status:document.querySelector('#status')?.textContent,recording:document.querySelector('#record-status')?.textContent,recordingState:document.querySelector('#record-status')?.dataset.state,recordStartDisabled:document.querySelector('#record-start')?.disabled,camera:document.querySelector('#camera-state')?.textContent,tracking:document.querySelector('#tracking-status')?.textContent,template:document.querySelector('#template-message')?.textContent,visibility:document.visibilityState,startDisabled:document.querySelector('#start')?.disabled})");
     throw new Error(`Timed out: ${expression}; state: ${state}; runtime errors: ${JSON.stringify(errors)}`);
   };
   await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` });
@@ -83,6 +84,14 @@ try {
     const {checkPicker}=await import('./picker-check.mjs');
     await checkPicker({evaluate,command,waitFor,choosers,profile,audit:process.env.PICKER_AUDIT==='1'});
     assert.deepEqual(errors,[]);
+  } else if(process.argv.includes('--recording')) {
+    await command('Emulation.setFocusEmulationEnabled',{enabled:true});
+    await call('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:profile});
+    await waitFor("document.body.dataset.appState==='ready'");
+    const {checkRecording}=await import('./recording-check.mjs');await checkRecording({evaluate,command,waitFor,profile});assert.deepEqual(errors,[]);
+  } else if(process.argv.includes('--composite')) {
+    await waitFor("document.body.dataset.appState==='ready'");
+    const {checkComposite}=await import('./composite-check.mjs');await checkComposite({evaluate,command,waitFor});assert.deepEqual(errors,[]);
   } else if(process.env.PERFORMANCE_COMPARE==='1') {
     await waitFor("!!document.querySelector('#image-file')&&!document.querySelector('#image-file').disabled");
     await comparePerformance({evaluate,waitFor});assert.deepEqual(errors,[]);

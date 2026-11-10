@@ -7,7 +7,7 @@ export async function checkTemplates({evaluate,command,waitFor}) {
   const idle = () => waitFor("document.querySelector('#template-manager').getAttribute('aria-busy')==='false'");
   const open = async()=>{if(!await evaluate("document.querySelector('#template-manager').open"))await click('templates-open');await idle();};
   const write = values=>evaluate(`(()=>{for(const [id,value]of Object.entries(${JSON.stringify(values)})){const e=document.getElementById(id);e.value=value;e.dispatchEvent(new Event(e.type==='range'?'input':'change'));}})()`);
-  const setupStore = ()=>evaluate("(async()=>{const {TemplateStore}=await import('./template-store.js?v=0.4.2');window.templateStore=new TemplateStore();await window.templateStore.open();})()");
+  const setupStore = ()=>evaluate("(async()=>{const {TemplateStore}=await import('./template-store.js?v=0.6.0');window.templateStore=new TemplateStore();await window.templateStore.open();})()");
   const docs = ()=>evaluate("(async()=> (await window.templateStore.list()).map(r=>r.doc))()");
   const named = async(button,name)=>{
     await click(button);await waitFor("document.querySelector('#template-name-dialog').open");
@@ -60,7 +60,7 @@ export async function checkTemplates({evaluate,command,waitFor}) {
   assert.equal(await evaluate("document.querySelector('#templates-open').textContent.includes('●')"),false);
   console.log('PASS TEMPLATE: new save with four independent parts, mirror and guide settings');
 
-  assert.equal(await evaluate(`(async()=>{const r=await window.templateStore.get('${firstId}');const {decodeBackground}=await import('./template-images.js?v=0.4.2');
+  assert.equal(await evaluate(`(async()=>{const r=await window.templateStore.get('${firstId}');const {decodeBackground}=await import('./template-images.js?v=0.6.0');
     const c=await decodeBackground(r.background,r.doc.background),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;
     for(let i=0;i<p.length;i+=4)if(p[i]!==160||p[i+1]!==64||p[i+2]!==48||p[i+3]!==255)return false;
     const bitmap=await createImageBitmap(r.thumbnail),t=document.createElement('canvas');t.width=bitmap.width;t.height=bitmap.height;t.getContext('2d').drawImage(bitmap,0,0);bitmap.close();

@@ -2,3 +2,4 @@
 * text=auto
 .gitattributes text eol=lf
 assets/home.js text eol=lf
+index.html text eol=lf

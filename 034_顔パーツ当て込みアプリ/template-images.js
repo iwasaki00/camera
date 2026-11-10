@@ -1,4 +1,4 @@
-import { LIMITS, imageHeader } from './template-schema.js?v=0.4.2';
+import { LIMITS, imageHeader } from './template-schema.js?v=0.6.0';
 
 export const canvasBlob = (canvas, type = 'image/png', quality) => new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('画像データを作成できませんでした。')),type,quality));
 export async function decodeBackground(blob, metadata) {

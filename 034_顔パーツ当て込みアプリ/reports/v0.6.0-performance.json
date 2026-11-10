@@ -1,0 +1,39 @@
+{
+  "conditions": "Desktop Chrome / actual local Face Landmarker Worker / NASA still-face input 640x480 at 30fps / 4 parts / output and recording 400x600 / 24fps target / 5.5s samples after 1s settling / sequential single browser",
+  "rows": [
+    {
+      "mode": "original",
+      "recording": false,
+      "drawFps": 29.99945455524168,
+      "detectionFps": 9.636188432895812,
+      "diagnostics": "Portrait Face Parts Player v0.6.0\n計測窓: 直近5秒（現在5.0秒）\n描画fps: 30.0\n検出/秒: 9.6 / 完了48回\n推論ms 直近/平均/最大: 15.5 / 19.7 / 29.0\n合成ms 平均/最大（同じ計測窓）: 0.9 / 2.6\n録画Canvas転送ms 平均/最大（今回の録画全体）: 0.00 / 0.00\n録画: idle / 転送0回 / 0.00 MB\n最新結果の経過ms（入力フレーム基準）: 107.4\n最新採用の経過ms（650msで非表示）: 107.4\n採用成功率: 100.0%\n状態: 追従中 (tracking)\nWorker: worker\n映像: 640×480\n推論入力: 480×360\n検出間隔ms: 100.0"
+    },
+    {
+      "mode": "original",
+      "recording": true,
+      "drawFps": 29.99836372587503,
+      "detectionFps": 9.635838045281071,
+      "diagnostics": "Portrait Face Parts Player v0.6.0\n計測窓: 直近5秒（現在5.0秒）\n描画fps: 30.0\n検出/秒: 9.8 / 完了49回\n推論ms 直近/平均/最大: 16.6 / 20.0 / 36.6\n合成ms 平均/最大（同じ計測窓）: 0.9 / 2.6\n録画Canvas転送ms 平均/最大（今回の録画全体）: 0.07 / 0.60\n録画: recording / 転送159回 / 0.00 MB\n最新結果の経過ms（入力フレーム基準）: 64.9\n最新採用の経過ms（650msで非表示）: 64.9\n採用成功率: 100.0%\n状態: 追従中 (tracking)\nWorker: worker\n映像: 640×480\n推論入力: 480×360\n検出間隔ms: 100.0",
+      "file": "reports/v0.6.0-tracked-original.mp4",
+      "bytes": 14311,
+      "duration": 6.6418
+    },
+    {
+      "mode": "natural",
+      "recording": false,
+      "drawFps": 29.953707905963512,
+      "detectionFps": 9.076881183625307,
+      "diagnostics": "Portrait Face Parts Player v0.6.0\n計測窓: 直近5秒（現在5.0秒）\n描画fps: 30.0\n検出/秒: 9.2 / 完了46回\n推論ms 直近/平均/最大: 37.8 / 23.6 / 46.3\n合成ms 平均/最大（同じ計測窓）: 11.5 / 24.0\n録画Canvas転送ms 平均/最大（今回の録画全体）: 0.07 / 0.60\n録画: completed / 転送162回 / 0.01 MB\n最新結果の経過ms（入力フレーム基準）: 131.2\n最新採用の経過ms（650msで非表示）: 131.2\n採用成功率: 100.0%\n状態: 追従中 (tracking)\nWorker: worker\n映像: 640×480\n推論入力: 480×360\n検出間隔ms: 100.0"
+    },
+    {
+      "mode": "natural",
+      "recording": true,
+      "drawFps": 29.923287572378758,
+      "detectionFps": 8.704956384692002,
+      "diagnostics": "Portrait Face Parts Player v0.6.0\n計測窓: 直近5秒（現在5.0秒）\n描画fps: 30.0\n検出/秒: 8.8 / 完了44回\n推論ms 直近/平均/最大: 34.2 / 26.8 / 57.7\n合成ms 平均/最大（同じ計測窓）: 11.1 / 23.5\n録画Canvas転送ms 平均/最大（今回の録画全体）: 0.06 / 0.30\n録画: recording / 転送162回 / 0.00 MB\n最新結果の経過ms（入力フレーム基準）: 36.8\n最新採用の経過ms（650msで非表示）: 36.8\n採用成功率: 100.0%\n状態: 追従中 (tracking)\nWorker: worker\n映像: 640×480\n推論入力: 480×360\n検出間隔ms: 102.6",
+      "file": "reports/v0.6.0-tracked-natural.mp4",
+      "bytes": 13675,
+      "duration": 6.674933
+    }
+  ]
+}

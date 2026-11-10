@@ -1,8 +1,180 @@
 # 顔パーツ当て込みアプリ / Portrait Face Parts Player
 
-**Version 0.4.2 — IMAGE PICKER HOTFIX**
+**Version 0.6.0 — VIDEO RECORDING & SHARING**
+
+## v0.6.0 動画を作る
+
+1. 画像を読み込み、カメラを開始してパーツ・追従・合成モードを調整します。
+2. 「録画設定」で15 / 30 / 60秒（初期30秒）、マイク（初期OFF）、画質を選びます。
+3. 「録画開始」。マイクON時に限り、この操作から音声許可を要求します。拒否された場合は理由を表示し、「音声なしで録画」で明示的に再試行できます。
+4. 指定時間で自動停止します。「録画停止」で途中終了も可能です。終了処理が完了すると、**録画済み動画**の確認画面を開きます。
+5. 再生・停止・動画保存・共有・録り直し・閉じるを選べます。閉じた後も「録画結果」で再表示できます。録り直し・次の録画では以前の結果を置き換えます。
+
+ファイル共有は `navigator.canShare({files})` に対応する環境だけ有効です。共有できない場合も動画プレビューとダウンロードリンクを用意します。**「写真」アプリへの直接保存は保証しません。** iPhoneでは保存・共有先を実機で確認してください。録画結果はメモリ内の1件だけで、テンプレートやIndexedDBには保存しません。再読み込み・ページ終了前にファイルとして保存してください。映像・音声は端末外へ送信しません。
+
+### 録画方式・制限
+
+- `recording.js` が状態（待機／初期化／録画中／終了処理／完了／エラー）、形式交渉、時間制限、所有トラックの解放を管理し、`recording-ui.js` が操作・プレビュー・共有を担当します。追加ライブラリはありません。
+- PNGと同じ `renderComposite()` の合成済みCanvasを、録画専用Canvasへ縮小転送します。既に描いたフレームを再利用し、顔検出・色調補正を二重実行しません。表示倍率・パン・編集枠・拡大鏡・診断・一時的な補正前表示を録画しません。PNG保存も維持しています。
+- 標準は長辺最大720px／目標24fps／動画2.5Mbps、低負荷は最大480px／目標15fps／1.2Mbps。小さい元画像は拡大しません。縦横比を維持して配置し、エンコーダ用の偶数寸法との差だけ黒い余白になる場合があります。実際のfps・ビットレートは端末依存です。
+- 専用Canvasの `captureStream(0)` と `requestFrame()` で転送フレームを要求します。`requestFrame()` 非対応時は指定fpsのCanvasストリームへ切り替えます。MediaRecorderは1秒を目安にチャンク化しますが、チャンク数を時計にしません。`performance.now()` と録画開始要求時刻で経過時間を管理します。
+- `MediaRecorder.isTypeSupported()` でMP4（H.264、音声ONならAAC）を優先し、WebM（VP8/VP9、Opus等）へ順次フォールバックします。終了時に実データのコンテナ署名も確認し、拡張子を合わせます。変換・リネームによる偽MP4化は行いません。対応形式はSafariの世代でも変わります（[WebKitのMediaRecorder説明](https://webkit.org/blog/11353/mediarecorder-api/)、[Safari 18.4の形式追加](https://webkit.org/blog/16574/webkit-features-in-safari-18-4/)）。
+- マイクだけを `getUserMedia({video:false,audio:…})` で取得し、既存カメラを二重起動しません。音声は96kbpsを要求します。終了・失敗・キャンセル時に録画専用の音声・Canvasトラックを停止し、アプリのカメラトラックは録画機能から停止しません。
+- 正常停止は最終 `dataavailable` と `stop` を待ってから解放します（[イベントの仕様と時間計測の注意](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/dataavailable_event)）。終了処理が10秒を超えた場合はエラーとし、利用できる途中データがあれば警告付きで保持します。64MB到達で停止しますが、最終チャンク分だけ上限を超える場合があります。
+- 録画中は編集・画像読込・テンプレート切替を制限し、追従・合成とカメラ停止は継続できます。カメラ停止・トラック終了・画面非表示・`pagehide` で安全な終了を試みます。ただしOSによる強制終了やページ破棄前の非同期保存完了は保証できません。バックグラウンド録画には対応しません。
+- プレビューを閉じる・録り直す際にBlob URLを解放します。テンプレートのスキーマは3を維持し、録画設定・動画・音声はテンプレートに追加しません。旧テンプレートのデータを削除しません。
+
+### 診断・検証コマンド
+
+追従診断に、**今回の録画全体**のCanvas転送平均・最大ms、転送回数、チャンク容量、状態を追加しました。既存の描画・推論・合成時間は直近5秒の窓です。Canvas転送時間はエンコーダ内部処理時間を含みません。診断を閉じている間、診断用表示更新は行いません。
+
+```powershell
+npm test
+npm run test:recording
+# Edge: ローカルの実行ファイルを指定
+$env:CHROME_PATH='C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
+npm run test:recording
+Remove-Item Env:CHROME_PATH
+# 60秒の実録画、ffprobe/ffmpegがPATH上に必要
+$env:LONG_RECORDING='1'
+npm run test:recording
+Remove-Item Env:LONG_RECORDING
+# 実モデルを含む既存テストと録画OFF/ON比較（単独実行）
+$env:RECORDING_PERFORMANCE='1'
+npm run test:browser
+Remove-Item Env:RECORDING_PERFORMANCE
+# インストール済みの対応Playwright Core / WebKitがある場合
+$env:PLAYWRIGHT_MODULE='インストール済みplaywright-coreのディレクトリ'
+npm run test:recording:webkit
+```
+
+単体テストでは時計・MediaRecorderをモックにして失敗や競合を再現します。実録画テストは動くCanvasテスト映像とブラウザ本来のMediaRecorderを使い、音声ONではブラウザのテスト用マイクを使用します。ffprobeで形式・映像・音声・時間を検査し、ffmpegでフレーム変化と非無音を確認し、ブラウザでも再生します。物理カメラ・物理マイクの品質テストとは区別しています。
+
+### PC性能比較（v0.6.0）
+
+Windows Chrome headless／実Face Landmarker・Worker／640×480のNASA顔画像Canvasストリーム／4パーツ／合成・録画400×600／標準24fps目標。1秒安定化後5.5秒ずつ、下表の順に単独ブラウザで計測しました。録画は元画像より拡大しないため、この条件の長辺は600pxです。NATURALは初期補正・質感ON、自動色合わせOFF。診断はONです。
+
+| モード | 録画 | 描画fps | 顔検出/秒 | 推論平均ms | 録画Canvas転送平均ms |
+| --- | --- | ---: | ---: | ---: | ---: |
+| ORIGINAL | OFF | 30.0 | 9.6 | 19.7 | — |
+| ORIGINAL | ON | 30.0 | 9.6 | 20.0 | 0.07 |
+| NATURAL | OFF | 30.0 | 9.1 | 23.6 | — |
+| NATURAL | ON | 29.9 | 8.7 | 26.8 | 0.06 |
+
+この短時間のPC条件では描画頻度を概ね維持しましたが、NATURAL録画中は検出頻度が低下しました。各条件1回で、端末差・順序・負荷変動を含みます。iPhone・高解像度・動く実顔で同等とは保証しません。転送msはCanvas間コピーの実測であり、エンコーダ内部の総負荷を示しません。[計測JSON](reports/v0.6.0-performance.json) と実追従中の録画ファイルを保存しました。
+
+### v0.6.0 検証結果
+
+- 単体 **173/173 PASS**（既存147＋録画26）。API・時計のモックで、15/30/60秒停止、重複操作、MIME交渉、権限待ちキャンセル、最終チャンク、音声資源解放、容量上限、異常・タイムアウト・共有判定を確認しました。
+- Chromeの既存関連 **47グループ PASS**。実モデルのWorker／メイン代替、停止再開、4パーツ、直接編集、ズーム・拡大鏡、PNG、旧テンプレート、IndexedDB、ZIP、診断を確認しました。実モデル追従中のORIGINAL／NATURAL録画も実ファイルとして確認しています。
+- Chromeの録画7ケース＋60秒1ケース、Edgeの録画6ケースがPASSしました。ネイティブMediaRecorderからMP4（H.264）を生成し、マイクONではAACトラックの存在と非無音を確認しました。映像フレームのハッシュが変わること、ブラウザで再生時間が進むこと、実ダウンロードとBlobのバイト一致、録り直し、URL解放、マイク拒否後の無音再試行、録画中ロック、カメラ停止、合成CanvasとPNG・録画用Canvasの画素一致を確認しました。Edgeでは音声終了後のマイクトラック停止とライブカメラ継続も確認しました。録画時間は初期化待ちも含む開始要求からの実時間です。録画テストのヘッドレスブラウザは可視状態をエミュレートし、背景スロットリングを抑制しています。
+- ChromeではMP4を候補から外すテスト条件で、**実WebM／VP8録画と再生**も確認しました。拡張子は `.webm`。WebMには長さメタデータがない場合があり、その場合はffprobeのパケット時刻から時間を求めます。アプリの経過表示はメタデータに依存しません。
+- 60秒のChrome実録画は **60.0545秒／1,699,360 bytes（約1.62MiB）／480×720**。約24fps、異なる映像フレーム1,428枚を確認しました。JSヒープは約2.5→2.2MBでしたが、GC・テスト器具の影響を受け、Blob・動画エンコーダ等のネイティブメモリは含みません。継続的なメモリ漏れがないことや、iPhoneの容量・発熱を保証する測定ではありません。[60秒検証JSON](reports/v0.6.0-chrome-recording-60sec.json)
+- 375px／390pxで録画設定を展開しても横はみ出しがないことを確認しました。[390px画面](reports/v0.6.0-chrome-ui-390.png)も目視確認しています。
+- 既存の合成UI・画素・テンプレート復元テストもChrome **10グループ PASS**、Windows版WebKit **4グループ PASS**でした。最終実行のFAILは0です。
+- 利用可能なWindows版WebKit 26.4には `MediaRecorder`・`captureStream`・カメラAPIがなく、実録画は実施できません。録画非対応の明示と375px／390pxのレイアウトを確認する **1グループ PASS**。**iPhone SafariのAPI対応や録画成功を示す結果ではありません。**
+
+### v0.6.0の作成・変更ファイル（詳細）
+
+- 新規: `recording.js`、`recording-ui.js`、`tests/recording.test.mjs`、`tests/recording-check.mjs`、`tests/recording-performance.mjs`、`tests/webkit-recording.mjs`。
+- 機能・文書: `app.js`、`index.html`、`style.css`、`diagnostics.js`、`template-ui.js`、`README.md`、`.gitattributes`（動画バイナリ指定）、`package.json`。
+- テスト接続: `tests/browser-check.mjs`、`tests/tracking-check.mjs`、`tests/webkit-picker.mjs`。
+- 版付きimport更新: `editor.js`、`magnifier.js`、`viewport.js`、`parts.js`、`renderer.js`、`composite-ui.js`、`tracking.js`、`tracking-worker.js`、`tracking-geometry.js`、`template-schema.js`、`template-images.js`、`template-store.js`、`template-zip.js`。関連テストの `tests/template.test.mjs`、`tests/template-check.mjs`、`tests/diagnostic-check.mjs`、`tests/composite-check.mjs`、`tests/webkit-color-check.mjs`、`tests/fixtures/original-renderer.mjs` も0.6.0へ統一。
+- メニュー・キャッシュ: リポジトリの `index.html`、`assets/home.js`。
+- 実録画・計測記録: `reports/v0.6.0-*`。以前のv0.5.0記録は履歴として維持しています。
+
+**iPhone Safari実機での新しい録画機能は未確認です。** MP4生成・再生・15/30/60秒停止・マイク許可/拒否・実際の発話の同期・共有先/ファイル保存・中断時の復帰・4パーツ追従＋NATURAL時のfps/発熱/メモリを確認してください。Windows版WebKitの結果をiPhone Safari成功と同一視しません。次期候補は **v0.6.1 — IPHONE RECORDING VALIDATION** です。
+
+## v0.5.0 合成モードと操作
+
+プレビュー直下で **ORIGINAL / NATURAL / COMIC** を切り替えます。全体の「補正強度」は0〜100%。「補正前」を指・マウスで押している間、またはフォーカスしてSpace/Enterを押している間だけORIGINALを表示し、離す・キャンセル・フォーカス喪失・タブ非表示で正式モードへ戻ります。比較は編集座標・設定・未保存判定を変更しません。**PNGは比較中も選択中の正式モードで保存します。**
+
+「色調・質感・境界」を開くと、選択中のパーツだけを調整できます。4パーツそれぞれがNATURAL/COMIC別々の値を保持するため、モードや選択を切り替えても手動設定は失われません。ORIGINALでは補正を通さず、従来のFeatherを使用します。全体強度0%、個別強度0%、または全項目が中立で自動色合わせOFFの場合も旧描画へ戻ります。画像選択UIはv0.4.2の実装を維持しています。自作エミュレータでのファイル選択問題をアプリ側の未解消問題とは扱いません。
+
+| 項目 | 範囲・意味 | NATURAL初期値 | COMIC初期値 |
+| --- | --- | ---: | ---: |
+| 明るさ | −50〜50%。RGBへ値×2.55を加算 | 0 | 6 |
+| コントラスト | −50〜80%。128付近を中心に倍率1＋値/100 | −4 | 22 |
+| 彩度 | −100〜100%。−100でグレー、0で元の彩度 | −6 | 30 |
+| 色温度 | −40〜40pt。暖色方向で赤＋・青−（値×0.6階調） | 0 | 0 |
+| 色かぶり | −40〜40pt。マゼンタ／緑方向（値×0.5階調） | 0 | 0 |
+| 質感 | 0〜15pt。固定粒子の全振幅、RGBの階調単位 | 1 | 0 |
+| 個別補正強度 | 0〜100%。全体強度と掛け合わせ | 100 | 100 |
+| 追加境界ぼかし | 0〜30%。既存Featherに適用強度分を加算 | 6 | 0 |
+| 境界強調 | 0〜60%。COMICのみ、輪郭付近を暗くする | 0 | 25 |
+
+手動補正は8bit RGB上の軽量な近似演算です。色温度は絶対温度Kを推定するホワイトバランスではありません。明るさ・コントラスト・色温度／色かぶり→彩度→自動合わせ→粒子・境界強調→補正強度による元画素との混合→形状・Featherマスクの順で処理します。質感は固定パターンなので毎フレーム乱数でちらつきません。「質感処理を使う」をOFFにすれば粒子を省けます。
+
+### 自動色合わせ
+
+NATURALで任意にONにします（初期OFF）。絵画の対象領域を回転も含めて1.6倍の範囲で48×48pxにサンプリングし、対象のすぐ外側のリングから暖色の肌候補を探します。元画像全体の毎フレーム解析はしません。カメラ側も中心の口内・瞳を避けたリングを48×48pxで最大8回/秒分析します。
+
+- 暗部・白いハイライト・透明画素・肌色候補以外を除外し、候補がリングの30%未満または12画素未満なら補正しません。チャンネル中央値とばらつきで極端な画素の影響を抑えます。
+- RGBゲインを0.85〜1.18に制限し、時定数300msで平滑化します。口の暗部・白い歯・瞳を肌色へ寄せる補正は行いません。手動補正値を上書きしません。
+- 絵画側の結果は元画像オブジェクト・寸法・配置・サイズ・回転・形状をキーにパーツごとにキャッシュします。ズーム・パンは分析座標へ入りません。カメラ側の一時ゲインは保存しません。
+- **肌の意味を理解するAIではありません。** 肌に近い色の衣服・背景を誤候補とする可能性があります。青い肌・極端な陰影・抽象画などは候補不足で補正しない場合があります。違和感が出る場合はOFFにして手動調整してください。
+
+### 境界・画質・負荷
+
+楕円／四角のマスクとアルファ合成を維持し、境界ぼかしは領域の内側だけに適用します。パーツ全体をぼかすフィルターや背景への拡張は使いません。COMICは外周付近のRGBを暗くして輪郭を強調します。
+
+ORIGINAL用Canvasと画素読み出しを行う補正用Canvasを分離しました。CanvasのGPU/CPU描画経路の切替が、ORIGINALへ戻した際の映像サンプリングに影響するケースをテストで確認したためです。ORIGINALは旧レンダラーとのRGBA一致を検証しています。補正用パッチは長辺最大320pxで処理して配置サイズへ描画し、Canvas・マスク・粒子バッファを再利用します。補正用のカメラフレームのコピーは全パーツで1描画1回にまとめ、画素解析と補正は小さなパーツ領域に限定しています。大きく配置した補正パーツでは解像感が下がる制限があります。ORIGINALと強度0%はこの縮小を行いません。
+
+「追従の診断」を開くと、既存の直近5秒の窓に**合成処理時間の平均・最大ms**も表示します。背景描画と全パーツ合成を含み、編集枠・拡大鏡・カメラプレビュー・PNG専用描画は含みません。診断OFF時は収集・表示更新を行いません。
+
+### テンプレート互換性
+
+保存スキーマは **3**。全体に `composite: {mode, blendStrength, autoMatch, textureEnabled}`、各パーツに `appearance: {natural: {...}, comic: {...}}` を追加しました。各モードに上表の9項目を保存し、読込時は有限値・範囲・必須フィールドを検証します。IndexedDBのDB名・DBバージョン・既存レコードは維持し、旧スキーマ1/2は読込時にORIGINALへ移行します。旧パーツの配置・手動sourceRect・追従補正・Featherは変えません。
+
+ZIPのファイル構成は従来どおり `template.json` と背景画像です。比較表示状態・分析結果・粒子バッファ・診断履歴・カメラ映像・ランドマーク履歴は保存しません。新スキーマ3のZIPは旧版アプリでは開けないため、読み込むアプリもv0.5.0以降を使用してください。
+
+### v0.5.0の関連テスト
+
+```powershell
+npm test
+npm run test:composite
+# 任意: 対応するPlaywright Core・WebKitがインストール済みの場合
+$env:PLAYWRIGHT_MODULE='インストール済みplaywright-coreのディレクトリ'
+npm run test:composite:webkit
+# 実モデル追従・既存編集/保存テスト＋同一条件OFF/ON比較
+$env:NATURAL_PERFORMANCE='1'
+$env:NATURAL_PERFORMANCE_OUTPUT='reports/v0.5.0-performance.json'
+npm run test:browser
+Remove-Item Env:NATURAL_PERFORMANCE, Env:NATURAL_PERFORMANCE_OUTPUT
+```
+
+単体テストは既存124件＋追加23件。新規ブラウザテストでは旧レンダラーとのORIGINAL画素一致、3モード・強度・独立設定、実タッチでの比較、比較中の正式モードPNG、ガイド/拡大鏡/表示倍率の非保存、自動色合わせON/OFF、固定粒子、マスク、停止再開、IndexedDB/ZIP復元、同一ソースでの復元PNG一致、375px/390px UIを確認します。画素一致テストでは入力フレームを固定します。異なるカメラセッションの映像まで同一であるとは仮定しません。
+
+既存の実モデル統合テストでは、ローカルMediaPipeモデル・Worker・メインスレッド代替でNATURALと4パーツ追従を併用し、失顔・再検出・保存・停止再開を確認します。モックによる平滑化単体テストとは別です。性能結果と最終PASS数は本節末尾に記載します。
+
+### 最終結果・PC性能比較
+
+- 単体 **147/147 PASS**（追加23件）、Chrome既存関連 **47グループ PASS**、新規合成UI/画素/保存 **10グループ PASS**。最終実行のFAILは0です。
+- Windows版WebKit 26.4で **4グループ PASS**。4パーツのCanvasソースで3モード・ORIGINAL復帰画素一致、個別設定、キーボード比較、375px/390pxを確認しました。実カメラ・iPhone実機のテストではありません。
+- Chromeの新規テストでも375px/390pxの展開時横はみ出し・比較ボタン44px以上を確認し、[390px UI記録](reports/v0.5.0-ui-390.png)を目視確認しました。
+
+Windows / Chrome headless / 実MediaPipeモデルCPU推論・Worker / 640×480のNASA顔画像Canvasストリーム / 合成400×600 / 4パーツ・Feather10の同一条件です。順序は **ORIGINAL → NATURAL → NATURAL → ORIGINAL**。各条件1.5秒ウォームアップ後5秒計測し、下表は各モード2回の平均です。診断ON、NATURALの質感と自動合わせ要求はON。背景は `#a04030` のため保守的な肌判定で背景候補を拒否し、自動ゲインが適用されない場合があります。自動合わせが有効になる別の暖色背景での動作は新規合成テストで確認しています。
+
+| モード | 描画fps | 顔検出/秒 | 合成平均ms | 合成最大ms（2回の最大） |
+| --- | ---: | ---: | ---: | ---: |
+| ORIGINAL / 補正OFF | 30.0 | 7.8 | 1.5 | 5.3 |
+| NATURAL / 補正ON | 29.4 | 4.7 | 17.2 | 56.6 |
+
+補正ONでもこの条件では描画頻度を概ね維持しましたが、**合成負荷は増加し、既存の描画優先制御で顔検出頻度が低下しました。** 単発の遅いフレームもあり、推論高速化・実機での滑らかさ達成を示す結果ではありません。PC上の短時間・各2回の測定で、実行間の負荷差があります。大きな画像・高解像度カメラ・長時間・iPhone・COMICの性能保証ではありません。生データ・診断テキストは [reports/v0.5.0-performance.json](reports/v0.5.0-performance.json) に保存しています。
+
+### v0.5.0の作成・変更ファイル
+
+- 新規実装: `composite-color.js`（補正・分析・検証）、`composite-ui.js`（モード・個別補正・比較）。
+- 機能変更: `renderer.js`、`app.js`、`parts.js`、`template-schema.js`、`template-ui.js`、`diagnostics.js`、`index.html`、`style.css`。
+- 新規テスト: `tests/composite-color.test.mjs`、`tests/composite-check.mjs`、`tests/natural-performance.mjs`、`tests/webkit-color-check.mjs`、`tests/fixtures/original-renderer.mjs`（旧描画の固定比較用）。
+- テスト/版整合: `package.json`、`tests/browser-check.mjs`、`tests/template.test.mjs`、`tests/template-check.mjs`、`tests/tracking-check.mjs`、`tests/diagnostic-check.mjs`、`tests/webkit-picker.mjs`。
+- キャッシュ参照のみ: `editor.js`、`magnifier.js`、`viewport.js`、`tracking.js`、`tracking-worker.js`、`tracking-geometry.js`、`template-images.js`、`template-store.js`、`template-zip.js`。文書・メニュー: `README.md`、リポジトリの `assets/home.js`、`index.html`、ルートの `.gitattributes`（メニューHTMLのLF固定）。記録: `reports/v0.5.0-performance.json`、`reports/v0.5.0-ui-390.png`。
+
+**新しい補正機能の実カメラ・iPhone Safari実機確認は未実施です。** 実機では、肌色や絵画の種類・照明変化での色合わせ、口内・歯・まばたきの保持、粒子のちらつき、長押し比較の解除、実際のPNG保存、旧テンプレートの表示、4パーツ＋追従時のfps・発熱・操作応答を確認してください。次の候補は **v0.5.1 — DEVICE COLOR VALIDATION** です。
 
 ## v0.4.2 画像・ZIPの選択修正
+
+後日のユーザー確認では、通常のChromeとiPhone実機のSafariで画像選択・読込が動作し、不具合発生環境は自作iPhone Web Emulatorでした。以下は当時の調査・自動テストの記録です。v0.5.0の新しい補正機能について、開発側のiPhone実機確認は未実施です。
 
 画像読込とZIP読込は、ボタン全体に重ねた透明なネイティブ `input type=file` を直接タップする方式です。labelから1×1pxの入力への起動委譲を廃止しました。入力は `opacity: 0` のみで透明化し、44px以上の実際の入力領域とキーボードフォーカス・フォーカス枠を維持します。JavaScriptの `.click()` や非同期の選択画面起動は使用しません。[透明化とアクセシビリティの参考（MDN）](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/input/file)
 

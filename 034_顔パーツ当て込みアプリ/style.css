@@ -46,6 +46,23 @@ input[type=range] { width: 100%; height: 36px; margin: 2px 0; accent-color: var(
 .quick-controls label:last-child { flex: 1; }
 .quick-controls input { width: 100%; min-width: 40px; }
 .quick-controls output { min-width: 32px; }
+.composite-bar { display: grid; grid-template-columns: auto minmax(40px,1fr) 40px; gap: 4px 6px; align-items: center; font-size: 12px; margin-top: 6px; }
+.composite-mode-row { grid-column: 1 / -1; display: flex; gap: 6px; min-width: 0; }
+.composite-bar select { flex: 1 1 0; width: 0; min-width: 0; font-size: 13px; }
+.composite-bar button { flex: 0 1 124px; min-width: 0; font-size: 11px; padding: 5px; }
+.composite-bar button[aria-pressed=true] { background: #d9f2ed; }
+#composite-before { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#recording-panel { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 6px; }
+.record-actions { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+.record-actions button { min-width: 0; padding: 8px 4px; }
+.record-state { display: flex; gap: 10px; align-items: baseline; margin-top: 6px; font-size: 12px; }
+#record-status[data-error=true] { color: #a52e25; }
+.record-options,.record-result-actions { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.record-options label { font-size: 12px; }
+.record-options select { max-width: 100%; font-size: 14px; }
+#record-player { display: block; width: 100%; max-height: 55vh; background: #172c2b; }
+#record-result { width: min(640px,calc(100vw - 24px)); }
+#record-result .panel-heading { align-items: flex-start; }
 select { font: inherit; font-size: 16px; border: 1px solid var(--line); background: white; border-radius: 8px; padding: 8px; min-height: 44px; }
 button, .button, select, .toggle { touch-action: manipulation; }
 details { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 4px; }

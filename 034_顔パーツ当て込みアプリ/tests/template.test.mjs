@@ -28,7 +28,7 @@ test('explicit allowlist excludes camera frames, streams, view and unknown prope
   assert.ok(r.bytes>image.length*2);
 });
 const invalidCases=[
-  ['unsupported schema',d=>d.schemaVersion=3],['missing image',d=>delete d.background],['invalid type',d=>d.parts[0].partType='ear'],
+  ['unsupported schema',d=>d.schemaVersion=99],['missing image',d=>delete d.background],['invalid type',d=>d.parts[0].partType='ear'],
   ['duplicate type',d=>d.parts[1].partType='mouth'],['duplicate id',d=>d.parts[1].id='mouth'],['duplicate layer',d=>d.parts[1].zIndex=0],
   ['invalid name',d=>d.name='  '],['invalid timestamp',d=>d.updatedAt='yesterday'],['invalid mirror',d=>d.mirror=1],
   ['negative coordinate',d=>d.parts[0].targetRect.x=-1],['zero size',d=>d.parts[0].targetRect.width=0],['non-finite size',d=>d.parts[0].targetRect.height=NaN],
@@ -83,7 +83,7 @@ test('record rejects missing thumbnails and incorrect image byte size',()=>{
 });
 test('schema 1 migrates to manual mode and default corrections without changing source/target',()=>{
   const input=doc();input.trackingEnabled=true;input.parts[0].tracking={offsetX:1,offsetY:1,widthScale:2,heightScale:2,rotation:30};
-  const result=validateDocument(input);assert.equal(result.schemaVersion,2);assert.equal(result.trackingEnabled,false);
+  const result=validateDocument(input);assert.equal(result.schemaVersion,3);assert.equal(result.trackingEnabled,false);
   assert.deepEqual(result.parts[0].tracking,{offsetX:0,offsetY:0,widthScale:1,heightScale:1,rotation:0});
   assert.deepEqual(result.parts[0].sourceRect,input.parts[0].sourceRect);assert.deepEqual(result.parts[0].targetRect,input.parts[0].targetRect);
 });
@@ -108,5 +108,5 @@ test('schema 2 allowlist strips transient landmarks, detections and face frames'
 });
 test('v0.4.0 schema 2 remains compatible and diagnostics are excluded from saved documents',()=>{
   const input=doc();input.schemaVersion=2;input.appVersion='0.4.0';input.trackingEnabled=true;input.diagnostics={drawFps:30,history:['private']};
-  const restored=validateDocument(input);assert.equal(restored.trackingEnabled,true);assert.equal(restored.appVersion,'0.4.2');assert.equal('diagnostics' in restored,false);
+  const restored=validateDocument(input);assert.equal(restored.trackingEnabled,true);assert.equal(restored.appVersion,'0.6.0');assert.equal('diagnostics' in restored,false);
 });

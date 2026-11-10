@@ -1,0 +1,85 @@
+{
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36 Edg/157.0.0.0",
+  "cases": [
+    {
+      "name": "original",
+      "file": "reports/v0.6.0-edge-original.mp4",
+      "bytes": 74167,
+      "duration": 3.233167,
+      "videoCodec": "h264",
+      "audioCodec": null,
+      "width": 480,
+      "height": 720,
+      "frameRate": "468000/19399",
+      "uniqueFrames": 64,
+      "startOffset": null
+    },
+    {
+      "name": "natural-audio",
+      "file": "reports/v0.6.0-edge-natural-audio.mp4",
+      "bytes": 88255,
+      "duration": 2.3255,
+      "videoCodec": "h264",
+      "audioCodec": "aac",
+      "width": 480,
+      "height": 720,
+      "frameRate": "114000/4651",
+      "uniqueFrames": 54,
+      "startOffset": 0
+    },
+    {
+      "name": "comic-camera-stop",
+      "file": "reports/v0.6.0-edge-comic-camera-stop.mp4",
+      "bytes": 68247,
+      "duration": 2.4736,
+      "videoCodec": "h264",
+      "audioCodec": null,
+      "width": 480,
+      "height": 720,
+      "frameRate": "33125/1546",
+      "uniqueFrames": 46,
+      "startOffset": null
+    },
+    {
+      "name": "auto-stop",
+      "file": "reports/v0.6.0-edge-auto-stop.mp4",
+      "bytes": 431089,
+      "duration": 15.039367,
+      "videoCodec": "h264",
+      "audioCodec": null,
+      "width": 480,
+      "height": 720,
+      "frameRate": "724000/29987",
+      "uniqueFrames": 325,
+      "startOffset": null
+    },
+    {
+      "name": "mic-denied-silent",
+      "file": "reports/v0.6.0-edge-mic-denied-silent.mp4",
+      "bytes": 70010,
+      "duration": 2.2817,
+      "videoCodec": "h264",
+      "audioCodec": null,
+      "width": 480,
+      "height": 720,
+      "frameRate": "560000/22817",
+      "uniqueFrames": 53,
+      "startOffset": null
+    },
+    {
+      "name": "retake-pagehide",
+      "file": "reports/v0.6.0-edge-retake-pagehide.mp4",
+      "bytes": 64616,
+      "duration": 2.3605,
+      "videoCodec": "h264",
+      "audioCodec": null,
+      "width": 480,
+      "height": 720,
+      "frameRate": "116000/4721",
+      "uniqueFrames": 56,
+      "startOffset": null
+    }
+  ],
+  "heapBefore": 2874561,
+  "heapAfter": 2309986
+}

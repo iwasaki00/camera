@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#172c2b">
   <title>顔パーツ当て込みアプリ / Portrait Face Parts Player</title>
-  <link rel="stylesheet" href="style.css?v=0.4.2">
+  <link rel="stylesheet" href="style.css?v=0.6.0">
   <script type="module">
-    import('./app.js?v=0.4.2').catch(error => {
+    import('./app.js?v=0.6.0').catch(error => {
       const status = document.getElementById('status');
       document.body.dataset.appState = 'error';
       for (const input of document.querySelectorAll('input[type="file"]')) input.disabled = true;
@@ -21,7 +21,7 @@
 </head>
 <body data-app-state="initializing">
   <main>
-    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.4.2</span></p><div class="title-row"><h1>顔パーツ当て込みアプリ</h1><button id="templates-open" type="button">保存・読込</button></div></header>
+    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.6.0</span></p><div class="title-row"><h1>顔パーツ当て込みアプリ</h1><button id="templates-open" type="button">保存・読込</button></div></header>
     <section class="preview-panel" aria-labelledby="preview-title">
       <div class="panel-heading"><h2 id="preview-title">絵画側 / <span id="selected-part-name">口</span></h2><select id="interaction-mode" aria-label="操作モード"><option value="edit">枠を編集</option><option value="pan">画像を移動</option><option value="view">鑑賞</option></select></div>
       <div class="part-bar" aria-label="顔パーツの追加と選択">
@@ -45,6 +45,29 @@
             <label for="shape">形状 <select id="shape"><option value="oval">楕円</option><option value="rectangle">四角</option></select></label>
             <label for="quick-feather">ぼかし <input id="quick-feather" type="range" min="0" max="100" value="20"><output id="quick-feather-value">20%</output></label>
           </div>
+          <div class="composite-bar" aria-label="合成の色調と比較">
+            <div class="composite-mode-row">
+            <select id="composite-mode" aria-label="合成モード"><option value="original">ORIGINAL / 元の合成</option><option value="natural">NATURAL / ナチュラル</option><option value="comic">COMIC / コミカル</option></select>
+            <button id="composite-before" type="button" aria-pressed="false">補正前（押して比較）</button>
+            </div>
+            <label for="composite-strength">補正強度</label><input id="composite-strength" type="range" min="0" max="100" value="100"><output id="composite-strength-value">100%</output>
+          </div><span id="composite-compare-state" class="help" role="status" aria-live="polite"></span>
+          <section id="recording-panel" aria-label="合成動画の録画">
+            <div class="record-actions"><button id="record-start" type="button" class="primary" disabled>録画開始</button><button id="record-stop" type="button" disabled>録画停止</button><button id="record-open" type="button" disabled>録画結果</button></div>
+            <div class="record-state"><output id="record-elapsed">0.0秒</output><span id="record-status" role="status" aria-live="polite">待機</span></div>
+            <details><summary>録画設定（初期30秒・マイクOFF）</summary><div class="record-options">
+              <label>時間 <select id="record-duration"><option value="15">15秒</option><option value="30" selected>30秒</option><option value="60">60秒</option></select></label>
+              <label class="toggle"><input id="record-mic" type="checkbox">マイク音声</label>
+              <label>画質 <select id="record-quality"><option value="normal">標準 720px / 24fps</option><option value="low">低負荷 480px / 15fps</option></select></label>
+            </div></details><button id="record-silent" type="button" hidden>音声なしで録画</button>
+          </section>
+          <details id="composite-settings"><summary>色調・質感・境界 / <span id="composite-part-name">口</span></summary>
+            <p class="help">選択パーツだけを調整。NATURALとCOMICは別々の値を保持します。ORIGINALは補正なし。全体強度0%でも従来の描画に戻ります。</p>
+            <label class="toggle"><input id="composite-auto" type="checkbox">自動色合わせ（NATURALのみ）</label>
+            <p class="help">周辺の暖色の肌候補を参考にします。髪・服などとの判別には限界があります。合わない場合はOFFで手動調整してください。</p>
+            <label class="toggle"><input id="composite-texture" type="checkbox" checked>質感処理を使う（負荷が高ければOFF）</label>
+            <div id="composite-controls"></div><button id="composite-reset" type="button">このパーツ・モードの補正を戻す</button>
+          </details>
         </div>
         <section class="camera-panel" aria-labelledby="camera-title">
           <div class="panel-heading"><h2 id="camera-title">カメラ側 / <span id="camera-part-name">口</span></h2><label class="toggle"><input id="mirror" type="checkbox" checked>左右反転</label><span id="camera-state">停止中</span></div>
@@ -71,8 +94,13 @@
       </details>
       <div id="export-result" hidden><p>PNGを作成しました。画像を長押しして保存することもできます。</p><a id="download" class="button" download="portrait-mouth.png">PNGをダウンロード</a><img id="export-image" alt="保存用の合成画像"></div>
     </section>
-    <footer>Version 0.4.2 — IMAGE PICKER HOTFIX · カメラは HTTPS / localhost で利用できます。</footer>
+    <footer>Version 0.6.0 — VIDEO RECORDING & SHARING · カメラは HTTPS / localhost で利用できます。</footer>
   </main>
+  <dialog id="record-result" aria-labelledby="record-result-title"><div class="panel-heading"><h2 id="record-result-title">録画済み動画 / ライブではありません</h2><button id="record-close" type="button">閉じる</button></div>
+    <video id="record-player" controls playsinline preload="metadata" aria-label="録画済み動画"></video><p id="record-result-info" class="help"></p>
+    <div class="record-result-actions"><button id="record-play" type="button">動画再生</button><button id="record-pause" type="button">動画停止</button><a id="record-download" class="button" download>動画保存</a><button id="record-share" type="button">共有</button><button id="record-retake" type="button">録り直し</button></div>
+    <p id="record-result-message" role="status" aria-live="polite"></p><p class="help">動画は端末内で作成します。共有が利用できなくても動画保存を使えます。「写真」への保存可否は端末と共有先により異なります。未保存の録画はページ再読み込みで失われます。</p>
+  </dialog>
   <dialog id="template-manager" aria-labelledby="template-title">
     <div class="panel-heading"><h2 id="template-title">テンプレート / 保存・読込</h2><button id="templates-close" type="button">閉じる</button></div>
     <p id="template-current"></p><p id="template-storage" class="help">保存機能を準備しています…</p>

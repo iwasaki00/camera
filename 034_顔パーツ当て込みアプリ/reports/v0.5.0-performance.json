@@ -1,0 +1,60 @@
+{
+  "conditions": {
+    "browser": "Windows Chrome headless",
+    "input": "640x480 NASA face canvas stream",
+    "output": "400x600",
+    "parts": 4,
+    "feather": 10,
+    "model": "actual local MediaPipe Face Landmarker CPU",
+    "tracking": true,
+    "texture": true,
+    "autoMatchRequested": true,
+    "background": "#a04030 (conservative target skin test may reject)",
+    "warmupSeconds": 1.5,
+    "sampleSeconds": 5,
+    "diagnosticsWindowSeconds": 5,
+    "order": "original,natural,natural,original"
+  },
+  "reports": [
+    {
+      "mode": "original",
+      "elapsedMs": 5000.5,
+      "drawFps": 29.997000299970004,
+      "detectionFps": 8.399160083991601,
+      "compositeAverageMs": 1.1,
+      "compositeMaxMs": 2.7,
+      "backend": "worker",
+      "diagnostic": "Portrait Face Parts Player v0.5.0\n計測窓: 直近5秒（現在5.0秒）\n描画fps: 30.0\n検出/秒: 8.4 / 完了42回\n推論ms 直近/平均/最大: 31.1 / 41.5 / 96.5\n合成ms 平均/最大（同じ計測窓）: 1.1 / 2.7\n最新結果の経過ms（入力フレーム基準）: 146.3\n最新採用の経過ms（650msで非表示）: 146.3\n採用成功率: 100.0%\n状態: 追従中 (tracking)\nWorker: worker\n映像: 640×480\n推論入力: 480×360\n検出間隔ms: 103.3"
+    },
+    {
+      "mode": "natural",
+      "elapsedMs": 5001.199999928474,
+      "drawFps": 29.79284971649423,
+      "detectionFps": 5.198752299522483,
+      "compositeAverageMs": 15.8,
+      "compositeMaxMs": 41,
+      "backend": "worker",
+      "diagnostic": "Portrait Face Parts Player v0.5.0\n計測窓: 直近5秒（現在5.0秒）\n描画fps: 29.8\n検出/秒: 5.2 / 完了26回\n推論ms 直近/平均/最大: 30.9 / 32.7 / 61.7\n合成ms 平均/最大（同じ計測窓）: 15.8 / 41.0\n最新結果の経過ms（入力フレーム基準）: 229.7\n最新採用の経過ms（650msで非表示）: 229.7\n採用成功率: 100.0%\n状態: 追従中 (tracking)\nWorker: worker\n映像: 640×480\n推論入力: 480×360\n検出間隔ms: 200.0"
+    },
+    {
+      "mode": "natural",
+      "elapsedMs": 5054.199999928474,
+      "drawFps": 29.084721618076117,
+      "detectionFps": 4.154960231153731,
+      "compositeAverageMs": 18.5,
+      "compositeMaxMs": 56.6,
+      "backend": "worker",
+      "diagnostic": "Portrait Face Parts Player v0.5.0\n計測窓: 直近5秒（現在5.0秒）\n描画fps: 29.0\n検出/秒: 4.0 / 完了20回\n推論ms 直近/平均/最大: 42.1 / 43.3 / 86.3\n合成ms 平均/最大（同じ計測窓）: 18.5 / 56.6\n最新結果の経過ms（入力フレーム基準）: 377.8\n最新採用の経過ms（650msで非表示）: 377.9\n採用成功率: 100.0%\n状態: 追従中 (tracking)\nWorker: worker\n映像: 640×480\n推論入力: 480×360\n検出間隔ms: 237.7"
+    },
+    {
+      "mode": "original",
+      "elapsedMs": 5000.899999976158,
+      "drawFps": 29.994600971968072,
+      "detectionFps": 7.198704233272337,
+      "compositeAverageMs": 1.8,
+      "compositeMaxMs": 5.3,
+      "backend": "worker",
+      "diagnostic": "Portrait Face Parts Player v0.5.0\n計測窓: 直近5秒（現在5.0秒）\n描画fps: 30.0\n検出/秒: 7.2 / 完了36回\n推論ms 直近/平均/最大: 59.2 / 57.8 / 91.7\n合成ms 平均/最大（同じ計測窓）: 1.8 / 5.3\n最新結果の経過ms（入力フレーム基準）: 134.6\n最新採用の経過ms（650msで非表示）: 134.6\n採用成功率: 100.0%\n状態: 追従中 (tracking)\nWorker: worker\n映像: 640×480\n推論入力: 480×360\n検出間隔ms: 111.1"
+    }
+  ]
+}

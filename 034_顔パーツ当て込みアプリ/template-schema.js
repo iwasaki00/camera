@@ -1,5 +1,6 @@
-import { DEFAULT_CORRECTION } from './tracking-geometry.js?v=0.4.2';
-export const SCHEMA_VERSION = 2;
+import { DEFAULT_CORRECTION } from './tracking-geometry.js?v=0.6.0';
+import { DEFAULT_COMPOSITE, defaultAppearance, validateAppearance, validateComposite } from './composite-color.js?v=0.6.0';
+export const SCHEMA_VERSION = 3;
 export const LIMITS = Object.freeze({ zip: 25 * 1024 * 1024, image: 20 * 1024 * 1024, json: 128 * 1024, thumbnail: 256 * 1024, edge: 2048, entries: 32 });
 export const newId = () => globalThis.crypto?.randomUUID?.() || `template-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const fail = message => { throw new Error(message); };
@@ -14,7 +15,7 @@ export function validName(value) {
 
 // Copy an explicit allowlist. No streams, camera canvases, image frames or view state can enter a document.
 export function validateDocument(input) {
-  if (!object(input) || ![1, SCHEMA_VERSION].includes(input.schemaVersion)) fail('対応していないテンプレート形式・スキーマバージョンです。');
+  if (!object(input) || ![1, 2, SCHEMA_VERSION].includes(input.schemaVersion)) fail('対応していないテンプレート形式・スキーマバージョンです。');
   const legacy=input.schemaVersion===1;
   if(!legacy && typeof input.trackingEnabled!=='boolean')fail('自動追従の設定が不正です。');
   if (!string(input.id, 100) || !/^[a-zA-Z0-9_-]+$/.test(input.id) || !date(input.createdAt) || !date(input.updatedAt) || input.updatedAt < input.createdAt) fail('テンプレートIDまたは日時が不正です。');
@@ -44,10 +45,12 @@ export function validateDocument(input) {
       || !number(tracking.widthScale,.5,3) || !number(tracking.heightScale,.5,3) || !number(tracking.rotation,-90,90))fail('自動追従の補正値が不正です。');
     return { id: p.id, partType: p.partType, enabled: p.enabled, targetRect: { x:t.x, y:t.y, width:t.width, height:t.height },
       sourceRect: { x:s.x, y:s.y, zoom:s.zoom }, rotation:p.rotation, shape:p.shape, feather:p.feather, zIndex:p.zIndex,
-      guides: { photo:guides.photo, camera:guides.camera }, tracking: {offsetX:tracking.offsetX,offsetY:tracking.offsetY,widthScale:tracking.widthScale,heightScale:tracking.heightScale,rotation:tracking.rotation} };
+      guides: { photo:guides.photo, camera:guides.camera }, tracking: {offsetX:tracking.offsetX,offsetY:tracking.offsetY,widthScale:tracking.widthScale,heightScale:tracking.heightScale,rotation:tracking.rotation},
+      appearance: input.schemaVersion < 3 ? defaultAppearance() : validateAppearance(p.appearance) };
   });
-  return { schemaVersion: SCHEMA_VERSION, appVersion: '0.4.2', id:input.id, name:validName(input.name), createdAt:input.createdAt, updatedAt:input.updatedAt,
-    background: { path:b.path, name:b.name, mime:b.mime, size:b.size, storedMime:b.storedMime, storedSize:b.storedSize, width:b.width, height:b.height }, parts, mirror:input.mirror, trackingEnabled:legacy?false:input.trackingEnabled };
+  return { schemaVersion: SCHEMA_VERSION, appVersion: '0.6.0', id:input.id, name:validName(input.name), createdAt:input.createdAt, updatedAt:input.updatedAt,
+    background: { path:b.path, name:b.name, mime:b.mime, size:b.size, storedMime:b.storedMime, storedSize:b.storedSize, width:b.width, height:b.height }, parts, mirror:input.mirror, trackingEnabled:legacy?false:input.trackingEnabled,
+    composite: input.schemaVersion < 3 ? {...DEFAULT_COMPOSITE} : validateComposite(input.composite) };
 }
 
 export const documentBytes = doc => new TextEncoder().encode(JSON.stringify(doc)).length;

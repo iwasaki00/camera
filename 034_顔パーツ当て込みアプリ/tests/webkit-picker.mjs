@@ -26,6 +26,11 @@ try {
   page.setDefaultTimeout(8000);
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   await page.waitForFunction(()=>document.body.dataset.appState==='ready');
+  if(process.argv.includes('--recording')) {
+    const {checkWebkitRecording}=await import('./webkit-recording.mjs');await checkWebkitRecording(page);
+  } else if(process.argv.includes('--composite')) {
+    const {checkWebkitColor}=await import('./webkit-color-check.mjs');await checkWebkitColor(page);
+  } else {
   const choose=async(selector,file,tap=false)=>{
     const event=page.waitForEvent('filechooser');
     if(tap)await page.locator(selector).tap();else await page.locator(selector).click();
@@ -52,4 +57,5 @@ try {
   await choose('#template-import-trigger',null);
   await page.locator('#zip-picker-help summary').click();await choose('#template-import-native',null);
   console.log('PASS: WebKit normal and fallback ZIP file choosers');
+  }
 }finally{await browser?.close();await new Promise(r=>server.close(r));}

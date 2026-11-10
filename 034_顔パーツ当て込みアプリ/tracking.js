@@ -1,8 +1,8 @@
-import { TrackingState, TRACKING_CONFIG } from './tracking-geometry.js?v=0.4.2';
+import { TrackingState, TRACKING_CONFIG } from './tracking-geometry.js?v=0.6.0';
 
 export class WorkerDetector {
   constructor(WorkerClass=Worker) {
-    this.worker=new WorkerClass(new URL('./tracking-worker.js?v=0.4.2',import.meta.url));
+    this.worker=new WorkerClass(new URL('./tracking-worker.js?v=0.6.0',import.meta.url));
     this.pending=new Map();this.id=0;this.backend='worker';this.closed=false;
     this.worker.onmessage=({data})=>{
       const request=this.pending.get(data.id);if(!request)return;
@@ -42,7 +42,7 @@ export async function createDetector(signal) {
     } catch(error){worker?.close();if(signal?.aborted)throw error;}
     finally{signal?.removeEventListener('abort',abort);}
   }
-  const {createFaceDetector}=await import('./face-detector.js?v=0.4.2');
+  const {createFaceDetector}=await import('./face-detector.js?v=0.6.0');
   const detector=await createFaceDetector();
   return {backend:'main',detect:(canvas,time)=>{const start=performance.now();return {landmarks:detector.detect(canvas,time),ms:performance.now()-start};},close:()=>detector.close()};
 }

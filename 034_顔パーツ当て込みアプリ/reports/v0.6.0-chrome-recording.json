@@ -1,0 +1,98 @@
+{
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+  "cases": [
+    {
+      "name": "original",
+      "file": "reports/v0.6.0-chrome-original.mp4",
+      "bytes": 76759,
+      "duration": 3.690933,
+      "videoCodec": "h264",
+      "audioCodec": null,
+      "width": 480,
+      "height": 720,
+      "frameRate": "285000/13841",
+      "uniqueFrames": 66,
+      "startOffset": null
+    },
+    {
+      "name": "natural-audio",
+      "file": "reports/v0.6.0-chrome-natural-audio.mp4",
+      "bytes": 86609,
+      "duration": 2.319433,
+      "videoCodec": "h264",
+      "audioCodec": "aac",
+      "width": 480,
+      "height": 720,
+      "frameRate": "1680000/69583",
+      "uniqueFrames": 55,
+      "startOffset": 0
+    },
+    {
+      "name": "comic-camera-stop",
+      "file": "reports/v0.6.0-chrome-comic-camera-stop.mp4",
+      "bytes": 45552,
+      "duration": 1.474333,
+      "videoCodec": "h264",
+      "audioCodec": null,
+      "width": 480,
+      "height": 720,
+      "frameRate": "108000/4423",
+      "uniqueFrames": 33,
+      "startOffset": null
+    },
+    {
+      "name": "auto-stop",
+      "file": "reports/v0.6.0-chrome-auto-stop.mp4",
+      "bytes": 430843,
+      "duration": 15.076567,
+      "videoCodec": "h264",
+      "audioCodec": null,
+      "width": 480,
+      "height": 720,
+      "frameRate": "5430000/225569",
+      "uniqueFrames": 332,
+      "startOffset": null
+    },
+    {
+      "name": "mic-denied-silent",
+      "file": "reports/v0.6.0-chrome-mic-denied-silent.mp4",
+      "bytes": 36403,
+      "duration": 1.37,
+      "videoCodec": "h264",
+      "audioCodec": null,
+      "width": 480,
+      "height": 720,
+      "frameRate": "3400/137",
+      "uniqueFrames": 34,
+      "startOffset": null
+    },
+    {
+      "name": "webm-fallback",
+      "file": "reports/v0.6.0-chrome-webm-fallback.webm",
+      "bytes": 37809,
+      "duration": 1.6466666666666667,
+      "videoCodec": "vp8",
+      "audioCodec": null,
+      "width": 480,
+      "height": 720,
+      "frameRate": "0/0",
+      "uniqueFrames": 40,
+      "startOffset": null
+    },
+    {
+      "name": "retake-pagehide",
+      "file": "reports/v0.6.0-chrome-retake-pagehide.mp4",
+      "bytes": 35066,
+      "duration": 1.424767,
+      "videoCodec": "h264",
+      "audioCodec": null,
+      "width": 480,
+      "height": 720,
+      "frameRate": "1050000/42743",
+      "uniqueFrames": 34,
+      "startOffset": null
+    }
+  ],
+  "heapBefore": 3936433,
+  "heapAfter": 2081517
+}

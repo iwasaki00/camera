@@ -1,0 +1,20 @@
+{
+    "browser":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+    "cases":  [
+                  {
+                      "name":  "60sec",
+                      "file":  "reports/v0.6.0-chrome-60sec.mp4",
+                      "bytes":  1699360,
+                      "duration":  60.0545,
+                      "videoCodec":  "h264",
+                      "audioCodec":  null,
+                      "width":  480,
+                      "height":  720,
+                      "frameRate":  "10815000/449257",
+                      "uniqueFrames":  1428,
+                      "startOffset":  null
+                  }
+              ],
+    "heapBefore":  2506492,
+    "heapAfter":  2178600
+}
