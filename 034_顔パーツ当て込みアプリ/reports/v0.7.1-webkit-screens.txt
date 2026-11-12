@@ -1,0 +1,6 @@
+PASS WEBKIT SCREEN: native image chooser and rendering in reorganized screen
+PASS WEBKIT REFINEMENT: initial magnifier storage and real touch show/store
+PASS WEBKIT REFINEMENT: touch focus and return to the previous whole-image view
+PASS WEBKIT SCREEN: three tabs retain canvas and fit 375/390px
+PASS WEBKIT SCREEN: 200% editing after tab restore; finished guide exclusion preserves guide preference
+PASS WEBKIT SCREEN: bounded settings, live mode status and landscape layout

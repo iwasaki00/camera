@@ -1,0 +1,4 @@
+PASS WEBKIT COLOR: four-part Canvas ORIGINAL/NATURAL/COMIC; return to ORIGINAL has identical pixels
+PASS WEBKIT COLOR: native controls and independent selected-part correction
+PASS WEBKIT COLOR: keyboard hold/release comparison
+PASS WEBKIT COLOR: 375px/390px expanded correction controls fit

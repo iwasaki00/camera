@@ -1,4 +1,4 @@
-import { LANDMARK_GROUPS } from './face-landmarks.js?v=0.7.0';
+import { LANDMARK_GROUPS } from './face-landmarks.js?v=0.7.1';
 
 export const DEFAULT_CORRECTION = Object.freeze({ offsetX: 0, offsetY: 0, widthScale: 1, heightScale: 1, rotation: 0 });
 export const TRACKING_CONFIG = Object.freeze({

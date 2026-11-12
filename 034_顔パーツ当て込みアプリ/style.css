@@ -210,3 +210,43 @@ select { font-size: 16px; max-width: 100%; }
   .settings-body { max-height: 200px; }
 }
 @media (min-width: 761px) { :root { --preview-height: clamp(280px,60dvh,600px); } }
+
+/* v0.7.1: the same layout, with clearer controls and unobstructed camera input. */
+:root { --ink: #193732; --muted: #536c64; --line: #d9e5df; }
+button, .button { min-width: 44px; min-height: 44px; border-radius: 10px; line-height: 1.25; }
+button:disabled, .file-picker[aria-disabled=true] { opacity: .42; filter: saturate(.25); }
+.part-tabs button[aria-pressed=true] { background: #d9f3eb; border: 2px solid var(--accent); box-shadow: inset 0 -3px 0 var(--accent); }
+.part-tabs button[data-exists=false] { background: #f7faf8; color: var(--muted); }
+.slider-label output, .view-tools output, .quick-controls output, .composite-bar output { text-align: right; min-width: 34px; font-variant-numeric: tabular-nums; }
+input[type=range] { appearance: none; -webkit-appearance: none; background: transparent; touch-action: pan-y; border: 0; padding: 0; }
+input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: #c6dcd1; }
+input[type=range]::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 22px; height: 22px; margin-top: -9px; border-radius: 50%; border: 2px solid white; background: var(--accent); box-shadow: 0 0 0 1px #a0c4b6; }
+input[type=range]::-moz-range-track { height: 4px; border-radius: 4px; background: #c6dcd1; }
+input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; border: 2px solid white; background: var(--accent); }
+input[type=range]:disabled { opacity: .4; }
+.view-tools { gap: 4px; }
+.view-tools input[type=range] { min-width: 32px; }
+.view-tools button { flex: 0 0 44px; font-size: 12px; }
+.view-tools .toggle { min-width: 44px; }
+.view-tools .toggle:has(input:checked) { color: var(--accent); }
+#photo-view-focus[aria-pressed=true], #camera-view-focus[aria-pressed=true] { border-color: var(--accent); background: #e1f4ed; }
+.camera-panel > .tracking-bar { position: static; height: 44px; width: 100%; max-width: 100%; padding: 0 2px; border-radius: 0; background: transparent; }
+.camera-stage { height: calc(var(--preview-height) - 44px); }
+#finished-mode-host { width: 126px; flex: 0 0 126px; }
+#finished-mode-host select { width: 100%; min-width: 0; min-height: 44px; padding: 4px; font-size: 16px; border-color: var(--accent); }
+.preview-panel[data-screen=finished] #interaction-mode,
+.preview-panel[data-screen=finished] .part-bar,
+.preview-panel[data-screen=finished] #settings-parts,
+.preview-panel[data-screen=finished] #settings-camera,
+.preview-panel[data-screen=finished] #photo-panel .view-tools .toggle { display: none; }
+.preview-panel[data-screen=finished] .workspace { height: calc(var(--preview-height) + 90px); }
+.preview-panel[data-screen=finished] .stage { height: calc(var(--preview-height) + 44px); }
+#record-start.primary { background: #ad293c; border-color: #ad293c; color: white; }
+#record-stop:not(:disabled) { font-weight: 750; background: #ad293c; border-color: #ad293c; }
+#recording-panel[data-recording-state=recording] #record-elapsed { font-size: 18px; color: #ad293c; }
+#recording-panel[data-has-result=true] #record-open { order: -1; }
+#recording-panel[data-unsaved=true] { border-radius: 8px; box-shadow: inset 3px 0 #b67c10; padding-left: 7px; background: #fffbef; }
+#recording-panel[data-unsaved=true] #record-status { color: #805509; font-weight: 600; }
+.settings-body > details > summary { font-weight: 650; color: #244b43; }
+.magnifier-heading { background: #163a33; }
+.view-tools button, .view-tools .toggle, .tracking-bar .toggle { touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }

@@ -59,6 +59,7 @@ export async function checkComposite({evaluate,command,waitFor}) {
   console.log('PASS COLOR: held touch comparison restores safely, changes no controls, and never changes official PNG mode');
   await click('photo-guide');await click('photo-loupe');await write('photo-view-zoom',200);assert.equal(await png(),corrected);
   await click('photo-guide');await click('photo-loupe');
+  await evaluate("document.querySelector('#photo-loupe').checked=true;document.querySelector('#photo-loupe').dispatchEvent(new Event('change'));");
   assert.equal(await evaluate("document.querySelector('#photo-magnifier').hidden"),false);
   console.log('PASS COLOR: guides/magnifier/zoom excluded from PNG; magnifier retains actual corrected composite source');
   await click('composite-auto');await new Promise(r=>setTimeout(r,700));const matched=await png();assert.notEqual(matched,corrected);

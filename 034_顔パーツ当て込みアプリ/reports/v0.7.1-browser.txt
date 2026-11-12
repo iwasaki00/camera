@@ -1,0 +1,50 @@
+PASS: empty state and 390x844 layout
+PASS: detail controls start collapsed and expand only on demand
+PASS: invalid image reports an error without enabling export
+PASS: real touch drag, resize, rotation, no scroll jump, and cancellation recovery
+PASS: camera touch move/resize, mirror on/off coordinates, display mode
+PASS: image decode/draw, fake camera start, adjustment controls and mirror
+PASS: independent zoom/pan/reset, pan/view mode isolation, unchanged model and PNG pixels
+PASS: six two-finger pinch cases across all modes; no crop mutation or one-finger jump
+PASS: adding a second finger rolls back the initial edit before pinching
+PASS: photo and camera edit deltas at 100/200/400%, with rotated photo frame
+PASS: independently hidden guides cannot edit; pinch remains available
+PASS: magnifier movement/toggle/2–5x controls, center tracking, and view-independent raster/PNG
+PASS MULTI: four distinct source crops, unique additions, simultaneous composite, and selection persistence
+PASS MULTI: independent target/source/rotation/feather, enable toggle, delete and fresh re-add
+PASS MULTI: per-part guide visibility persists separately from compositing and camera guides
+PASS MULTI: anatomical eye identity under mirror and both magnifiers follow the selected part
+PASS MULTI: front/back order is visible in pixels; overlapping non-selected parts cannot be edited
+PASS MULTI: zoomed eye edit, independent multi-part coordinates, all-parts PNG and guide/view exclusion
+PASS MULTI: deleting all parts is safe; the four parts can be recreated
+PASS MULTI: all four configurations survive camera stop and restart
+PASS: PNG signature, guide excluded from PNG, camera tracks stopped, no runtime errors
+PASS: camera stop/restart preserves working view and edit gestures
+PASS TEMPLATE: new save with four independent parts, mirror and guide settings
+PASS TEMPLATE: stored background and thumbnail exclude live camera; original file metadata and capacity shown
+PASS TEMPLATE: overwrite retains ID/creation date; save-as creates an independent record
+PASS TEMPLATE: rename, duplicate, delete confirmation cancellation and deletion
+PASS TEMPLATE: unsaved-change cancel/accept, full restoration, manual camera restart, identical PNG output
+PASS TEMPLATE: deleted-part state is restored without recreating the missing part
+PASS TEMPLATE: ZIP export/import roundtrip restores data as a new unsaved draft, then explicitly saves
+PASS TEMPLATE: invalid ZIP and truncated real image are rejected before applying or changing saved data
+PASS TEMPLATE: simulated quota failure aborts overwrite and preserves every existing record
+PASS TEMPLATE: page reload preserves IndexedDB records, background bytes and all saved settings
+PASS TEMPLATE: unavailable IndexedDB leaves editor and ZIP export usable; saved records remain intact
+PASS REAL MODEL: local VIDEO-mode Worker/WASM inference detects the face and enables live tracking
+PASS SCREEN TRACKING: tab switches preserve active real-model inference and the camera stream
+PASS DIAGNOSTICS: live rolling values, both resolutions, copy and denied-copy fallback; no display updates when OFF
+PASS REAL MODEL: four landmark crops, anatomical eye identity, translation, scale and roll on transformed image input
+PASS COLOR TRACKING: NATURAL corrections enabled alongside actual four-part face tracking
+PASS TRACKING UI: independent corrections, protected manual sources, compact layout and zoom/pan separation
+PASS TRACKING UI: magnifiers follow selected tracked parts; PNG contains all active crops and no UI
+PERF REAL MODEL (desktop Chromium / 4 parts / worker): {"drawFps":30.1,"detectionFps":4.9,"timing":""}
+PASS REAL MODEL: face loss hides expired composition/PNG crops and reacquisition resumes safely
+PASS TRACKING TEMPLATE: schema 3 ZIP retains natural mode, auto preference, per-part correction and manual sources; loading starts no camera/model
+PASS STABILITY: simulated Worker error during real tracking returns to manual; tracking can be started again
+PASS REAL MODEL: camera stop and explicit restart maintain configuration and restart inference
+PERF REAL MODEL (desktop Chromium / 4 parts / main fallback): {"drawFps":29.5,"detectionFps":4.4,"timing":""}
+PASS REAL MODEL: unavailable Worker uses actual main-thread inference at reduced input size/frequency
+PASS TRACKING UI: model-load failure returns to preserved manual settings; page resources are all same-origin
+PASS TRACKING TEMPLATE: actual v0.3.0 schema 1 ZIP restores manual mode and original settings
+PASS: camera permission denial is shown and controls recover

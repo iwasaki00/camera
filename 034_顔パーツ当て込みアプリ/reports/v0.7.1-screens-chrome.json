@@ -1,0 +1,51 @@
+{
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+  "groups": 16,
+  "recordings": [
+    {
+      "startTab": "photo",
+      "width": 400,
+      "height": 600,
+      "duration": 1.267167
+    },
+    {
+      "startTab": "camera",
+      "width": 400,
+      "height": 600,
+      "duration": 1.240833
+    },
+    {
+      "startTab": "finished",
+      "width": 400,
+      "height": 600,
+      "duration": 1.218433
+    }
+  ],
+  "layouts": [
+    {
+      "width": 375,
+      "height": 812,
+      "pageHeight": 861
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "pageHeight": 893
+    },
+    {
+      "width": 844,
+      "height": 390,
+      "pageHeight": 709
+    },
+    {
+      "width": 375,
+      "height": 568,
+      "pageHeight": 639
+    },
+    {
+      "width": 1280,
+      "height": 900,
+      "pageHeight": 973
+    }
+  ]
+}

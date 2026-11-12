@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#172c2b">
   <title>顔パーツ当て込みアプリ / Portrait Face Parts Player</title>
-  <link rel="stylesheet" href="style.css?v=0.7.0">
+  <link rel="stylesheet" href="style.css?v=0.7.1">
   <script type="module">
-    import('./app.js?v=0.7.0').catch(error => {
+    import('./app.js?v=0.7.1').catch(error => {
       const status = document.getElementById('status');
       document.body.dataset.appState = 'error';
       for (const input of document.querySelectorAll('input[type="file"]')) input.disabled = true;
@@ -21,7 +21,7 @@
 </head>
 <body data-app-state="initializing">
   <main>
-    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.7.0</span></p><div class="title-row"><h1>顔パーツ当て込みアプリ</h1><button id="templates-open" type="button">保存・読込</button></div></header>
+    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.7.1</span></p><div class="title-row"><h1>顔パーツ当て込みアプリ</h1><button id="templates-open" type="button">保存・読込</button></div></header>
     <section class="preview-panel" aria-labelledby="preview-title">
       <div class="panel-heading"><h2 id="preview-title">絵画側 / <span id="selected-part-name">口</span></h2><select id="interaction-mode" aria-label="操作モード"><option value="edit">枠を編集</option><option value="pan">画像を移動</option><option value="view">鑑賞</option></select></div>
       <div class="part-bar" aria-label="顔パーツの追加と選択">
@@ -34,7 +34,7 @@
           <div class="view-tools" aria-label="絵画側の表示設定">
             <input id="photo-view-zoom" type="range" min="50" max="400" value="100" aria-label="絵画側の表示倍率"><output id="photo-view-value">100%</output>
             <button id="photo-view-reset" aria-label="絵画側の倍率と表示位置をリセット">戻す</button>
-            <label class="toggle"><input id="photo-guide" type="checkbox" checked>枠</label><label class="toggle"><input id="photo-loupe" type="checkbox" checked>拡大鏡</label>
+            <label class="toggle"><input id="photo-guide" type="checkbox" checked>枠</label><label class="toggle"><input id="photo-loupe" type="checkbox">拡大鏡</label>
           </div>
           <div class="actions">
             <div id="image-trigger" class="button primary file-picker" aria-disabled="true"><span aria-hidden="true">画像を読み込む</span><input id="image-file" class="file-input" type="file" accept="image/*" aria-label="画像を読み込む" aria-describedby="status" disabled></div>
@@ -76,7 +76,7 @@
           <div class="view-tools" aria-label="カメラ側の表示設定">
             <input id="camera-view-zoom" type="range" min="100" max="400" value="100" aria-label="カメラ側の表示倍率"><output id="camera-view-value">100%</output>
             <button id="camera-view-reset" aria-label="カメラ側の倍率と表示位置をリセット">戻す</button>
-            <label class="toggle"><input id="camera-guide" type="checkbox" checked>枠</label><label class="toggle"><input id="camera-loupe" type="checkbox" checked>拡大鏡</label>
+            <label class="toggle"><input id="camera-guide" type="checkbox" checked>枠</label><label class="toggle"><input id="camera-loupe" type="checkbox">拡大鏡</label>
           </div>
           <p id="eye-convention" class="help">左右は映る本人基準。反転ON：本人の左目は画面左。</p>
           <details id="tracking-settings"><summary>追従の補正 / <span id="tracking-part-name">口</span></summary><p class="help">自動中は補正で調整します。手動に戻すと枠を直接編集できます。位置は反転前の部位基準で、幅・高さに対する割合です。</p><div id="tracking-controls"></div><button id="tracking-correction-reset" type="button">このパーツの補正を戻す</button><p id="tracking-metrics" class="help"></p></details>
@@ -94,7 +94,7 @@
       </details>
       <div id="export-result" hidden><p>PNGを作成しました。画像を長押しして保存することもできます。</p><a id="download" class="button" download="portrait-mouth.png">PNGをダウンロード</a><img id="export-image" alt="保存用の合成画像"></div>
     </section>
-    <footer>Version 0.7.0 — SCREEN REORGANIZATION · カメラは HTTPS / localhost で利用できます。</footer>
+    <footer>Version 0.7.1 — VISUAL & TOUCH REFINEMENT · カメラは HTTPS / localhost で利用できます。</footer>
   </main>
   <dialog id="record-result" aria-labelledby="record-result-title"><div class="panel-heading"><h2 id="record-result-title">録画済み動画 / ライブではありません</h2><button id="record-close" type="button">閉じる</button></div>
     <p id="record-temporary" class="help">この動画は一時データです。再読み込みで失われます。保存先で再生を確認してください。</p>

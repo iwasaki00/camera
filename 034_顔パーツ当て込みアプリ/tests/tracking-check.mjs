@@ -79,6 +79,7 @@ export async function checkTracking({evaluate,command,waitFor}) {
   // PNG contains pixels from all four parts, while guides and magnifiers remain separate canvases.
   assert.equal(await evaluate(`(async()=>{const img=document.querySelector('#export-image');await img.decode();const c=document.createElement('canvas');c.width=400;c.height=600;c.getContext('2d').drawImage(img,0,0);
     return [[100,150],[300,150],[100,450],[300,450]].every(([x,y])=>{const p=c.getContext('2d').getImageData(x,y,1,1).data;return !(p[0]===160&&p[1]===64&&p[2]===48)});})()`),true);
+  await evaluate("document.querySelector('#camera-loupe').checked=true;document.querySelector('#camera-loupe').dispatchEvent(new Event('change'));");
   assert.equal(await evaluate("document.querySelector('#camera-magnifier').hidden"),false);
   await click('select-leftEye');assert.equal(await evaluate("document.querySelector('#camera-magnifier .magnifier-heading span').textContent"),'左目');
   console.log('PASS TRACKING UI: magnifiers follow selected tracked parts; PNG contains all active crops and no UI');

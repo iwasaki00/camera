@@ -1,5 +1,5 @@
-import { DEFAULT_CORRECTION } from './tracking-geometry.js?v=0.7.0';
-import { defaultAppearance } from './composite-color.js?v=0.7.0';
+import { DEFAULT_CORRECTION } from './tracking-geometry.js?v=0.7.1';
+import { defaultAppearance } from './composite-color.js?v=0.7.1';
 export const PART_TYPES = Object.freeze({ mouth: '口', leftEye: '左目', rightEye: '右目', nose: '鼻' });
 const defaults = {
   mouth: { width: 24, height: 10, x: .5, y: .65, zoom: 1.5 },

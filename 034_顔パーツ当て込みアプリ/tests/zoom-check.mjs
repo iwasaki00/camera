@@ -105,10 +105,11 @@ export async function checkZoom({ evaluate, command, touchDrag, waitFor }) {
     assert.equal(await evaluate(`document.querySelector('#${id}-magnifier').hidden`),false);
     assert.equal(await evaluate(`document.querySelector('#${id}-magnifier select').value`),'3');
     const rect=await evaluate(`(() =>{const r=document.querySelector('#${id}-magnifier').getBoundingClientRect();return{x:r.left+12,y:r.top+14,left:r.left,top:r.top};})()`);
-    const dx=id==='photo'?-18:18;
-    await touchDrag(rect,{x:rect.x+dx,y:rect.y+12});
+    const stageRect=await evaluate(`(()=>{const r=document.querySelector('#${id}-magnifier').parentElement.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+    const dx=rect.x>stageRect.x?-18:18,dy=rect.y>stageRect.y?-12:12;
+    await touchDrag(rect,{x:rect.x+dx,y:rect.y+dy});
     const moved=await evaluate(`(() =>{const r=document.querySelector('#${id}-magnifier').getBoundingClientRect();return{left:r.left,top:r.top};})()`);
-    assert.ok(Math.abs(moved.left-rect.left-dx)<1); assert.ok(Math.abs(moved.top-rect.top-12)<1);
+    assert.ok(Math.abs(moved.left-rect.left-dx)<1); assert.ok(Math.abs(moved.top-rect.top-dy)<1);
     const before=await evaluate(`document.querySelector('#${id}-magnifier canvas').toDataURL()`);
     await evaluate(`(() =>{const el=document.querySelector('#${id}-magnifier select');el.value='2';el.dispatchEvent(new Event('change'));})()`);
     assert.equal(await evaluate(`document.querySelector('#${id}-magnifier select').value`),'2');

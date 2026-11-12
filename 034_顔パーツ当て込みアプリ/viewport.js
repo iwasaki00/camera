@@ -1,4 +1,4 @@
-import { clamp } from './renderer.js?v=0.7.0';
+import { clamp } from './renderer.js?v=0.7.1';
 
 // All view transforms use CSS pixels; model coordinates remain unchanged.
 export const toContent = (point, view, origin) => ({ x: (point.x - origin.x - view.x) / view.scale, y: (point.y - origin.y - view.y) / view.scale });
@@ -22,7 +22,8 @@ export class Viewport {
       origin: { x: rect.left - parent.left - this.view.x, y: rect.top - parent.top - this.view.y },
       surface: { width: parent.width, height: parent.height } };
   }
-  set(next) {
+  set(next, { preserveReturn = false } = {}) {
+    if (!preserveReturn) this.returnView = null;
     this.view = { ...next, scale: clamp(next.scale, this.min, this.max) };
     this.target.style.transform = `translate(${this.view.x}px, ${this.view.y}px) scale(${this.view.scale})`;
     this.changed();
@@ -33,4 +34,16 @@ export class Viewport {
     this.set(zoomAt(this.view, origin, point, point, clamp(scale, this.min, this.max)));
   }
   reset() { this.set({ scale: 1, x: 0, y: 0 }); }
+  focus(box) {
+    if (!box || ![box.x,box.y,box.width,box.height].every(Number.isFinite) || box.width<=0 || box.height<=0) return false;
+    const {origin,surface}=this.geometry();
+    if (!surface.width || !surface.height) return false;
+    this.returnView ??= {...this.view};
+    const angle=box.angle||0,c=Math.abs(Math.cos(angle)),s=Math.abs(Math.sin(angle));
+    const width=c*box.width+s*box.height,height=s*box.width+c*box.height;
+    const scale=clamp(Math.min(surface.width*.6/width,surface.height*.6/height),Math.max(1.5,this.min),this.max);
+    this.set({scale,x:surface.width/2-origin.x-box.x*scale,y:surface.height/2-origin.y-box.y*scale},{preserveReturn:true});
+    return true;
+  }
+  restore() { if(this.returnView)this.set(this.returnView); }
 }

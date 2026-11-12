@@ -1,0 +1,10 @@
+PASS COLOR: ORIGINAL RGBA equals frozen old renderer for four parts, both shapes, mirror and rotation
+PASS COLOR: three modes, ORIGINAL-compatible zero global strength, and corrected PNG
+PASS COLOR: selected-part and per-mode settings retain independent manual corrections
+PASS COLOR: held touch comparison restores safely, changes no controls, and never changes official PNG mode
+PASS COLOR: guides/magnifier/zoom excluded from PNG; magnifier retains actual corrected composite source
+PASS COLOR: automatic matching ON/OFF, stable grain and texture bypass
+PASS COLOR: shape/Feather masks and camera stop/restart preserve color configuration
+PASS COLOR: IndexedDB and ZIP retain all four mode settings; same-source restored PNG pixels match
+PASS COLOR: reload and actual IndexedDB load restore correction controls
+PASS COLOR: 375px and 390px collapsed/expanded UI fits with 44px comparison target

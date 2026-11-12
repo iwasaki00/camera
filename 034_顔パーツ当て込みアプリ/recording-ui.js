@@ -1,4 +1,4 @@
-import {shareableRecording} from './recording.js?v=0.7.0';
+import {shareableRecording} from './recording.js?v=0.7.1';
 const $=id=>document.getElementById(id);
 const names={idle:'待機',initializing:'初期化中',recording:'録画中',stopping:'録画終了処理中',completed:'録画完了',error:'エラー'};
 export class RecordingUI {

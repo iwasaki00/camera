@@ -1,0 +1,14 @@
+AUDIT: {"status":"画像を読み込み、枠を直接動かして合わせてください。2本指で表示を拡大できます。","disabled":false,"trigger":"DIV","inputWidth":83,"inputHeight":44,"css":"style.css?v=0.7.1"}
+PASS: initialized input; real click activates chooser; cancellation returns safely
+PASS: real touch taps at center and lower-right edge activate native chooser
+PASS: chooser selection decodes and displays image/png
+PASS: chooser selection decodes and displays image/jpeg
+PASS: same image reselection and cancel/reopen preserve image
+PASS: invalid image and unsupported type report distinct errors; previous image retained
+PASS: visible native fallback uses normal image loader
+PASS: native input keyboard activation
+PASS: valid ZIP chosen through real chooser restores background
+PASS: ZIP chooser, cancellation, import validation and native fallback
+PASS: full-size input owns hit target; mobile layout fits
+PASS: initialization failure explains disabled inputs
+PASS: reload recovers initialization

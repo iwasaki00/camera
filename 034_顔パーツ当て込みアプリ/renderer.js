@@ -1,5 +1,5 @@
-import { orderedParts, sourceForDisplay } from './parts.js?v=0.7.0';
-import { activeCorrection, ColorProcessor } from './composite-color.js?v=0.7.0';
+import { orderedParts, sourceForDisplay } from './parts.js?v=0.7.1';
+import { activeCorrection, ColorProcessor } from './composite-color.js?v=0.7.1';
 
 export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 

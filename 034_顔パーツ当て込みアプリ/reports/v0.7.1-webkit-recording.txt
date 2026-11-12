@@ -1,0 +1,2 @@
+WEBKIT RECORDING SUPPORT {"recorder":"undefined","capture":"undefined","types":[]}
+PASS WEBKIT: unsupported recording is explained; 375px/390px layouts fit (real recording unavailable)

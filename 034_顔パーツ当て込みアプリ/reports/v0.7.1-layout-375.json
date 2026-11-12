@@ -1,0 +1,54 @@
+{
+  "empty": {
+    "width": 375,
+    "height": 844,
+    "pageHeight": 877,
+    "photo": {
+      "top": 199,
+      "height": 434,
+      "width": 337
+    },
+    "camera": {
+      "top": 243,
+      "height": 390,
+      "width": 337
+    },
+    "image": {
+      "top": 708.390625,
+      "height": 46,
+      "width": 81.25
+    },
+    "record": {
+      "top": 762.390625,
+      "height": 44,
+      "width": 165.5
+    },
+    "settings": false
+  },
+  "loaded": {
+    "width": 375,
+    "height": 844,
+    "pageHeight": 877,
+    "photo": {
+      "top": 199,
+      "height": 434,
+      "width": 337
+    },
+    "camera": {
+      "top": 243,
+      "height": 390,
+      "width": 337
+    },
+    "image": {
+      "top": 708.390625,
+      "height": 46,
+      "width": 81.25
+    },
+    "record": {
+      "top": 762.390625,
+      "height": 44,
+      "width": 165.5
+    },
+    "settings": false
+  }
+}

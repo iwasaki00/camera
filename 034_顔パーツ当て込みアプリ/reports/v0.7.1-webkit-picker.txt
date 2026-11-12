@@ -1,0 +1,5 @@
+PASS: WebKit 375px real tap → filechooser → PNG displayed
+PASS: WebKit 390px real tap → filechooser → PNG displayed
+PASS: WebKit cancellation and same-image reselection
+PASS: WebKit native fallback
+PASS: WebKit normal and fallback ZIP file choosers

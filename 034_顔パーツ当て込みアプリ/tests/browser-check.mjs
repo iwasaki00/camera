@@ -37,7 +37,7 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const profile = await mkdtemp(path.join(tmpdir(), 'portrait-browser-'));
 const browser = spawn(process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', [
   '--headless=new', '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=0',
-  ...(process.argv.includes('--recording')?['--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']:[]),
+  ...(process.argv.includes('--recording')||process.argv.includes('--screens')?['--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']:[]),
   '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', `--user-data-dir=${profile}`, 'about:blank'
 ], { stdio: ['ignore', 'ignore', 'pipe'] });
 let socket;
@@ -91,8 +91,11 @@ try {
     const report={empty,loaded};console.log(JSON.stringify(report,null,2));
     if(process.env.LAYOUT_REPORT)await writeFile(process.env.LAYOUT_REPORT,JSON.stringify(report,null,2)+'\n');
   } else if(process.argv.includes('--screens')) {
+    await command('Emulation.setFocusEmulationEnabled',{enabled:true});
+    await command('Page.bringToFront');
+    await command('Page.setInterceptFileChooserDialog',{enabled:true});
     await waitFor("document.body?.dataset.appState==='ready'");
-    const {checkScreens}=await import('./screens-check.mjs');await checkScreens({evaluate,command,waitFor});assert.deepEqual(errors,[]);
+    const {checkScreens}=await import('./screens-check.mjs');await checkScreens({evaluate,command,waitFor});assert.deepEqual(errors,[]);assert.deepEqual(choosers,[]);
   } else if(process.env.PICKER_AUDIT==='1'||process.env.PICKER_ONLY==='1'||process.argv.includes('--picker')) {
     const {checkPicker}=await import('./picker-check.mjs');
     await checkPicker({evaluate,command,waitFor,choosers,profile,audit:process.env.PICKER_AUDIT==='1'});

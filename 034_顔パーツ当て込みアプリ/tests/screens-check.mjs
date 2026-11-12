@@ -21,6 +21,7 @@ export async function checkScreens({evaluate,command,waitFor}) {
     document.querySelector('#start').click();
   })()`);
   await waitFor("document.querySelector('#camera').readyState>=2&&!document.querySelector('#save').disabled");
+  const {checkRefinement}=await import('./touch-refinement-check.mjs');count+=await checkRefinement({evaluate,command,waitFor,drag});
   await evaluate("window.originalStream=document.querySelector('#camera').srcObject;window.originalCanvas=document.querySelector('#composition');window.originalVideo=document.querySelector('#camera');");
   const before=await values();const initialScroll=await evaluate('scrollY');
   const templateLabel=await evaluate("document.querySelector('#templates-open').textContent");
@@ -77,18 +78,30 @@ export async function checkScreens({evaluate,command,waitFor}) {
     await evaluate("document.querySelector('#record-stop').click()");
     await waitFor("document.querySelector('#record-result').open");
     await waitFor("document.querySelector('#record-player').readyState>=2");
+    await waitFor("document.querySelector('#recording-panel').dataset.unsaved==='true'");
+    assert.equal(await evaluate("document.querySelector('#record-open').classList.contains('primary')&&!document.querySelector('#record-start').classList.contains('primary')"),true);
     const info=await evaluate(`(()=>{const v=document.querySelector('#record-player');return{width:v.videoWidth,height:v.videoHeight,duration:v.duration,mime:v.currentSrc};})()`);
     assert.ok(info.width>0&&info.height>0);
     // Decode two real recorded frames, rather than relying on recorder mocks.
     const frameAt=async time=>evaluate(`(async()=>{const v=document.querySelector('#record-player');await new Promise(r=>{v.addEventListener('seeked',r,{once:true});v.currentTime=${time};});const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);return c.toDataURL();})()`);
     assert.notEqual(await frameAt(.1),await frameAt(.8));
     recordings.push({startTab,width:info.width,height:info.height,duration:Number.isFinite(info.duration)?info.duration:'stream duration unknown'});
+    if(startTab==='finished'){
+      await evaluate("document.querySelector('#record-close').click()");
+      const label=(process.env.CHROME_PATH||'').includes('Edge')?'edge':'chrome';
+      const shot=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:true});await writeFile(`reports/v0.7.1-unsaved-${label}.png`,Buffer.from(shot.data,'base64'));
+      await evaluate("document.querySelector('#record-open').click()");
+    }
     await evaluate("document.querySelector('#record-acknowledge').click();document.querySelector('#record-close').click()");
   }
   pass('three actual recordings start from all tabs and keep moving during tab changes; decoded frames differ');
   await evaluate("document.querySelector('#camera').pause();clearInterval(feedTimer)");
   await tab('photo');await evaluate("document.querySelector('#save').click()");await waitFor("!document.querySelector('#save').disabled");
   const png=await evaluate("(async()=>{const image=document.querySelector('#export-image');await image.decode();const c=document.createElement('canvas');c.width=image.naturalWidth;c.height=image.naturalHeight;c.getContext('2d').drawImage(image,0,0);return c.toDataURL();})()");
+  await evaluate("document.querySelector('#photo-view-focus').click();document.querySelector('#save').click()");await waitFor("!document.querySelector('#save').disabled");
+  assert.equal(await evaluate("(async()=>{const image=document.querySelector('#export-image');await image.decode();const c=document.createElement('canvas');c.width=image.naturalWidth;c.height=image.naturalHeight;c.getContext('2d').drawImage(image,0,0);return c.toDataURL();})()"),png);
+  await evaluate("document.querySelector('#photo-view-reset').click()");
+  pass('focus preset leaves every saved PNG pixel unchanged');
   await tab('finished');await evaluate("document.querySelector('#save').click()");await waitFor("!document.querySelector('#save').disabled");
   assert.equal(await evaluate("(async()=>{const image=document.querySelector('#export-image');await image.decode();const c=document.createElement('canvas');c.width=image.naturalWidth;c.height=image.naturalHeight;c.getContext('2d').drawImage(image,0,0);return c.toDataURL();})()"),png);
   pass('finished PNG matches editing-tab PNG exactly and excludes presentation UI');
@@ -100,7 +113,7 @@ export async function checkScreens({evaluate,command,waitFor}) {
     for(const id of ['photo','camera','finished']){
       await tab(id);
       assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true,`${width}x${height}/${id} overflow`);
-      assert.equal(await evaluate("[...document.querySelectorAll('.screen-tabs button,#basic-bar button:not([hidden]),#image-trigger')].filter(e=>!e.hidden).every(e=>e.getBoundingClientRect().height>=44)"),true);
+      assert.equal(await evaluate("[...document.querySelectorAll('.screen-tabs button,.part-tabs button,#basic-bar button:not([hidden]),#image-trigger,.view-tools button,.view-tools .toggle,#finished-mode-host select,#interaction-mode')].filter(e=>!e.hidden&&e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden').every(e=>{const r=e.getBoundingClientRect();return r.height>=44&&r.width>=44;})"),true);
     }
     await tab('photo');await evaluate("document.querySelector('#photo-loupe').checked=false;document.querySelector('#photo-loupe').dispatchEvent(new Event('change'));document.querySelector('.stage').scrollIntoView({block:'center',behavior:'instant'})");
     const p=await evaluate("(()=>{const r=document.querySelector('#composition').getBoundingClientRect();const v=id=>Number(document.querySelector(id).value);return{x:r.x+r.width*v('#part-x')/100,y:r.y+r.height*v('#part-y')/100,w:r.width,before:v('#part-x')};})()");
@@ -112,6 +125,10 @@ export async function checkScreens({evaluate,command,waitFor}) {
   await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await tab('photo');await evaluate('window.scrollTo(0,0)');
   const label=(process.env.CHROME_PATH||'').includes('Edge')?'edge':'chrome';
   const browser=await evaluate('navigator.userAgent');
-  const {data}=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:true});await writeFile(`reports/v0.7.0-screen-${label}.png`,Buffer.from(data,'base64'));
-  await writeFile(`reports/v0.7.0-screens-${label}.json`,JSON.stringify({browser,groups:count,recordings,layouts},null,2)+'\n');
+  const {data}=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:true});await writeFile(`reports/v0.7.1-screen-${label}.png`,Buffer.from(data,'base64'));
+  for(const id of ['camera','finished']){
+    await tab(id);await evaluate('window.scrollTo(0,0)');
+    const shot=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:true});await writeFile(`reports/v0.7.1-${id}-${label}.png`,Buffer.from(shot.data,'base64'));
+  }
+  await writeFile(`reports/v0.7.1-screens-${label}.json`,JSON.stringify({browser,groups:count,recordings,layouts},null,2)+'\n');
 }

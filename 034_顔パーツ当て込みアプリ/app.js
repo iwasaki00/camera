@@ -1,18 +1,18 @@
-import { Camera } from './camera.js?v=0.7.0';
-import { CompositeRenderer, sourceRect } from './renderer.js?v=0.7.0';
-import { TouchEditor, sourceFromBox } from './editor.js?v=0.7.0';
-import { Viewport } from './viewport.js?v=0.7.0';
-import { Magnifier } from './magnifier.js?v=0.7.0';
-import { PartCollection, PART_TYPES, sourceForDisplay, setDisplaySource } from './parts.js?v=0.7.0';
-import { TemplateUI } from './template-ui.js?v=0.7.0';
-import { FaceTracker } from './tracking.js?v=0.7.0';
-import { correctionFor, DEFAULT_CORRECTION, displayCrop } from './tracking-geometry.js?v=0.7.0';
-import { Diagnostics, DiagnosticPanel } from './diagnostics.js?v=0.7.0';
-import { DEFAULT_COMPOSITE } from './composite-color.js?v=0.7.0';
-import { CompositeUI } from './composite-ui.js?v=0.7.0';
-import { VideoRecording } from './recording.js?v=0.7.0';
-import { RecordingUI } from './recording-ui.js?v=0.7.0';
-import { ScreenUI } from './screen-ui.js?v=0.7.0';
+import { Camera } from './camera.js?v=0.7.1';
+import { CompositeRenderer, sourceRect } from './renderer.js?v=0.7.1';
+import { TouchEditor, sourceFromBox } from './editor.js?v=0.7.1';
+import { Viewport, toScreen } from './viewport.js?v=0.7.1';
+import { Magnifier } from './magnifier.js?v=0.7.1';
+import { PartCollection, PART_TYPES, sourceForDisplay, setDisplaySource } from './parts.js?v=0.7.1';
+import { TemplateUI } from './template-ui.js?v=0.7.1';
+import { FaceTracker } from './tracking.js?v=0.7.1';
+import { correctionFor, DEFAULT_CORRECTION, displayCrop } from './tracking-geometry.js?v=0.7.1';
+import { Diagnostics, DiagnosticPanel } from './diagnostics.js?v=0.7.1';
+import { DEFAULT_COMPOSITE } from './composite-color.js?v=0.7.1';
+import { CompositeUI } from './composite-ui.js?v=0.7.1';
+import { VideoRecording } from './recording.js?v=0.7.1';
+import { RecordingUI } from './recording-ui.js?v=0.7.1';
+import { ScreenUI } from './screen-ui.js?v=0.7.1';
 
 const $ = id => document.getElementById(id);
 const canvas = $('composition'), ctx = canvas.getContext('2d');
@@ -34,7 +34,7 @@ let frame = 0, imageGeneration = 0, exportUrl = null, lastDraw = -Infinity;
 let photoEditor, cameraEditor;
 let photoMagnifier, cameraMagnifier;
 let templates;
-const screens = new ScreenUI({changed:()=>{cancelEditors();render();}});
+const screens = new ScreenUI({changed:()=>{cancelEditors();photoMagnifier?.cancelDrag();cameraMagnifier?.cancelDrag();render();}});
 const photoView = new Viewport(canvas, { min: .5, changed: () => { syncViewControls(); render(); } });
 const cameraView = new Viewport($('camera-preview'), { changed: () => { syncViewControls(); render(); } });
 const controls = [];
@@ -69,6 +69,9 @@ function syncViewControls() {
   for (const [id, viewport] of [['photo', photoView], ['camera', cameraView]]) {
     $(`${id}-view-zoom`).value = Math.round(viewport.view.scale * 100);
     $(`${id}-view-value`).value = `${Math.round(viewport.view.scale * 100)}%`;
+    $(`${id}-view-focus`).textContent=viewport.returnView?'戻す':'寄る';
+    $(`${id}-view-focus`).setAttribute('aria-pressed',String(!!viewport.returnView));
+    $(`${id}-view-focus`).setAttribute('aria-label',viewport.returnView?'寄る前の表示倍率・位置に戻す':`${id==='photo'?'絵画':'カメラ'}の選択パーツを中心に拡大`);
   }
 }
 
@@ -171,6 +174,10 @@ function renderComposite(target, before = false) {
   if(state.trackingEnabled && $('tracking-status').dataset.state!==tracker.state.status)syncTrackingUI();
 }
 function render() {
+  for(const [id,available] of [['photo',!!state.image],['camera',state.running&&video.readyState>=2]]){
+    const control=$(`${id}-view-focus`),disabled=!available||!selected()||!!recording?.busy;
+    if(control.disabled!==disabled)control.disabled=disabled;
+  }
   diagnostics.frame(performance.now());
   renderComposite(ctx, comparing && !recording?.busy);
   recording?.pushFrame(canvas, performance.now());
@@ -190,7 +197,7 @@ function tick(time = performance.now()) {
   if(time-lastDraw>=1000/30-1){const start=performance.now();render();tracker.observeDraw(performance.now()-start);lastDraw=time;}
   frame = state.running ? requestAnimationFrame(tick) : 0;
 }
-function stopCamera(text = 'カメラを停止しました。再開するには「カメラ開始」を押してください。') {
+function stopCamera(text = 'カメラを停止しました。') {
   recording?.stop('カメラ停止のため録画を終了しました。');
   cameraEditor?.cancel();
   tracker.stop();
@@ -212,7 +219,7 @@ $('start').addEventListener('click', async () => {
     camera.stream.getVideoTracks().forEach(track => track.addEventListener('ended', () => {
       if (state.running) stopCamera('カメラとの接続が終了しました。再度開始してください。');
     }, { once: true }));
-    message('写真は水色、カメラはオレンジの枠を直接ドラッグして合わせてください。'); tick();
+    message('枠をドラッグして位置を合わせます。'); tick();
     recordingUI?.sync();
   } catch (error) {
     stopCamera();
@@ -232,6 +239,15 @@ for (const [id, viewport] of [['photo', photoView], ['camera', cameraView]]) {
     photoEditor.cancel(); cameraEditor.cancel(); viewport.zoom(Number(event.target.value) / 100);
   });
   $(`${id}-view-reset`).addEventListener('click', () => { photoEditor.cancel(); cameraEditor.cancel(); viewport.reset(); });
+  $(`${id}-view-focus`).addEventListener('click',()=>{
+    cancelEditors();if(viewport.returnView)viewport.restore();else focusPart(id);
+  });
+}
+function focusPart(id) {
+  const editor=id==='photo'?photoEditor:cameraEditor,view=id==='photo'?photoView:cameraView;
+  if(!selected()||(id==='photo'?!state.image:!state.running))return;
+  const geometry=view.geometry(),box=editor.getBox(geometry);
+  if(box)view.focus(box);
 }
 $('interaction-mode').addEventListener('change', event => {
   photoEditor.cancel(); cameraEditor.cancel(); state.mode = event.target.value; render();
@@ -246,6 +262,7 @@ $('quick-feather').addEventListener('input', event => {
 function cancelEditors() { photoEditor?.cancel(); cameraEditor?.cancel(); }
 for (const type of Object.keys(PART_TYPES)) $(`select-${type}`).addEventListener('click', () => {
   cancelEditors(); collection.add(type); update();
+  if(photoView.returnView)focusPart('photo');if(cameraView.returnView)focusPart('camera');
 });
 $('part-enabled').addEventListener('change', event => { if (selected()) selected().enabled = event.target.checked; update(); });
 $('part-delete').addEventListener('click', () => { cancelEditors(); collection.removeSelected(); update(); });
@@ -277,7 +294,7 @@ async function loadImage(event) {
     $('empty-hint').hidden = true; $('save').disabled = false; clearExport(); photoView.reset();
     templates?.changed();
     recordingUI?.sync();
-    imageMessage('画像の読み込みが完了しました。パーツを選び、枠を直接動かして合わせてください。', false, 'image-ready');
+    imageMessage('画像を読み込みました。枠をドラッグで調整できます。', false, 'image-ready');
   } catch (error) {
     if (generation === imageGeneration) {
       if (error?.message === 'UNSUPPORTED_IMAGE') imageMessage('非対応画像形式です。JPEG・PNGなどの画像を選んでください。', true, 'unsupported-image');
@@ -360,12 +377,14 @@ cameraEditor = new TouchEditor($('camera-preview'), {
   }
 });
 photoMagnifier = new Magnifier(canvas.parentElement, {
+  getAnchor:()=>{const g=photoView.geometry();const box=photoEditor.getBox(g);return box?toScreen(box,photoView.view,g.origin):null;},
   id: 'photo', label: '絵画側', color: '#24e3cd', getSource: () => state.image && selected() ? {
     image: canvas, x: canvas.width * selected().targetRect.x / 100, y: canvas.height * selected().targetRect.y / 100,
     fit: photoView.geometry().width / canvas.width
   } : null
 });
 cameraMagnifier = new Magnifier($('camera-preview').parentElement, {
+  getAnchor:()=>{const g=cameraView.geometry();const box=cameraEditor.getBox(g);return box?toScreen(box,cameraView.view,g.origin):null;},
   id: 'camera', label: 'カメラ側', color: '#ffba69', getSource: () => {
     if (!state.running || video.readyState < 2 || !video.videoWidth || !selected()) return null;
     if(state.trackingEnabled) {
@@ -411,4 +430,4 @@ for (const id of ['image-file', 'image-file-native']) $(id).disabled = false;
 $('image-trigger').removeAttribute('aria-disabled');
 document.body.dataset.appState = 'ready';
 $('status').dataset.state = 'ready';
-message('画像を読み込み、枠を直接動かして合わせてください。2本指で表示を拡大できます。');
+message('画像を読み込んで始めてください。');

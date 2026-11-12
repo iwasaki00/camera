@@ -86,6 +86,7 @@ export async function checkTemplates({evaluate,command,waitFor}) {
   assert.equal(await evaluate("(()=>{const d=document.querySelector('#template-manager');return d.scrollWidth<=d.clientWidth&&document.documentElement.scrollWidth<=innerWidth;})()"),true);
   await click('templates-close');await click('select-mouth');await write({'part-x':61,'photo-view-zoom':200,'camera-view-zoom':300,'interaction-mode':'pan'});
   await evaluate("const magnifier=document.querySelector('#photo-magnifier select');magnifier.value='5';magnifier.dispatchEvent(new Event('change'));");
+  await evaluate("for(const id of ['photo','camera']){const e=document.querySelector('#'+id+'-loupe');e.checked=true;e.dispatchEvent(new Event('change'));}");
   await open();await action(firstId,'load');
   await waitFor("document.querySelector('#template-confirm').open");await click('template-confirm-no');await idle();assert.equal(await evaluate("document.querySelector('#part-x').value"),'61');
   await action(firstId,'load');await waitFor("document.querySelector('#template-confirm').open");await click('template-confirm-yes');await waitFor("!document.querySelector('#template-manager').open");await idle();
@@ -93,6 +94,7 @@ export async function checkTemplates({evaluate,command,waitFor}) {
   assert.equal(await evaluate("document.querySelector('#photo-view-value').value"),'100%');
   assert.equal(await evaluate("document.querySelector('#camera-view-value').value"),'100%');
   assert.equal(await evaluate("document.querySelector('#photo-magnifier select').value"),'3');
+  assert.equal(await evaluate("['photo','camera'].every(id=>!document.querySelector('#'+id+'-loupe').checked)"),true);
   assert.equal(await evaluate("document.querySelector('#interaction-mode').value"),'edit');
   await attachVideo();assert.equal(await png(),originalPNG);
   console.log('PASS TEMPLATE: unsaved-change cancel/accept, full restoration, manual camera restart, identical PNG output');

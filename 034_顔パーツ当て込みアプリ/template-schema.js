@@ -1,5 +1,5 @@
-import { DEFAULT_CORRECTION } from './tracking-geometry.js?v=0.7.0';
-import { DEFAULT_COMPOSITE, defaultAppearance, validateAppearance, validateComposite } from './composite-color.js?v=0.7.0';
+import { DEFAULT_CORRECTION } from './tracking-geometry.js?v=0.7.1';
+import { DEFAULT_COMPOSITE, defaultAppearance, validateAppearance, validateComposite } from './composite-color.js?v=0.7.1';
 export const SCHEMA_VERSION = 3;
 export const LIMITS = Object.freeze({ zip: 25 * 1024 * 1024, image: 20 * 1024 * 1024, json: 128 * 1024, thumbnail: 256 * 1024, edge: 2048, entries: 32 });
 export const newId = () => globalThis.crypto?.randomUUID?.() || `template-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -48,7 +48,7 @@ export function validateDocument(input) {
       guides: { photo:guides.photo, camera:guides.camera }, tracking: {offsetX:tracking.offsetX,offsetY:tracking.offsetY,widthScale:tracking.widthScale,heightScale:tracking.heightScale,rotation:tracking.rotation},
       appearance: input.schemaVersion < 3 ? defaultAppearance() : validateAppearance(p.appearance) };
   });
-  return { schemaVersion: SCHEMA_VERSION, appVersion: '0.7.0', id:input.id, name:validName(input.name), createdAt:input.createdAt, updatedAt:input.updatedAt,
+  return { schemaVersion: SCHEMA_VERSION, appVersion: '0.7.1', id:input.id, name:validName(input.name), createdAt:input.createdAt, updatedAt:input.updatedAt,
     background: { path:b.path, name:b.name, mime:b.mime, size:b.size, storedMime:b.storedMime, storedSize:b.storedSize, width:b.width, height:b.height }, parts, mirror:input.mirror, trackingEnabled:legacy?false:input.trackingEnabled,
     composite: input.schemaVersion < 3 ? {...DEFAULT_COMPOSITE} : validateComposite(input.composite) };
 }

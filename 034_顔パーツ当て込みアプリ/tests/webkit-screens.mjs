@@ -5,13 +5,23 @@ export async function checkWebkitScreens(page) {
   await (await chooser).setFiles({name:'screen.png',mimeType:'image/png',buffer:Buffer.from(image,'base64')});
   await page.waitForFunction(()=>document.querySelector('#status').dataset.state==='image-ready');
   console.log('PASS WEBKIT SCREEN: native image chooser and rendering in reorganized screen');
-  await page.evaluate(()=>{window.originalCanvas=document.querySelector('#composition');document.querySelector('#photo-loupe').click();});
+  assert.equal(await page.evaluate(()=>['photo','camera'].every(id=>!document.querySelector('#'+id+'-loupe').checked)),true);
+  await page.locator('#photo-loupe').tap();assert.equal(await page.locator('#photo-magnifier').isVisible(),true);
+  await page.locator('#photo-loupe').tap();assert.equal(await page.locator('#photo-magnifier').isVisible(),false);
+  console.log('PASS WEBKIT REFINEMENT: initial magnifier storage and real touch show/store');
+  await page.locator('#photo-view-focus').tap();
+  assert.equal(await page.locator('#photo-view-focus').getAttribute('aria-pressed'),'true');
+  await page.locator('#photo-view-focus').tap();
+  assert.equal(await page.locator('#photo-view-value').textContent(),'100%');
+  console.log('PASS WEBKIT REFINEMENT: touch focus and return to the previous whole-image view');
+  await page.evaluate(()=>{window.originalCanvas=document.querySelector('#composition');});
   for(const width of [375,390]){
     await page.setViewportSize({width,height:844});
     for(const id of ['camera','finished','photo']){
       await page.locator('#screen-'+id).tap();
       assert.equal(await page.locator('#screen-'+id).getAttribute('aria-selected'),'true');
       assert.equal(await page.evaluate(()=>document.querySelector('#composition')===originalCanvas&&document.documentElement.scrollWidth<=innerWidth),true);
+      if(id==='finished')assert.equal(await page.evaluate(()=>document.querySelector('#composite-mode').parentElement.id==='finished-mode-host'&&getComputedStyle(document.querySelector('.part-bar')).display==='none'),true);
     }
   }
   console.log('PASS WEBKIT SCREEN: three tabs retain canvas and fit 375/390px');
