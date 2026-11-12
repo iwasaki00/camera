@@ -108,5 +108,10 @@ test('schema 2 allowlist strips transient landmarks, detections and face frames'
 });
 test('v0.4.0 schema 2 remains compatible and diagnostics are excluded from saved documents',()=>{
   const input=doc();input.schemaVersion=2;input.appVersion='0.4.0';input.trackingEnabled=true;input.diagnostics={drawFps:30,history:['private']};
-  const restored=validateDocument(input);assert.equal(restored.trackingEnabled,true);assert.equal(restored.appVersion,'0.7.1');assert.equal('diagnostics' in restored,false);
+  const restored=validateDocument(input);assert.equal(restored.trackingEnabled,true);assert.equal(restored.appVersion,'0.8.0');assert.equal('diagnostics' in restored,false);
+});
+test('schema 3 strips short-video transient settings while retaining existing template data',()=>{
+  const input=validateDocument(doc());input.recording={aspect:'vertical',title:'not persisted',countdown:true};input.shortVideo={fade:true};
+  const result=validateDocument(input);assert.equal(result.schemaVersion,3);assert.equal('recording' in result,false);assert.equal('shortVideo' in result,false);
+  assert.equal(JSON.stringify(result).includes('not persisted'),false);assert.equal(result.parts.length,input.parts.length);
 });

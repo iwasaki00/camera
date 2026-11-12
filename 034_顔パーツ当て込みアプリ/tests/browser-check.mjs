@@ -37,7 +37,7 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const profile = await mkdtemp(path.join(tmpdir(), 'portrait-browser-'));
 const browser = spawn(process.env.CHROME_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', [
   '--headless=new', '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=0',
-  ...(process.argv.includes('--recording')||process.argv.includes('--screens')?['--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']:[]),
+  ...(process.argv.includes('--recording')||process.argv.includes('--screens')||process.argv.includes('--short')?['--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']:[]),
   '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', `--user-data-dir=${profile}`, 'about:blank'
 ], { stdio: ['ignore', 'ignore', 'pipe'] });
 let socket;
@@ -90,6 +90,10 @@ try {
     const loaded=await measure();
     const report={empty,loaded};console.log(JSON.stringify(report,null,2));
     if(process.env.LAYOUT_REPORT)await writeFile(process.env.LAYOUT_REPORT,JSON.stringify(report,null,2)+'\n');
+  } else if(process.argv.includes('--short')) {
+    await command('Emulation.setFocusEmulationEnabled',{enabled:true});await command('Page.bringToFront');
+    await waitFor("document.body?.dataset.appState==='ready'");
+    const {checkShortVideo}=await import('./short-video-check.mjs');await checkShortVideo({evaluate,command,waitFor});assert.deepEqual(errors,[]);
   } else if(process.argv.includes('--screens')) {
     await command('Emulation.setFocusEmulationEnabled',{enabled:true});
     await command('Page.bringToFront');

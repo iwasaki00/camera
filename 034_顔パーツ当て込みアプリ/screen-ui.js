@@ -10,6 +10,7 @@ export class ScreenUI {
     this.changed = changed; this.screen = 'photo';
     const panel = document.querySelector('.preview-panel'), workspace = document.querySelector('.workspace');
     const photo = workspace.firstElementChild, camera = document.querySelector('.camera-panel');
+    workspace.append($('record-countdown-overlay'));
     // Keep the media decoder outside inactive/inert tab panels. Only its canvas preview switches.
     panel.append($('camera'));
     photo.id = 'photo-panel'; camera.id = 'camera-panel';
@@ -115,7 +116,7 @@ export class ScreenUI {
   sync() {
     const running=$('camera-state').textContent==='使用中', connecting=$('camera-state').textContent==='接続中';
     $('start').hidden=running||connecting;$('stop').hidden=!running&&!connecting;
-    const busy=['initializing','recording','stopping'].includes($('record-status').dataset.state);
+    const busy=['initializing','countdown','recording','stopping'].includes($('record-status').dataset.state);
     $('record-start').hidden=busy;$('record-stop').hidden=!busy;
     // Keep "record result" discoverable after closing the result dialog.
     $('record-open').hidden=$('record-open').disabled;

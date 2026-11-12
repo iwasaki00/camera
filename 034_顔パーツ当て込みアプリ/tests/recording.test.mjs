@@ -22,6 +22,33 @@ function fixture(options={}) {
     schedule:fn=>{intervals.set(++id,fn);return id;},unschedule:i=>intervals.delete(i),timeout:fn=>{timeouts.set(++id,fn);return id;},clearTimeout:i=>timeouts.delete(i),...options});
   return {recording,source,canvas,microphone,copies,states,intervals,timeouts,advance:ms=>{clock+=ms;},timer:()=>{for(const fn of [...intervals.values()])fn();}};
 }
+
+test('countdown prepares microphone and encoder first, shows 3/2/1 and starts the elapsed clock afterwards',async()=>{
+  const f=fixture();const pending=f.recording.start({source:f.source,microphone:true,countdown:true});
+  await Promise.resolve();assert.equal(f.recording.state,'countdown');assert.equal(f.recording.session.microphoneStatus,'acquired');
+  assert.equal(f.recording.session.countdown,3);assert.equal(f.recording.elapsedMs,0);assert.equal(await f.recording.start({source:f.source}),false);
+  f.advance(1000);f.timer();assert.equal(f.recording.session.countdown,2);f.advance(1000);f.timer();assert.equal(f.recording.session.countdown,1);
+  f.advance(1000);f.timer();assert.equal(await pending,true);assert.equal(f.recording.elapsedMs,0);f.advance(500);const result=await f.recording.stop();assert.equal(result.elapsedMs,500);
+});
+test('canceling countdown preserves the previous recording and releases microphone/video tracks',async()=>{
+  const f=fixture();await f.recording.start({source:f.source});const old=await f.recording.stop();
+  const pending=f.recording.start({source:f.source,countdown:true,microphone:true});await Promise.resolve();const track=f.recording.session.track;
+  await f.recording.stop();assert.equal(await pending,false);assert.equal(f.recording.result,old);assert.equal(track.readyState,'ended');assert.equal(f.microphone.getAudioTracks()[0].readyState,'ended');assert.equal(f.intervals.size,0);
+  assert.equal(await f.recording.start({source:f.source}),true);await f.recording.stop();
+});
+test('failed resources/encoder preparation never display countdown',async()=>{
+  class Broken extends Recorder{constructor(){throw new Error('unavailable')}}
+  const f=fixture({Recorder:Broken});assert.equal(await f.recording.start({source:f.source,countdown:true}),false);assert.equal(f.states.includes('countdown'),false);
+});
+test('microphone loss during countdown cancels without starting an encoder',async()=>{
+  const f=fixture();const pending=f.recording.start({source:f.source,microphone:true,countdown:true});await Promise.resolve();f.microphone.getAudioTracks()[0].dispatchEvent(new Event('ended'));
+  assert.equal(await pending,false);assert.equal(f.recording.busy,false);assert.equal(f.recording.result,null);assert.match(f.recording.reason,/マイク/);
+});
+test('vertical plan freezes output settings and does not change source dimensions',async()=>{
+  const f=fixture(),output={aspect:'vertical',framing:'fill',centerX:.8};await f.recording.start({source:f.source,output});output.centerX=.1;
+  assert.equal(f.canvas.width,360);assert.equal(f.canvas.height,640);assert.equal(f.recording.session.output.centerX,.8);assert.equal(f.source.width,400);await f.recording.stop();
+  await f.recording.start({source:f.source,output,quality:'low'});assert.equal(f.canvas.width,270);assert.equal(f.canvas.height,480);await f.recording.stop();
+});
 test('normal/low recording plans cap resolution and never upscale',()=>{
   assert.deepEqual([recordingPlan(1600,2400).width,recordingPlan(1600,2400).height,recordingPlan(1600,2400).fps],[480,720,24]);
   assert.equal(recordingPlan(2400,1600,'low').width,480);assert.equal(recordingPlan(320,240).width,320);assert.throws(()=>recordingPlan(0,4));assert.throws(()=>recordingPlan(4,4,'bad'));

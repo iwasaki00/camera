@@ -1,12 +1,16 @@
-import {shareableRecording} from './recording.js?v=0.7.1';
+import {shareableRecording} from './recording.js?v=0.8.0';
+import {recordingPlan} from './recording.js?v=0.8.0';
+import {outputOptions,drawRecordingOutput} from './recording-output.js?v=0.8.0';
 const $=id=>document.getElementById(id);
-const names={idle:'待機',initializing:'初期化中',recording:'録画中',stopping:'録画終了処理中',completed:'録画完了',error:'エラー'};
+const names={idle:'待機',initializing:'初期化中',countdown:'カウントダウン',recording:'録画中',stopping:'録画終了処理中',completed:'録画完了',error:'エラー'};
 export class RecordingUI {
   constructor({recorder,ready,start,lockChanged,confirmDiscard=()=>window.confirm('未保存の録画を置き換えます。先に保存先で動画を確認しましたか？ 置き換えてよい場合はOKを選んでください。')}) {
     Object.assign(this,{recorder,ready,start,lockChanged,confirmDiscard});this.disabled=new Map();this.url=null;this.result=null;this.acknowledged=false;this.error='';
     this.beforeLeave=event=>{event.preventDefault();event.returnValue=true;};
     $('record-start').addEventListener('click',()=>this.requestStart());
     $('record-stop').addEventListener('click',()=>recorder.stop());
+    $('record-countdown-cancel').addEventListener('click',()=>recorder.stop('カウントダウンをキャンセルしました。'));
+    for(const input of document.querySelectorAll('.record-options input,.record-options select'))input.addEventListener('input',()=>{this.previewAt=0;if(this.previewSource)this.pushPreview(this.previewSource,performance.now(),true);});
     $('record-silent').addEventListener('click',()=>{$('record-mic').checked=false;this.requestStart();});
     $('record-open').addEventListener('click',()=>this.open());
     $('record-close').addEventListener('click',()=>$('record-result').close());
@@ -38,7 +42,20 @@ export class RecordingUI {
     if(warn===this.warnOnLeave)return;this.warnOnLeave=warn;
     if(warn)window.addEventListener('beforeunload',this.beforeLeave);else window.removeEventListener('beforeunload',this.beforeLeave);
   }
-  options(){return {duration:Number($('record-duration').value),microphone:$('record-mic').checked,quality:$('record-quality').value};}
+  options(){return {duration:Number($('record-duration').value),microphone:$('record-mic').checked,quality:$('record-quality').value,countdown:$('record-countdown').checked,
+    output:outputOptions({aspect:$('record-aspect').value,framing:$('record-framing').value,centerX:Number($('record-center-x').value)/100,centerY:Number($('record-center-y').value)/100,title:$('record-title').value,titleTime:$('record-title-time').value,fade:$('record-fade').checked})};}
+  pushPreview(source,time,force=false) {
+    this.previewSource=source;
+    if(!force&&(time<(this.previewAt||0)||!$('settings-panel').open||!$('settings-recording').open||document.hidden))return;
+    this.previewAt=time+200;
+    const options=this.options(),s=this.recorder.session,output=s?.output||options.output,duration=s?.duration||options.duration;
+    const plan=s?.plan||recordingPlan(source.width,source.height,options.quality,output.aspect),canvas=$('record-output-preview');
+    if(canvas.width!==plan.width||canvas.height!==plan.height){canvas.width=plan.width;canvas.height=plan.height;}
+    $('record-preview-time').max=duration;
+    const seconds=this.recorder.state==='recording'?this.recorder.elapsedMs/1000:Math.min(duration,Number($('record-preview-time').value));
+    $('record-preview-value').value=`${seconds.toFixed(1)}秒`;
+    drawRecordingOutput(canvas.getContext('2d'),source,plan.width,plan.height,output,seconds,duration);
+  }
   applyLock() {
     const busy=this.recorder.busy;
     const controls=[...document.querySelectorAll('.preview-panel button,.preview-panel input,.preview-panel select,#templates-open')]
@@ -54,7 +71,9 @@ export class RecordingUI {
     const r=this.recorder,busy=r.busy;
     this.applyLock();
     $('recording-panel').dataset.recordingState=r.state;$('recording-panel').setAttribute('aria-busy',String(busy));
-    $('record-stop').textContent=r.state==='stopping'?'終了処理中…':'録画停止';
+    $('record-countdown-overlay').hidden=r.state!=='countdown';
+    $('record-countdown-number').value=String(r.session?.countdown||3);
+    $('record-stop').textContent=r.state==='stopping'?'終了処理中…':r.state==='countdown'?'キャンセル':'録画停止';
     $('record-start').disabled=busy||!this.ready()||!r.supported;
     $('record-stop').disabled=!busy||r.state==='stopping';
     for(const id of ['record-duration','record-mic','record-quality'])$(id).disabled=busy;

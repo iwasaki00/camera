@@ -1,9 +1,11 @@
+import {outputOptions,drawRecordingOutput} from './recording-output.js?v=0.8.0';
 // Owns only recording canvas/microphone tracks. The application's camera is never acquired here.
 export const RECORDING_LIMIT_BYTES = 64 * 1024 * 1024;
 export const RECORDING_QUALITIES = Object.freeze({normal:{edge:720,fps:24,bitrate:2500000},low:{edge:480,fps:15,bitrate:1200000}});
-export function recordingPlan(width,height,quality='normal') {
+export function recordingPlan(width,height,quality='normal',aspect='original') {
   if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0||!RECORDING_QUALITIES[quality])throw new Error('録画サイズまたは画質が不正です。');
   const q=RECORDING_QUALITIES[quality],scale=Math.min(1,q.edge/Math.max(width,height));
+  if(aspect==='vertical')return {...q,width:quality==='low'?270:360,height:quality==='low'?480:640};
   return {...q,width:Math.max(2,Math.ceil(width*scale/2)*2),height:Math.max(2,Math.ceil(height*scale/2)*2)};
 }
 export function recordingTypes(Recorder,audio=false) {
@@ -28,29 +30,29 @@ export class VideoRecording {
     Object.assign(this,{Recorder,Stream,mediaDevices,createCanvas,captureSupported,now,wallNow,changed,schedule,unschedule,timeout,cancelTimeout});
     this.state='idle';this.result=null;this.error='';this.reason='';this.canRetrySilent=false;this.metrics={frames:0,averageMs:0,maxMs:0,bytes:0};
   }
-  get busy(){return ['initializing','recording','stopping'].includes(this.state);}
+  get busy(){return ['initializing','countdown','recording','stopping'].includes(this.state);}
   get supported(){return this._supported ??= this.captureSupported()&&typeof this.Recorder==='function'&&typeof this.Stream==='function'&&recordingTypes(this.Recorder).length>0;}
   get elapsedMs(){const s=this.session;return s?s.started===undefined?0:Math.max(0,(s.stopped??this.now())-s.started):this.lastInfo?.elapsedMs??this.result?.elapsedMs??0;}
   notify(state=this.state){this.state=state;this.changed(this);}
   sessionInfo(s) {
     return {selectedMime:s.selectedMime||'',actualMime:s.recorder?.mimeType||'',width:s.plan?.width||0,height:s.plan?.height||0,fps:s.plan?.fps||0,
       startedAt:s.startedAt||'',elapsedMs:s.started===undefined?0:Math.max(0,(s.stopped??this.now())-s.started),microphone:!!s.microphone,microphoneStatus:s.microphoneStatus,
-      audioTracks:(s.stream?.getAudioTracks()||[]).map(t=>({state:t.readyState,enabled:!!t.enabled,muted:!!t.muted})),captureMode:s.captureMode||'',audioVerification:'unverified',chunks:s.chunkCount,bytes:s.bytes};
+      audioTracks:(s.stream?.getAudioTracks()||[]).map(t=>({state:t.readyState,enabled:!!t.enabled,muted:!!t.muted})),captureMode:s.captureMode||'',audioVerification:'unverified',outputAspect:s.output?.aspect||'original',framing:s.output?.framing||'fit',countdown:s.countdown||0,chunks:s.chunkCount,bytes:s.bytes};
   }
   diagnosticSnapshot() {
     // Only scalars and anonymous audio-track states. Never return streams, blobs, IDs or labels.
     return {...(this.session?this.sessionInfo(this.session):this.lastInfo||{}),mediaRecorderSupported:typeof this.Recorder==='function',captureStreamSupported:this.captureSupported(),
-      state:({idle:'IDLE',initializing:'PREPARING',recording:'RECORDING',stopping:'STOPPING',completed:'READY',error:'ERROR'})[this.state],retainedPrevious:!!this.retainedPrevious,reason:this.reason,lastError:this.error};
+      state:({idle:'IDLE',initializing:'PREPARING',countdown:'COUNTDOWN',recording:'RECORDING',stopping:'STOPPING',completed:'READY',error:'ERROR'})[this.state],retainedPrevious:!!this.retainedPrevious,reason:this.reason,lastError:this.error};
   }
-  async start({source,duration=30,microphone=false,quality='normal'}={}) {
+  async start({source,duration=30,microphone=false,quality='normal',countdown=false,output={}}={}) {
     if(this.busy)return false;
     this.error='';this.reason='';this.canRetrySilent=false;
     if(!this.supported||typeof source?.captureStream!=='function'){this.error='このブラウザはCanvas動画録画に対応していません。';this.notify('error');return false;}
     if(![15,30,60].includes(duration)){this.error='録画時間は15・30・60秒から選んでください。';this.notify('error');return false;}
-    const s={previousResult:this.result,chunks:[],chunkCount:0,bytes:0,source,duration,microphone,microphoneStatus:microphone?'requesting':'off',frames:0,totalMs:0,maxMs:0};
+    const s={previousResult:this.result,chunks:[],chunkCount:0,bytes:0,source,duration,output:outputOptions(output),microphone,microphoneStatus:microphone?'requesting':'off',frames:0,totalMs:0,maxMs:0};
     s.done=new Promise(resolve=>s.resolve=resolve);this.session=s;this.lastInfo=null;this.retainedPrevious=false;this.metrics={frames:0,averageMs:0,maxMs:0,bytes:0};this.notify('initializing');
     try {
-      s.plan=recordingPlan(source.width,source.height,quality);
+      s.plan=recordingPlan(source.width,source.height,quality,s.output.aspect);
       if(microphone) {
         let mic;
         try {
@@ -73,20 +75,41 @@ export class VideoRecording {
       }
       if(!s.track)throw new Error('録画用の映像トラックを取得できませんでした。');
       const audio=s.mic?.getAudioTracks()||[];s.stream=new this.Stream([...s.video.getVideoTracks(),...audio]);
-      let started=false,lastError;
+      for(const t of s.stream.getTracks())t.addEventListener?.('ended',()=>{if(this.session===s&&!s.stopping)this.stop(t.kind==='audio'?'マイク接続が終了しました。':'録画映像が終了しました。');},{once:true});
+      // Validate an encoder before displaying the countdown. Construction does not record.
+      const candidates=[];let preparationError;
       for(const mimeType of recordingTypes(this.Recorder,microphone)) {
+        try {const recorder=new this.Recorder(s.stream,{mimeType,videoBitsPerSecond:s.plan.bitrate,...(microphone?{audioBitsPerSecond:96000}:{})});candidates.push({mimeType,recorder});break;}
+        catch(error){preparationError=error;}
+      }
+      if(!candidates.length)throw preparationError||new Error('No supported recorder');
+      if(countdown) {
+        const began=this.now();s.countdown=3;this.notify('countdown');
+        const proceed=await new Promise(resolve=>{
+          s.cancelCountdown=()=>resolve(false);
+          s.countdownTimer=this.schedule(()=>{if(this.session!==s||s.stopping){resolve(false);return;}
+            const remaining=Math.max(0,3-Math.floor((this.now()-began)/1000));
+            if(!remaining){resolve(true);return;}
+            if(remaining!==s.countdown){s.countdown=remaining;this.notify();}
+          },50);
+        });
+        this.unschedule(s.countdownTimer);s.cancelCountdown=null;
+        if(!proceed||this.session!==s)return false;
+      }
+      let started=false,lastError;
+      const prepared=candidates[0];
+      for(const mimeType of recordingTypes(this.Recorder,microphone).slice(recordingTypes(this.Recorder,microphone).indexOf(prepared.mimeType))) {
         let recorder;
         try {
-          s.selectedMime=mimeType;recorder=new this.Recorder(s.stream,{mimeType,videoBitsPerSecond:s.plan.bitrate,...(microphone?{audioBitsPerSecond:96000}:{})});s.recorder=recorder;
+          s.selectedMime=mimeType;recorder=mimeType===prepared.mimeType?prepared.recorder:new this.Recorder(s.stream,{mimeType,videoBitsPerSecond:s.plan.bitrate,...(microphone?{audioBitsPerSecond:96000}:{})});s.recorder=recorder;
           recorder.ondataavailable=e=>{if(this.session!==s||!e.data?.size)return;s.chunks.push(e.data);s.chunkCount++;s.bytes+=e.data.size;this.metrics.bytes=s.bytes;if(s.bytes>=RECORDING_LIMIT_BYTES)this.stop('録画サイズが64MBに達したため終了しました。');};
           recorder.onstart=()=>{if(this.session!==s||s.stopping)return;s.nextFrame=this.now();this.notify('recording');this.pushFrame(source,s.nextFrame,true);if(s.stopping)return;s.timer=this.schedule(()=>{if(this.session!==s)return;if(this.elapsedMs>=duration*1000)this.stop('指定時間に達しました。');else this.notify();},100);};
           recorder.onerror=e=>{if(this.session!==s)return;s.failure=e.error?.message||'録画エンコード中にエラーが発生しました。';this.error=s.failure;this.stop('録画エラーのため終了しました。');};
           recorder.onstop=()=>this.finish(s);
-          s.started=this.now();s.startedAt=this.wallNow();s.nextFrame=s.started;recorder.start(1000);this.copyFrame(s);if(s.captureMode==='manual')s.track.requestFrame();started=true;break;
+          s.started=this.now();s.startedAt=this.wallNow();s.nextFrame=s.started;this.copyFrame(s);recorder.start(1000);this.copyFrame(s);if(s.captureMode==='manual')s.track.requestFrame();started=true;break;
         } catch(error) {lastError=error;if(recorder){recorder.ondataavailable=recorder.onstart=recorder.onerror=recorder.onstop=null;try{if(recorder.state!=='inactive')recorder.stop();}catch{}}s.chunks=[];s.chunkCount=0;s.bytes=0;}
       }
       if(!started)throw new Error('利用可能な形式で録画を開始できませんでした。低画質で再試行してください。'+(lastError?.name?` (${lastError.name})`:''));
-      for(const t of s.stream.getTracks())t.addEventListener?.('ended',()=>{if(this.session===s&&!s.stopping)this.stop(t.kind==='audio'?'マイク接続が終了しました。':'録画映像が終了しました。');},{once:true});
       return true;
     } catch(error) {
       if(this.session!==s)return false;
@@ -95,8 +118,7 @@ export class VideoRecording {
   }
   copyFrame(s) {
     const start=this.now(),c=this.canvas.getContext('2d'),source=s.source;
-    const scale=Math.min(this.canvas.width/source.width,this.canvas.height/source.height),w=source.width*scale,h=source.height*scale;
-    c.fillStyle='#000';c.fillRect(0,0,this.canvas.width,this.canvas.height);c.drawImage(source,(this.canvas.width-w)/2,(this.canvas.height-h)/2,w,h);
+    drawRecordingOutput(c,source,this.canvas.width,this.canvas.height,s.output,s.started===undefined?0:this.elapsedMs/1000,s.duration);
     const ms=Math.max(0,this.now()-start);s.frames++;s.totalMs+=ms;s.maxMs=Math.max(s.maxMs,ms);
     this.metrics={frames:s.frames,averageMs:s.totalMs/s.frames,maxMs:s.maxMs,bytes:s.bytes};
   }
@@ -136,6 +158,6 @@ export class VideoRecording {
     } catch(error){this.error=error.message;this.result=s.previousResult||null;this.retainedPrevious=!!s.previousResult;}
     finally {s.chunks=[];this.release(s);this.session=null;this.notify(completed?'completed':'error');s.resolve(this.result);}
   }
-  release(s) {this.unschedule(s.timer);this.cancelTimeout(s.watchdog);if(s.recorder)s.recorder.ondataavailable=s.recorder.onstart=s.recorder.onerror=s.recorder.onstop=null;stopTracks(s.video);stopTracks(s.mic);if(s.mic)s.microphoneStatus='released';else if(s.microphoneStatus==='requesting')s.microphoneStatus='canceled';this.lastInfo=this.sessionInfo(s);}
+  release(s) {s.cancelCountdown?.();this.unschedule(s.countdownTimer);this.unschedule(s.timer);this.cancelTimeout(s.watchdog);if(s.recorder)s.recorder.ondataavailable=s.recorder.onstart=s.recorder.onerror=s.recorder.onstop=null;stopTracks(s.video);stopTracks(s.mic);if(s.mic)s.microphoneStatus='released';else if(s.microphoneStatus==='requesting')s.microphoneStatus='canceled';this.lastInfo=this.sessionInfo(s);}
   clearResult(){if(this.busy)return false;this.result=null;this.lastInfo=null;this.retainedPrevious=false;this.error='';this.reason='';this.notify('idle');return true;}
 }

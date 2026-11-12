@@ -1,0 +1,18 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {outputOptions,outputPlacement,titleVisible,fadeOpacity,titleLines,drawRecordingOutput} from '../recording-output.js';
+test('recording settings normalize and bound transient values',()=>{const o=outputOptions({aspect:'bad',centerX:2,centerY:-3,title:'x'.repeat(300)});assert.equal(o.aspect,'original');assert.equal(o.centerX,1);assert.equal(o.centerY,0);assert.equal(o.title.length,160);assert.ok(Object.isFrozen(o));});
+test('FIT includes whole source without distortion and FILL covers output without distortion',()=>{
+  for(const [sw,sh]of [[800,400],[400,800],[400,400]])for(const framing of ['fit','fill']){const p=outputPlacement(sw,sh,360,640,outputOptions({aspect:'vertical',framing}));assert.ok(Math.abs(p.width/p.height-sw/sh)<1e-10);if(framing==='fit'){assert.ok(p.width<=360&&p.height<=640);assert.ok(p.x>=0&&p.y>=0);}else assert.ok(p.width>=360&&p.height>=640);}
+});
+test('FILL crop center shifts only presentation and clamps within valid edges',()=>{const a=outputPlacement(800,400,360,640,outputOptions({aspect:'vertical',framing:'fill',centerX:0})),b=outputPlacement(800,400,360,640,outputOptions({aspect:'vertical',framing:'fill',centerX:1}));assert.ok(a.x===0);assert.equal(b.x,360-b.width);assert.equal(a.width,b.width);});
+test('title phases use selected recording duration without extending it',()=>{for(const titleTime of ['none','start','all','end']){const o=outputOptions({title:'日本語',titleTime});assert.equal(titleVisible(o,1,15),['start','all'].includes(titleTime));assert.equal(titleVisible(o,5,15),titleTime==='all');assert.equal(titleVisible(o,14,15),['end','all'].includes(titleTime));}assert.equal(titleVisible(outputOptions({titleTime:'all'}),1,15),false);});
+test('fade is bounded, .4 seconds at each end, and has no synthetic manual-stop outro',()=>{assert.equal(fadeOpacity(0,15),0);assert.equal(fadeOpacity(.2,15),.5);assert.equal(fadeOpacity(.4,15),1);assert.equal(fadeOpacity(5,15),1);assert.ok(Math.abs(fadeOpacity(14.8,15)-.5)<1e-10);assert.equal(fadeOpacity(15,15),0);});
+test('Japanese long titles wrap within four safe lines and never become HTML',()=>{const ctx={measureText:s=>({width:Array.from(s).length*10})};const lines=titleLines(ctx,'<script>日本語の長いタイトルです</script>'.repeat(5),100);assert.equal(lines.length,4);assert.ok(lines.every(s=>ctx.measureText(s).width<=100));assert.ok(lines[3].endsWith('…'));});
+test('original output with no effects retains legacy transfer geometry and performs one copy',()=>{const calls=[],ctx={fillRect(...a){calls.push(a)},drawImage(...a){calls.push(a)}};const source={width:401,height:601};drawRecordingOutput(ctx,source,402,602,outputOptions());assert.equal(calls.length,2);const [,x,y,w,h]=calls[1];assert.ok(x>=0&&y>=0);assert.equal(w/h,401/601);assert.equal(ctx.fillStyle,'#000');});
+test('full Japanese title scales and wraps inside the vertical safe area, with cached layout on later frames',()=>{
+  const title='日本語の長いタイトル'.repeat(12),drawn=[],ctx={save(){},restore(){},fillRect(){},drawImage(){},measureText(text){return {width:Array.from(text).length*Number(this.font.match(/(\d+)px/)[1])}},fillText(text,x,y,w){drawn.push({text,x,y,w})}};
+  const options=outputOptions({aspect:'vertical',title,titleTime:'all'}),source={width:800,height:400};drawRecordingOutput(ctx,source,270,480,options,1,15);
+  assert.equal(drawn.map(s=>s.text).join(''),title);assert.ok(drawn.every(s=>s.x>=0&&s.x<=270&&s.y>=480*.5&&s.y<480*.9&&s.w<=270));
+  const first=drawn.splice(0);drawRecordingOutput(ctx,source,270,480,options,2,15);assert.deepEqual(drawn,first);
+});

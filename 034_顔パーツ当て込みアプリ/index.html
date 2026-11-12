@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#172c2b">
   <title>顔パーツ当て込みアプリ / Portrait Face Parts Player</title>
-  <link rel="stylesheet" href="style.css?v=0.7.1">
+  <link rel="stylesheet" href="style.css?v=0.8.0">
   <script type="module">
-    import('./app.js?v=0.7.1').catch(error => {
+    import('./app.js?v=0.8.0').catch(error => {
       const status = document.getElementById('status');
       document.body.dataset.appState = 'error';
       for (const input of document.querySelectorAll('input[type="file"]')) input.disabled = true;
@@ -21,7 +21,7 @@
 </head>
 <body data-app-state="initializing">
   <main>
-    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.7.1</span></p><div class="title-row"><h1>顔パーツ当て込みアプリ</h1><button id="templates-open" type="button">保存・読込</button></div></header>
+    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.8.0</span></p><div class="title-row"><h1>顔パーツ当て込みアプリ</h1><button id="templates-open" type="button">保存・読込</button></div></header>
     <section class="preview-panel" aria-labelledby="preview-title">
       <div class="panel-heading"><h2 id="preview-title">絵画側 / <span id="selected-part-name">口</span></h2><select id="interaction-mode" aria-label="操作モード"><option value="edit">枠を編集</option><option value="pan">画像を移動</option><option value="view">鑑賞</option></select></div>
       <div class="part-bar" aria-label="顔パーツの追加と選択">
@@ -59,6 +59,15 @@
               <label>時間 <select id="record-duration"><option value="15">15秒</option><option value="30" selected>30秒</option><option value="60">60秒</option></select></label>
               <label class="toggle"><input id="record-mic" type="checkbox">マイク音声</label>
               <label>画質 <select id="record-quality"><option value="normal">標準 720px / 24fps</option><option value="low">低負荷 480px / 15fps</option></select></label>
+              <label>出力比率 <select id="record-aspect"><option value="original">元画像比率</option><option value="vertical">縦型 9:16（標準360×640 / 低負荷270×480）</option></select></label>
+              <label>9:16画角 <select id="record-framing"><option value="fit">FIT / 全体表示</option><option value="fill">FILL / 画面いっぱい</option></select></label>
+              <label>切り取り中心 X <input id="record-center-x" type="range" min="0" max="100" value="50"></label>
+              <label>切り取り中心 Y <input id="record-center-y" type="range" min="0" max="100" value="50"></label>
+              <label class="toggle"><input id="record-countdown" type="checkbox" checked>3秒カウントダウン</label>
+              <label>タイトル <input id="record-title" type="text" maxlength="160" placeholder="空欄なら表示なし"></label>
+              <label>タイトル表示 <select id="record-title-time"><option value="none">表示なし</option><option value="start">冒頭2秒</option><option value="all">動画全体</option><option value="end">最後の2秒</option></select></label>
+              <label class="toggle"><input id="record-fade" type="checkbox">冒頭・終了0.4秒フェード（映像のみ）</label>
+              <div class="record-output-preview"><p class="help">動画出力プレビュー（最大5回/秒）。時間指定でタイトルとフェードを確認できます。</p><label>確認する時点 <input id="record-preview-time" type="range" min="0" max="30" step="0.1" value="1" data-recording-safe><output id="record-preview-value">1.0秒</output></label><canvas id="record-output-preview" width="360" height="640" aria-label="録画出力の画角・タイトル確認"></canvas></div>
             </div></details><button id="record-silent" type="button" hidden>音声なしで録画</button>
           </section>
           <details id="composite-settings"><summary>色調・質感・境界 / <span id="composite-part-name">口</span></summary>
@@ -94,8 +103,9 @@
       </details>
       <div id="export-result" hidden><p>PNGを作成しました。画像を長押しして保存することもできます。</p><a id="download" class="button" download="portrait-mouth.png">PNGをダウンロード</a><img id="export-image" alt="保存用の合成画像"></div>
     </section>
-    <footer>Version 0.7.1 — VISUAL & TOUCH REFINEMENT · カメラは HTTPS / localhost で利用できます。</footer>
+    <footer>Version 0.8.0 — SHORT VIDEO CREATOR · カメラは HTTPS / localhost で利用できます。</footer>
   </main>
+  <div id="record-countdown-overlay" hidden role="status" aria-live="assertive"><span>録画まで</span><output id="record-countdown-number">3</output><button id="record-countdown-cancel" type="button" data-recording-safe>キャンセル</button></div>
   <dialog id="record-result" aria-labelledby="record-result-title"><div class="panel-heading"><h2 id="record-result-title">録画済み動画 / ライブではありません</h2><button id="record-close" type="button">閉じる</button></div>
     <p id="record-temporary" class="help">この動画は一時データです。再読み込みで失われます。保存先で再生を確認してください。</p>
     <video id="record-player" controls playsinline preload="metadata" aria-label="録画済み動画"></video><p id="record-result-info" class="help"></p>

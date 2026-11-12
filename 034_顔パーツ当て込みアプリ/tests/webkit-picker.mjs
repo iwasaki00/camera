@@ -26,7 +26,9 @@ try {
   page.setDefaultTimeout(8000);
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   await page.waitForFunction(()=>document.body.dataset.appState==='ready');
-  if(process.argv.includes('--screens')) {
+  if(process.argv.includes('--short')) {
+    const {checkWebkitShort}=await import('./webkit-short.mjs');await checkWebkitShort(page);
+  } else if(process.argv.includes('--screens')) {
     const {checkWebkitScreens}=await import('./webkit-screens.mjs');await checkWebkitScreens(page);
   } else if(process.argv.includes('--recording')) {
     const {checkWebkitRecording}=await import('./webkit-recording.mjs');await checkWebkitRecording(page);

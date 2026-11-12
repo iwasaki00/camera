@@ -1,4 +1,4 @@
-import { clamp } from './renderer.js?v=0.7.1';
+import { clamp } from './renderer.js?v=0.8.0';
 
 export class Magnifier {
   constructor(parent, { id, label, color, getSource, getAnchor = () => null }) {

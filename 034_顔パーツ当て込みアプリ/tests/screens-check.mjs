@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {writeFile} from 'node:fs/promises';
 export async function checkScreens({evaluate,command,waitFor}) {
+  await evaluate("document.querySelector('#record-countdown').checked=false");
   let count=0;const pass=name=>{count++;console.log('PASS SCREEN:',name);};
   const tab=id=>evaluate(`document.querySelector('#screen-${id}').click()`);
   const values=()=>evaluate(`JSON.stringify([...document.querySelectorAll('#part-controls input,#source-controls input,#source-zoom,#photo-guide,#camera-guide')].map(e=>[e.value,e.checked]))`);
@@ -89,7 +90,7 @@ export async function checkScreens({evaluate,command,waitFor}) {
     if(startTab==='finished'){
       await evaluate("document.querySelector('#record-close').click()");
       const label=(process.env.CHROME_PATH||'').includes('Edge')?'edge':'chrome';
-      const shot=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:true});await writeFile(`reports/v0.7.1-unsaved-${label}.png`,Buffer.from(shot.data,'base64'));
+      const shot=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:true});await writeFile(`reports/v0.8.0-unsaved-${label}.png`,Buffer.from(shot.data,'base64'));
       await evaluate("document.querySelector('#record-open').click()");
     }
     await evaluate("document.querySelector('#record-acknowledge').click();document.querySelector('#record-close').click()");
@@ -125,10 +126,10 @@ export async function checkScreens({evaluate,command,waitFor}) {
   await command('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await tab('photo');await evaluate('window.scrollTo(0,0)');
   const label=(process.env.CHROME_PATH||'').includes('Edge')?'edge':'chrome';
   const browser=await evaluate('navigator.userAgent');
-  const {data}=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:true});await writeFile(`reports/v0.7.1-screen-${label}.png`,Buffer.from(data,'base64'));
+  const {data}=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:true});await writeFile(`reports/v0.8.0-screen-${label}.png`,Buffer.from(data,'base64'));
   for(const id of ['camera','finished']){
     await tab(id);await evaluate('window.scrollTo(0,0)');
-    const shot=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:true});await writeFile(`reports/v0.7.1-${id}-${label}.png`,Buffer.from(shot.data,'base64'));
+    const shot=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:true});await writeFile(`reports/v0.8.0-${id}-${label}.png`,Buffer.from(shot.data,'base64'));
   }
-  await writeFile(`reports/v0.7.1-screens-${label}.json`,JSON.stringify({browser,groups:count,recordings,layouts},null,2)+'\n');
+  await writeFile(`reports/v0.8.0-screens-${label}.json`,JSON.stringify({browser,groups:count,recordings,layouts},null,2)+'\n');
 }

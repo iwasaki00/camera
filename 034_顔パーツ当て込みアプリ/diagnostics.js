@@ -36,6 +36,7 @@ export function recordingDiagnosticText(r={},uiError='') {
     `MediaRecorder: ${support(r.mediaRecorderSupported)} / Canvas.captureStream: ${support(r.captureStreamSupported)}`,
     `選択MIME: ${r.selectedMime||'未選択'}`,`MediaRecorder.mimeType: ${r.actualMime||'未生成'}`,
     `録画解像度: ${r.width||0}×${r.height||0} / 設定fps: ${r.fps||0}`,
+    `動画出力: ${r.outputAspect||'original'} / ${r.framing||'fit'} / カウント残り: ${r.countdown||0}`,
     `開始日時（UTC）: ${r.startedAt||'未開始'}`,`経過秒: ${fixed((r.elapsedMs||0)/1000,2)} / 録画状態: ${r.state||'IDLE'}`,
     `マイク: ${r.microphone?'ON':'OFF'} / 取得状態: ${r.microphoneStatus||'off'}`,
     `映像取得方式: ${r.captureMode||'未開始'} / ファイルの音声収録: 未検証（取得成功とは別）`,
@@ -45,7 +46,7 @@ export function recordingDiagnosticText(r={},uiError='') {
     `終了理由: ${r.reason||'なし'}`,`最終エラー: ${uiError||r.lastError||'なし'}`].join('\n');
 }
 export function diagnosticText(s) {
-  return [`Portrait Face Parts Player v0.7.1`, `計測窓: 直近${s.windowMs/1000}秒（現在${fixed(s.elapsedMs/1000)}秒）`,
+  return [`Portrait Face Parts Player v0.8.0`, `計測窓: 直近${s.windowMs/1000}秒（現在${fixed(s.elapsedMs/1000)}秒）`,
     `描画fps: ${fixed(s.drawFps)}`,`検出/秒: ${fixed(s.detectionFps)} / 完了${s.count}回`,
     `推論ms 直近/平均/最大: ${fixed(s.inferenceLastMs)} / ${fixed(s.inferenceAverageMs)} / ${fixed(s.inferenceMaxMs)}`,
     `合成ms 平均/最大（同じ計測窓）: ${fixed(s.compositeAverageMs)} / ${fixed(s.compositeMaxMs)}`,

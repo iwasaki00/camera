@@ -211,7 +211,7 @@ select { font-size: 16px; max-width: 100%; }
 }
 @media (min-width: 761px) { :root { --preview-height: clamp(280px,60dvh,600px); } }
 
-/* v0.7.1: the same layout, with clearer controls and unobstructed camera input. */
+/* v0.8.0: the same layout, with clearer controls and unobstructed camera input. */
 :root { --ink: #193732; --muted: #536c64; --line: #d9e5df; }
 button, .button { min-width: 44px; min-height: 44px; border-radius: 10px; line-height: 1.25; }
 button:disabled, .file-picker[aria-disabled=true] { opacity: .42; filter: saturate(.25); }
@@ -250,3 +250,14 @@ input[type=range]:disabled { opacity: .4; }
 .settings-body > details > summary { font-weight: 650; color: #244b43; }
 .magnifier-heading { background: #163a33; }
 .view-tools button, .view-tools .toggle, .tracking-bar .toggle { touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+/* Recording-only tools stay inside the bounded settings scroller. */
+#record-countdown-overlay:not([hidden]) {position:absolute;inset:0;z-index:20;border-radius:10px;background:rgba(10,30,29,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:white;touch-action:manipulation;}
+#record-countdown-number {font-size:clamp(60px,16vh,112px);line-height:1.2;font-weight:700;font-variant-numeric:tabular-nums;}
+.record-options {min-width:0;}
+.record-options>label,.record-output-preview {flex:1 1 100%;min-width:0;max-width:100%;}
+.record-options input[type=text],.record-options select {max-width:100%;min-width:0;box-sizing:border-box;}
+.record-options input[type=text] {font:inherit;font-size:16px;min-height:44px;width:100%;}
+.record-output-preview {text-align:center;}
+#record-output-preview {display:block;max-width:100%;max-height:200px;width:auto;height:auto;margin:8px auto;background:#202b2b;scroll-margin-bottom:150px;}
+.record-output-preview label {display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.record-output-preview output {font-variant-numeric:tabular-nums;}

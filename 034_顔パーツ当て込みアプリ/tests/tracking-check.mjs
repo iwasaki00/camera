@@ -94,6 +94,7 @@ export async function checkTracking({evaluate,command,waitFor}) {
   const perf=await measure();assert.ok(perf.drawFps>0&&perf.detectionFps>0);console.log('PERF REAL MODEL (desktop Chromium / 4 parts / worker): '+JSON.stringify(perf));
   if(process.env.NATURAL_PERFORMANCE==='1'){const {compareNaturalPerformance}=await import('./natural-performance.mjs');await compareNaturalPerformance({evaluate,waitFor});}
   if(process.env.RECORDING_PERFORMANCE==='1'){const {compareRecordingPerformance}=await import('./recording-performance.mjs');await compareRecordingPerformance({evaluate,waitFor});}
+  if(process.env.SHORT_PERFORMANCE==='1'){const {compareShortPerformance}=await import('./short-performance.mjs');await compareShortPerformance({evaluate,waitFor});}
   if(process.env.TRACKING_SCREENSHOT_PATH){await evaluate('window.scrollTo(0,0)');const {data}=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:true});await writeFile(process.env.TRACKING_SCREENSHOT_PATH,Buffer.from(data,'base64'));}
 
   // A black frame is a real-model no-face test. Expired crops and magnifiers must disappear.
