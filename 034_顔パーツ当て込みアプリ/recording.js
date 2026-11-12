@@ -24,21 +24,31 @@ export function shareableRecording(result,nav=globalThis.navigator) {
 }
 const stopTracks=stream=>{for(const t of stream?.getTracks?.()||[])try{t.stop();}catch{}};
 export class VideoRecording {
-  constructor({Recorder=globalThis.MediaRecorder,Stream=globalThis.MediaStream,mediaDevices=globalThis.navigator?.mediaDevices,createCanvas=()=>document.createElement('canvas'),now=()=>performance.now(),changed=()=>{},schedule=(fn,ms)=>globalThis.setInterval(fn,ms),unschedule=id=>globalThis.clearInterval(id),timeout=(fn,ms)=>globalThis.setTimeout(fn,ms),clearTimeout:cancelTimeout=id=>globalThis.clearTimeout(id)}={}) {
-    Object.assign(this,{Recorder,Stream,mediaDevices,createCanvas,now,changed,schedule,unschedule,timeout,cancelTimeout});
+  constructor({Recorder=globalThis.MediaRecorder,Stream=globalThis.MediaStream,mediaDevices=globalThis.navigator?.mediaDevices,createCanvas=()=>document.createElement('canvas'),captureSupported=()=>typeof globalThis.HTMLCanvasElement?.prototype?.captureStream==='function',now=()=>performance.now(),wallNow=()=>new Date().toISOString(),changed=()=>{},schedule=(fn,ms)=>globalThis.setInterval(fn,ms),unschedule=id=>globalThis.clearInterval(id),timeout=(fn,ms)=>globalThis.setTimeout(fn,ms),clearTimeout:cancelTimeout=id=>globalThis.clearTimeout(id)}={}) {
+    Object.assign(this,{Recorder,Stream,mediaDevices,createCanvas,captureSupported,now,wallNow,changed,schedule,unschedule,timeout,cancelTimeout});
     this.state='idle';this.result=null;this.error='';this.reason='';this.canRetrySilent=false;this.metrics={frames:0,averageMs:0,maxMs:0,bytes:0};
   }
   get busy(){return ['initializing','recording','stopping'].includes(this.state);}
-  get supported(){return this._supported ??= typeof this.Recorder==='function'&&typeof this.Stream==='function'&&recordingTypes(this.Recorder).length>0;}
-  get elapsedMs(){const s=this.session;return s?.started===undefined?this.result?.elapsedMs||0:Math.max(0,(s.stopped??this.now())-s.started);}
+  get supported(){return this._supported ??= this.captureSupported()&&typeof this.Recorder==='function'&&typeof this.Stream==='function'&&recordingTypes(this.Recorder).length>0;}
+  get elapsedMs(){const s=this.session;return s?s.started===undefined?0:Math.max(0,(s.stopped??this.now())-s.started):this.lastInfo?.elapsedMs??this.result?.elapsedMs??0;}
   notify(state=this.state){this.state=state;this.changed(this);}
+  sessionInfo(s) {
+    return {selectedMime:s.selectedMime||'',actualMime:s.recorder?.mimeType||'',width:s.plan?.width||0,height:s.plan?.height||0,fps:s.plan?.fps||0,
+      startedAt:s.startedAt||'',elapsedMs:s.started===undefined?0:Math.max(0,(s.stopped??this.now())-s.started),microphone:!!s.microphone,microphoneStatus:s.microphoneStatus,
+      audioTracks:(s.stream?.getAudioTracks()||[]).map(t=>({state:t.readyState,enabled:!!t.enabled,muted:!!t.muted})),captureMode:s.captureMode||'',audioVerification:'unverified',chunks:s.chunkCount,bytes:s.bytes};
+  }
+  diagnosticSnapshot() {
+    // Only scalars and anonymous audio-track states. Never return streams, blobs, IDs or labels.
+    return {...(this.session?this.sessionInfo(this.session):this.lastInfo||{}),mediaRecorderSupported:typeof this.Recorder==='function',captureStreamSupported:this.captureSupported(),
+      state:({idle:'IDLE',initializing:'PREPARING',recording:'RECORDING',stopping:'STOPPING',completed:'READY',error:'ERROR'})[this.state],retainedPrevious:!!this.retainedPrevious,reason:this.reason,lastError:this.error};
+  }
   async start({source,duration=30,microphone=false,quality='normal'}={}) {
     if(this.busy)return false;
     this.error='';this.reason='';this.canRetrySilent=false;
     if(!this.supported||typeof source?.captureStream!=='function'){this.error='このブラウザはCanvas動画録画に対応していません。';this.notify('error');return false;}
     if(![15,30,60].includes(duration)){this.error='録画時間は15・30・60秒から選んでください。';this.notify('error');return false;}
-    const s={chunks:[],bytes:0,source,duration,microphone,frames:0,totalMs:0,maxMs:0};
-    s.done=new Promise(resolve=>s.resolve=resolve);this.session=s;this.result=null;this.metrics={frames:0,averageMs:0,maxMs:0,bytes:0};this.notify('initializing');
+    const s={previousResult:this.result,chunks:[],chunkCount:0,bytes:0,source,duration,microphone,microphoneStatus:microphone?'requesting':'off',frames:0,totalMs:0,maxMs:0};
+    s.done=new Promise(resolve=>s.resolve=resolve);this.session=s;this.lastInfo=null;this.retainedPrevious=false;this.metrics={frames:0,averageMs:0,maxMs:0,bytes:0};this.notify('initializing');
     try {
       s.plan=recordingPlan(source.width,source.height,quality);
       if(microphone) {
@@ -46,36 +56,41 @@ export class VideoRecording {
         try {
           if(!this.mediaDevices?.getUserMedia)throw new Error('MIC_UNAVAILABLE');
           mic=await this.mediaDevices.getUserMedia({video:false,audio:{echoCancellation:true,noiseSuppression:true}});
-        } catch(error) {this.canRetrySilent=this.session===s;throw new Error(error?.name==='NotAllowedError'?'マイクが許可されませんでした。「音声なしで録画」で続行できます。':'マイクを利用できません。「音声なしで録画」で続行できます。');}
+        } catch(error) {s.microphoneStatus=error?.name==='NotAllowedError'?'denied':'error';this.canRetrySilent=this.session===s;throw new Error(error?.name==='NotAllowedError'?'マイクが許可されませんでした。「音声なしで録画」で続行できます。':'マイクを利用できません。「音声なしで録画」で続行できます。');}
         if(this.session!==s){stopTracks(mic);return false;}
-        s.mic=mic;
+        s.mic=mic;s.microphoneStatus='acquired';
         if(!mic.getAudioTracks().some(t=>t.readyState==='live')){this.canRetrySilent=true;throw new Error('マイクの音声トラックがありません。「音声なしで録画」で続行できます。');}
       }
       if(this.session!==s)return false;
       this.canvas ||= this.createCanvas();this.canvas.width=s.plan.width;this.canvas.height=s.plan.height;
       this.copyFrame(s);
-      s.video=this.canvas.captureStream(0);s.track=s.video.getVideoTracks()[0];
+      try {
+        s.video=this.canvas.captureStream(0);s.track=s.video.getVideoTracks()[0];
+        if(typeof s.track?.requestFrame!=='function')throw new Error('MANUAL_CAPTURE_UNAVAILABLE');
+        s.track.requestFrame();s.captureMode='manual';
+      } catch {
+        stopTracks(s.video);s.video=this.canvas.captureStream(s.plan.fps);s.track=s.video.getVideoTracks()[0];s.captureMode='native-fps';
+      }
       if(!s.track)throw new Error('録画用の映像トラックを取得できませんでした。');
-      if(typeof s.track.requestFrame!=='function'){stopTracks(s.video);s.video=this.canvas.captureStream(s.plan.fps);s.track=s.video.getVideoTracks()[0];}
       const audio=s.mic?.getAudioTracks()||[];s.stream=new this.Stream([...s.video.getVideoTracks(),...audio]);
       let started=false,lastError;
       for(const mimeType of recordingTypes(this.Recorder,microphone)) {
         let recorder;
         try {
-          recorder=new this.Recorder(s.stream,{mimeType,videoBitsPerSecond:s.plan.bitrate,...(microphone?{audioBitsPerSecond:96000}:{})});s.recorder=recorder;
-          recorder.ondataavailable=e=>{if(this.session!==s||!e.data?.size)return;s.chunks.push(e.data);s.bytes+=e.data.size;this.metrics.bytes=s.bytes;if(s.bytes>=RECORDING_LIMIT_BYTES)this.stop('録画サイズが64MBに達したため終了しました。');};
-          recorder.onstart=()=>{if(this.session!==s||s.stopping)return;s.nextFrame=this.now();this.notify('recording');this.pushFrame(source,s.nextFrame,true);s.timer=this.schedule(()=>{if(this.session!==s)return;if(this.elapsedMs>=duration*1000)this.stop('指定時間に達しました。');else this.notify();},100);};
+          s.selectedMime=mimeType;recorder=new this.Recorder(s.stream,{mimeType,videoBitsPerSecond:s.plan.bitrate,...(microphone?{audioBitsPerSecond:96000}:{})});s.recorder=recorder;
+          recorder.ondataavailable=e=>{if(this.session!==s||!e.data?.size)return;s.chunks.push(e.data);s.chunkCount++;s.bytes+=e.data.size;this.metrics.bytes=s.bytes;if(s.bytes>=RECORDING_LIMIT_BYTES)this.stop('録画サイズが64MBに達したため終了しました。');};
+          recorder.onstart=()=>{if(this.session!==s||s.stopping)return;s.nextFrame=this.now();this.notify('recording');this.pushFrame(source,s.nextFrame,true);if(s.stopping)return;s.timer=this.schedule(()=>{if(this.session!==s)return;if(this.elapsedMs>=duration*1000)this.stop('指定時間に達しました。');else this.notify();},100);};
           recorder.onerror=e=>{if(this.session!==s)return;s.failure=e.error?.message||'録画エンコード中にエラーが発生しました。';this.error=s.failure;this.stop('録画エラーのため終了しました。');};
           recorder.onstop=()=>this.finish(s);
-          s.started=this.now();s.nextFrame=s.started;recorder.start(1000);this.copyFrame(s);s.track.requestFrame?.();started=true;break;
-        } catch(error) {lastError=error;if(recorder){recorder.ondataavailable=recorder.onstart=recorder.onerror=recorder.onstop=null;try{if(recorder.state!=='inactive')recorder.stop();}catch{}}s.chunks=[];s.bytes=0;}
+          s.started=this.now();s.startedAt=this.wallNow();s.nextFrame=s.started;recorder.start(1000);this.copyFrame(s);if(s.captureMode==='manual')s.track.requestFrame();started=true;break;
+        } catch(error) {lastError=error;if(recorder){recorder.ondataavailable=recorder.onstart=recorder.onerror=recorder.onstop=null;try{if(recorder.state!=='inactive')recorder.stop();}catch{}}s.chunks=[];s.chunkCount=0;s.bytes=0;}
       }
       if(!started)throw new Error('利用可能な形式で録画を開始できませんでした。低画質で再試行してください。'+(lastError?.name?` (${lastError.name})`:''));
       for(const t of s.stream.getTracks())t.addEventListener?.('ended',()=>{if(this.session===s&&!s.stopping)this.stop(t.kind==='audio'?'マイク接続が終了しました。':'録画映像が終了しました。');},{once:true});
       return true;
     } catch(error) {
       if(this.session!==s)return false;
-      this.error=error.message||'録画を開始できませんでした。';this.release(s);this.session=null;s.resolve(null);this.notify('error');return false;
+      this.error=error.message||'録画を開始できませんでした。';this.retainedPrevious=!!s.previousResult;this.release(s);this.session=null;s.resolve(null);this.notify('error');return false;
     }
   }
   copyFrame(s) {
@@ -88,14 +103,15 @@ export class VideoRecording {
   pushFrame(source,time=this.now(),force=false) {
     const s=this.session;if(!s||s.stopping||!(this.state==='recording'||this.state==='initializing'&&s.recorder?.state==='recording'))return;
     if(!force&&time<s.nextFrame-.5)return;
-    s.source=source;this.copyFrame(s);s.track.requestFrame?.();
+    try{s.source=source;this.copyFrame(s);if(s.captureMode==='manual')s.track.requestFrame();}
+    catch(error){s.failure=error.message||'録画フレームの転送に失敗しました。';this.error=s.failure;this.stop('フレーム転送エラーのため終了しました。');return;}
     const interval=1000/s.plan.fps;s.nextFrame+=interval;if(s.nextFrame<time-interval)s.nextFrame=time+interval;
   }
   stop(reason='途中停止しました。') {
     const s=this.session;if(!s)return Promise.resolve(this.result);
     if(s.stopping)return s.done;
     s.stopping=true;s.stopped=this.now();this.reason=reason;this.unschedule(s.timer);
-    if(!s.recorder){this.release(s);this.session=null;s.resolve(null);this.notify('idle');return s.done;}
+    if(!s.recorder){this.retainedPrevious=!!s.previousResult;this.release(s);this.session=null;s.resolve(null);this.notify('idle');return s.done;}
     this.notify('stopping');
     // Keep owned tracks alive until final dataavailable → stop. Bound a broken encoder's wait.
     s.watchdog=this.timeout(()=>{s.failure='録画終了処理がタイムアウトしました。途中ファイルは再生確認が必要です。';this.finish(s);},10000);
@@ -106,6 +122,7 @@ export class VideoRecording {
     if(this.session!==s||s.finishing)return;s.finishing=true;s.stopping=true;
     s.stopped??=this.now();this.unschedule(s.timer);this.cancelTimeout(s.watchdog);this.notify('stopping');
     const elapsedMs=s.started===undefined?0:Math.max(0,s.stopped-s.started);
+    let completed=false;
     try {
       if(!s.bytes)throw new Error(s.failure||'録画データが生成されませんでした。');
       let blob=new Blob(s.chunks,{type:s.recorder.mimeType||s.chunks[0]?.type||''});
@@ -114,10 +131,11 @@ export class VideoRecording {
       blob=new Blob([blob],{type:mime});
       this.result={blob,mime,extension:container.extension,filename:`portrait-${new Date().toISOString().replace(/[:.]/g,'-')}.${container.extension}`,elapsedMs,
         hasAudio:!!s.mic?.getAudioTracks().length,width:s.plan.width,height:s.plan.height,fps:s.plan.fps,partial:!!s.failure};
-      this.error=s.failure||'';
-    } catch(error){this.error=error.message;this.result=null;}
-    finally {s.chunks=[];this.release(s);this.session=null;this.notify(this.result?'completed':'error');s.resolve(this.result);}
+      completed=!s.failure;this.error=s.failure||'';
+      if(s.failure&&s.previousResult){this.result=s.previousResult;this.retainedPrevious=true;}
+    } catch(error){this.error=error.message;this.result=s.previousResult||null;this.retainedPrevious=!!s.previousResult;}
+    finally {s.chunks=[];this.release(s);this.session=null;this.notify(completed?'completed':'error');s.resolve(this.result);}
   }
-  release(s) {this.unschedule(s.timer);this.cancelTimeout(s.watchdog);if(s.recorder)s.recorder.ondataavailable=s.recorder.onstart=s.recorder.onerror=s.recorder.onstop=null;stopTracks(s.video);stopTracks(s.mic);}
-  clearResult(){if(this.busy)return false;this.result=null;this.error='';this.reason='';this.notify('idle');return true;}
+  release(s) {this.unschedule(s.timer);this.cancelTimeout(s.watchdog);if(s.recorder)s.recorder.ondataavailable=s.recorder.onstart=s.recorder.onerror=s.recorder.onstop=null;stopTracks(s.video);stopTracks(s.mic);if(s.mic)s.microphoneStatus='released';else if(s.microphoneStatus==='requesting')s.microphoneStatus='canceled';this.lastInfo=this.sessionInfo(s);}
+  clearResult(){if(this.busy)return false;this.result=null;this.lastInfo=null;this.retainedPrevious=false;this.error='';this.reason='';this.notify('idle');return true;}
 }

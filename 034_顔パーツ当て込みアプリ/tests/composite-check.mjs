@@ -24,7 +24,7 @@ export async function checkComposite({evaluate,command,waitFor}) {
   await startCamera();
   // Frozen old renderer, actual Canvas RGBA comparison across mirror/shape/rotation cases.
   assert.equal(await evaluate(`(async()=>{
-    const {CompositeRenderer}=await import('./renderer.js?v=0.6.0'),{CompositeRenderer:Legacy}=await import('./tests/fixtures/original-renderer.mjs'),{createPart}=await import('./parts.js?v=0.6.0');
+    const {CompositeRenderer}=await import('./renderer.js?v=0.6.2'),{CompositeRenderer:Legacy}=await import('./tests/fixtures/original-renderer.mjs'),{createPart}=await import('./parts.js?v=0.6.2');
     for(const mirror of [true,false])for(const shape of ['oval','rectangle']) {
       const a=document.createElement('canvas'),b=document.createElement('canvas');a.width=b.width=400;a.height=b.height=600;
       const parts=['mouth','leftEye','rightEye','nose'].map((t,i)=>({...createPart(t,i),shape,rotation:i*17,feather:i*17}));
@@ -73,10 +73,10 @@ export async function checkComposite({evaluate,command,waitFor}) {
   await click('templates-open');await waitFor("!document.querySelector('#template-save').disabled");await click('template-save-as');
   await evaluate("document.querySelector('#template-name').value='Color fixture';document.querySelector('#template-name-form').requestSubmit()");
   await waitFor("!document.querySelector('#template-name-dialog').open&&document.querySelector('#template-manager').getAttribute('aria-busy')==='false'");
-  const saved=await evaluate(`(async()=>{const {TemplateStore}=await import('./template-store.js?v=0.6.0');const s=new TemplateStore(),rows=await s.list();s.close();return rows.find(r=>r.doc.name==='Color fixture').doc;})()`);
+  const saved=await evaluate(`(async()=>{const {TemplateStore}=await import('./template-store.js?v=0.6.2');const s=new TemplateStore(),rows=await s.list();s.close();return rows.find(r=>r.doc.name==='Color fixture').doc;})()`);
   assert.equal(saved.schemaVersion,3);assert.equal(saved.composite.mode,'natural');assert.equal(saved.parts.find(p=>p.partType==='mouth').appearance.natural.brightness,18);
   await click('template-export');await waitFor("!document.querySelector('#template-download').hidden&&document.querySelector('#template-manager').getAttribute('aria-busy')==='false'");
-  const zipDoc=await evaluate(`(async()=>{const {importTemplate}=await import('./template-zip.js?v=0.6.0');window.colorZip=await(await fetch(document.querySelector('#template-download').href)).blob();return(await importTemplate(colorZip)).doc;})()`);
+  const zipDoc=await evaluate(`(async()=>{const {importTemplate}=await import('./template-zip.js?v=0.6.2');window.colorZip=await(await fetch(document.querySelector('#template-download').href)).blob();return(await importTemplate(colorZip)).doc;})()`);
   assert.deepEqual(zipDoc.parts,saved.parts);assert.deepEqual(zipDoc.composite,saved.composite);
   await click('templates-close');await write('composite-mode','comic');await click('templates-open');
   await waitFor("!document.querySelector('#template-import').disabled");
@@ -85,7 +85,7 @@ export async function checkComposite({evaluate,command,waitFor}) {
   assert.equal(await evaluate("document.querySelector('#composite-mode').value"),'natural');assert.equal(await evaluate("document.querySelector('#camera').srcObject"),null);
   await startCamera();assert.equal(await evaluate("document.querySelector('#composite-mode').value"),'natural');
   assert.equal(await evaluate(`(async()=>{
-    const {CompositeRenderer}=await import('./renderer.js?v=0.6.0'),{importTemplate}=await import('./template-zip.js?v=0.6.0');
+    const {CompositeRenderer}=await import('./renderer.js?v=0.6.2'),{importTemplate}=await import('./template-zip.js?v=0.6.2');
     const record=await importTemplate(colorZip),bg=new Image();bg.src=URL.createObjectURL(record.background);await bg.decode();URL.revokeObjectURL(bg.src);
     Object.assign(colorFeed,{videoWidth:640,videoHeight:480,readyState:4});const results=[];
     for(const doc of [${JSON.stringify(saved)},record.doc]){const c=document.createElement('canvas');c.width=400;c.height=600;const ctx=c.getContext('2d');ctx.drawImage(bg,0,0);new CompositeRenderer().draw(ctx,colorFeed,doc.parts,doc.mirror,null,{composite:doc.composite,background:bg,time:0});results.push(c.toDataURL());}

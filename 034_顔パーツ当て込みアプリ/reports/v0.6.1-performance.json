@@ -1,0 +1,61 @@
+{
+  "conditions": "Desktop Chrome / actual local Face Landmarker Worker / NASA face translated horizontally +/-8px at 10Hz, input 640x480 at 30fps / 4 parts / output and recording 400x600 / 24fps target / 5.5s samples after 1s settling / sequential single browser / diagnostics ON",
+  "rows": [
+    {
+      "mode": "original",
+      "recording": false,
+      "drawFps": 29.929801012300892,
+      "detectionFps": 8.525458470170557,
+      "compositeAverageMs": 1.4,
+      "compositeMaxMs": 3,
+      "recordingWidth": null,
+      "recordingHeight": null,
+      "recordingFps": null,
+      "diagnostics": "Portrait Face Parts Player v0.6.1\n計測窓: 直近5秒（現在5.0秒）\n描画fps: 30.0\n検出/秒: 8.6 / 完了43回\n推論ms 直近/平均/最大: 63.8 / 39.1 / 82.7\n合成ms 平均/最大（同じ計測窓）: 1.4 / 3.0\n録画Canvas転送ms 平均/最大（今回の録画全体）: 0.00 / 0.00\n録画: idle / 転送0回 / 0.00 MB\n最新結果の経過ms（入力フレーム基準）: 109.8\n最新採用の経過ms（650msで非表示）: 109.8\n採用成功率: 100.0%\n状態: 追従中 (tracking)\nWorker: worker\n映像: 640×480\n推論入力: 480×360\n検出間隔ms: 120.0\n録画診断（件数・サイズは今回の録画全体／メディアは含みません）\nMediaRecorder: 対応 / Canvas.captureStream: 対応\n選択MIME: 未選択\nMediaRecorder.mimeType: 未生成\n録画解像度: 0×0 / 設定fps: 0\n開始日時（UTC）: 未開始\n経過秒: 0.00 / 録画状態: IDLE\nマイク: OFF / 取得状態: off\n録画Streamの音声: 0本 / なし\n生成チャンク: 0 / 生成サイズ: 0 bytes\n終了理由: なし\n最終エラー: なし"
+    },
+    {
+      "mode": "original",
+      "recording": true,
+      "drawFps": 29.995636998514815,
+      "detectionFps": 8.362420011707162,
+      "compositeAverageMs": 1.4,
+      "compositeMaxMs": 3.1,
+      "recordingWidth": 400,
+      "recordingHeight": 600,
+      "recordingFps": 24,
+      "diagnostics": "Portrait Face Parts Player v0.6.1\n計測窓: 直近5秒（現在5.0秒）\n描画fps: 30.0\n検出/秒: 8.6 / 完了43回\n推論ms 直近/平均/最大: 54.8 / 38.9 / 92.9\n合成ms 平均/最大（同じ計測窓）: 1.4 / 3.1\n録画Canvas転送ms 平均/最大（今回の録画全体）: 0.11 / 0.40\n録画: recording / 転送157回 / 0.00 MB\n最新結果の経過ms（入力フレーム基準）: 79.3\n最新採用の経過ms（650msで非表示）: 79.3\n採用成功率: 100.0%\n状態: 追従中 (tracking)\nWorker: worker\n映像: 640×480\n推論入力: 480×360\n検出間隔ms: 103.0\n録画診断（件数・サイズは今回の録画全体／メディアは含みません）\nMediaRecorder: 対応 / Canvas.captureStream: 対応\n選択MIME: video/mp4;codecs=avc1.42E01E\nMediaRecorder.mimeType: video/mp4;codecs=avc1.42001f\n録画解像度: 400×600 / 設定fps: 24\n開始日時（UTC）: 2026-11-10T04:24:11.506Z\n経過秒: 6.44 / 録画状態: RECORDING\nマイク: OFF / 取得状態: off\n録画Streamの音声: 0本 / なし\n生成チャンク: 1 / 生成サイズ: 752 bytes\n終了理由: なし\n最終エラー: なし",
+      "file": "reports/v0.6.1-tracked-original.mp4",
+      "bytes": 264299,
+      "duration": 6.619233,
+      "uniqueFrames": 105
+    },
+    {
+      "mode": "natural",
+      "recording": false,
+      "drawFps": 29.996182304460433,
+      "detectionFps": 9.271547257742315,
+      "compositeAverageMs": 11.6,
+      "compositeMaxMs": 24.1,
+      "recordingWidth": null,
+      "recordingHeight": null,
+      "recordingFps": null,
+      "diagnostics": "Portrait Face Parts Player v0.6.1\n計測窓: 直近5秒（現在5.0秒）\n描画fps: 29.8\n検出/秒: 9.4 / 完了47回\n推論ms 直近/平均/最大: 20.4 / 27.5 / 55.4\n合成ms 平均/最大（同じ計測窓）: 11.6 / 24.1\n録画Canvas転送ms 平均/最大（今回の録画全体）: 0.11 / 0.40\n録画: completed / 転送161回 / 0.25 MB\n最新結果の経過ms（入力フレーム基準）: 47.6\n最新採用の経過ms（650msで非表示）: 47.6\n採用成功率: 100.0%\n状態: 追従中 (tracking)\nWorker: worker\n映像: 640×480\n推論入力: 480×360\n検出間隔ms: 100.9\n録画診断（件数・サイズは今回の録画全体／メディアは含みません）\nMediaRecorder: 対応 / Canvas.captureStream: 対応\n選択MIME: video/mp4;codecs=avc1.42E01E\nMediaRecorder.mimeType: video/mp4;codecs=avc1.42001f\n録画解像度: 400×600 / 設定fps: 24\n開始日時（UTC）: 2026-11-10T04:24:11.506Z\n経過秒: 6.64 / 録画状態: READY\nマイク: OFF / 取得状態: off\n録画Streamの音声: 0本 / なし\n生成チャンク: 2 / 生成サイズ: 264299 bytes\n終了理由: 途中停止しました。\n最終エラー: なし"
+    },
+    {
+      "mode": "natural",
+      "recording": true,
+      "drawFps": 29.935774157521582,
+      "detectionFps": 7.438586305808393,
+      "compositeAverageMs": 13,
+      "compositeMaxMs": 45.3,
+      "recordingWidth": 400,
+      "recordingHeight": 600,
+      "recordingFps": 24,
+      "diagnostics": "Portrait Face Parts Player v0.6.1\n計測窓: 直近5秒（現在5.0秒）\n描画fps: 29.8\n検出/秒: 7.8 / 完了39回\n推論ms 直近/平均/最大: 77.5 / 32.0 / 77.5\n合成ms 平均/最大（同じ計測窓）: 13.0 / 45.3\n録画Canvas転送ms 平均/最大（今回の録画全体）: 0.07 / 0.20\n録画: recording / 転送153回 / 0.00 MB\n最新結果の経過ms（入力フレーム基準）: 109.1\n最新採用の経過ms（650msで非表示）: 109.1\n採用成功率: 100.0%\n状態: 追従中 (tracking)\nWorker: worker\n映像: 640×480\n推論入力: 480×360\n検出間隔ms: 200.0\n録画診断（件数・サイズは今回の録画全体／メディアは含みません）\nMediaRecorder: 対応 / Canvas.captureStream: 対応\n選択MIME: video/mp4;codecs=avc1.42E01E\nMediaRecorder.mimeType: video/mp4;codecs=avc1.42001f\n録画解像度: 400×600 / 設定fps: 24\n開始日時（UTC）: 2026-11-10T04:24:25.176Z\n経過秒: 6.27 / 録画状態: RECORDING\nマイク: OFF / 取得状態: off\n録画Streamの音声: 0本 / なし\n生成チャンク: 1 / 生成サイズ: 752 bytes\n終了理由: なし\n最終エラー: なし",
+      "file": "reports/v0.6.1-tracked-natural.mp4",
+      "bytes": 275312,
+      "duration": 6.656433,
+      "uniqueFrames": 89
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 // Frozen pre-v0.5 renderer for ORIGINAL browser pixel compatibility.
-import { orderedParts, sourceForDisplay } from '../../parts.js?v=0.6.0';
+import { orderedParts, sourceForDisplay } from '../../parts.js?v=0.6.2';
 
 export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 

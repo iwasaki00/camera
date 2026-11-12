@@ -1,4 +1,4 @@
-import { clamp } from './renderer.js?v=0.6.0';
+import { clamp } from './renderer.js?v=0.6.2';
 
 // All view transforms use CSS pixels; model coordinates remain unchanged.
 export const toContent = (point, view, origin) => ({ x: (point.x - origin.x - view.x) / view.scale, y: (point.y - origin.y - view.y) / view.scale });

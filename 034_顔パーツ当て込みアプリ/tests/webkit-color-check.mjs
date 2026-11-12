@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 export async function checkWebkitColor(page) {
   assert.equal(await page.evaluate(async()=>{
-    const {CompositeRenderer}=await import('./renderer.js?v=0.6.0');
-    const {createPart}=await import('./parts.js?v=0.6.0'),{DEFAULT_COMPOSITE}=await import('./composite-color.js?v=0.6.0');
+    const {CompositeRenderer}=await import('./renderer.js?v=0.6.2');
+    const {createPart}=await import('./parts.js?v=0.6.2'),{DEFAULT_COMPOSITE}=await import('./composite-color.js?v=0.6.2');
     const source=document.createElement('canvas');source.width=source.videoWidth=320;source.height=source.videoHeight=240;source.readyState=4;
     const s=source.getContext('2d');s.fillStyle='#82645a';s.fillRect(0,0,320,240);
     const bg=document.createElement('canvas');bg.width=400;bg.height=600;bg.getContext('2d').fillStyle='#bd927a';bg.getContext('2d').fillRect(0,0,400,600);

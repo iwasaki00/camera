@@ -29,8 +29,23 @@ export class Diagnostics {
 }
 const fixed=(n,d=1)=>Number.isFinite(n)?n.toFixed(d):'—';
 const stateNames={stopped:'停止中',initializing:'初期化中',detecting:'検出中',tracking:'追従中',lost:'一時的な未検出',notFound:'顔消失',error:'エラー'};
+export function recordingDiagnosticText(r={},uiError='') {
+  const support=v=>v===undefined?'未確認':v?'対応':'非対応';
+  const tracks=r.audioTracks||[];
+  return ['録画診断（件数・サイズは今回の録画全体／メディアは含みません）',
+    `MediaRecorder: ${support(r.mediaRecorderSupported)} / Canvas.captureStream: ${support(r.captureStreamSupported)}`,
+    `選択MIME: ${r.selectedMime||'未選択'}`,`MediaRecorder.mimeType: ${r.actualMime||'未生成'}`,
+    `録画解像度: ${r.width||0}×${r.height||0} / 設定fps: ${r.fps||0}`,
+    `開始日時（UTC）: ${r.startedAt||'未開始'}`,`経過秒: ${fixed((r.elapsedMs||0)/1000,2)} / 録画状態: ${r.state||'IDLE'}`,
+    `マイク: ${r.microphone?'ON':'OFF'} / 取得状態: ${r.microphoneStatus||'off'}`,
+    `映像取得方式: ${r.captureMode||'未開始'} / ファイルの音声収録: 未検証（取得成功とは別）`,
+    `以前の動画を保持: ${r.retainedPrevious?'はい':'いいえ'}`,
+    `録画Streamの音声: ${tracks.length}本${tracks.length?' / '+tracks.map(t=>`${t.state} (enabled=${t.enabled}, muted=${t.muted})`).join(', '):' / なし'}`,
+    `生成チャンク: ${r.chunks||0} / 生成サイズ: ${r.bytes||0} bytes`,
+    `終了理由: ${r.reason||'なし'}`,`最終エラー: ${uiError||r.lastError||'なし'}`].join('\n');
+}
 export function diagnosticText(s) {
-  return [`Portrait Face Parts Player v0.6.0`, `計測窓: 直近${s.windowMs/1000}秒（現在${fixed(s.elapsedMs/1000)}秒）`,
+  return [`Portrait Face Parts Player v0.6.2`, `計測窓: 直近${s.windowMs/1000}秒（現在${fixed(s.elapsedMs/1000)}秒）`,
     `描画fps: ${fixed(s.drawFps)}`,`検出/秒: ${fixed(s.detectionFps)} / 完了${s.count}回`,
     `推論ms 直近/平均/最大: ${fixed(s.inferenceLastMs)} / ${fixed(s.inferenceAverageMs)} / ${fixed(s.inferenceMaxMs)}`,
     `合成ms 平均/最大（同じ計測窓）: ${fixed(s.compositeAverageMs)} / ${fixed(s.compositeMaxMs)}`,
@@ -38,7 +53,7 @@ export function diagnosticText(s) {
     `録画: ${s.recordingState||'idle'} / 転送${s.recordingFrames||0}回 / ${fixed((s.recordingBytes||0)/1024/1024,2)} MB`,
     `最新結果の経過ms（入力フレーム基準）: ${fixed(s.resultAgeMs)}`,`最新採用の経過ms（650msで非表示）: ${fixed(s.lastGoodAgeMs)}`,`採用成功率: ${s.successRate===null?'—':fixed(s.successRate*100)+'%'}`,
     `状態: ${stateNames[s.status]||s.status} (${s.status})`,`Worker: ${s.backend||'未使用'}`,`映像: ${s.videoWidth}×${s.videoHeight}`,`推論入力: ${s.inputWidth}×${s.inputHeight}`,
-    `検出間隔ms: ${fixed(s.interval)}`].join('\n');
+    `検出間隔ms: ${fixed(s.interval)}`,recordingDiagnosticText(s.recording,s.recordingUIError)].join('\n');
 }
 export async function copyDiagnostic(text,clipboard=globalThis.navigator?.clipboard) {
   if(!clipboard?.writeText)return false;

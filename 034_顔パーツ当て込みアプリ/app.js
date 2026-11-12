@@ -1,17 +1,17 @@
-import { Camera } from './camera.js?v=0.6.0';
-import { CompositeRenderer, sourceRect } from './renderer.js?v=0.6.0';
-import { TouchEditor, sourceFromBox } from './editor.js?v=0.6.0';
-import { Viewport } from './viewport.js?v=0.6.0';
-import { Magnifier } from './magnifier.js?v=0.6.0';
-import { PartCollection, PART_TYPES, sourceForDisplay, setDisplaySource } from './parts.js?v=0.6.0';
-import { TemplateUI } from './template-ui.js?v=0.6.0';
-import { FaceTracker } from './tracking.js?v=0.6.0';
-import { correctionFor, DEFAULT_CORRECTION, displayCrop } from './tracking-geometry.js?v=0.6.0';
-import { Diagnostics, DiagnosticPanel } from './diagnostics.js?v=0.6.0';
-import { DEFAULT_COMPOSITE } from './composite-color.js?v=0.6.0';
-import { CompositeUI } from './composite-ui.js?v=0.6.0';
-import { VideoRecording } from './recording.js?v=0.6.0';
-import { RecordingUI } from './recording-ui.js?v=0.6.0';
+import { Camera } from './camera.js?v=0.6.2';
+import { CompositeRenderer, sourceRect } from './renderer.js?v=0.6.2';
+import { TouchEditor, sourceFromBox } from './editor.js?v=0.6.2';
+import { Viewport } from './viewport.js?v=0.6.2';
+import { Magnifier } from './magnifier.js?v=0.6.2';
+import { PartCollection, PART_TYPES, sourceForDisplay, setDisplaySource } from './parts.js?v=0.6.2';
+import { TemplateUI } from './template-ui.js?v=0.6.2';
+import { FaceTracker } from './tracking.js?v=0.6.2';
+import { correctionFor, DEFAULT_CORRECTION, displayCrop } from './tracking-geometry.js?v=0.6.2';
+import { Diagnostics, DiagnosticPanel } from './diagnostics.js?v=0.6.2';
+import { DEFAULT_COMPOSITE } from './composite-color.js?v=0.6.2';
+import { CompositeUI } from './composite-ui.js?v=0.6.2';
+import { VideoRecording } from './recording.js?v=0.6.2';
+import { RecordingUI } from './recording-ui.js?v=0.6.2';
 
 const $ = id => document.getElementById(id);
 const canvas = $('composition'), ctx = canvas.getContext('2d');
@@ -49,7 +49,8 @@ const diagnosticPanel = new DiagnosticPanel({details:$('diagnostics'),output:$('
     videoWidth:video.videoWidth,videoHeight:video.videoHeight,inputWidth:tracker.active?(tracker.metrics.inputWidth||0):0,inputHeight:tracker.active?(tracker.metrics.inputHeight||0):0,
     lastCapture:tracker.metrics.lastCapture,lastGoodAgeMs:Number.isFinite(tracker.state.lastGood)?performance.now()-tracker.state.lastGood:null,interval:tracker.metrics.interval,
     recordingState:recording?.state,recordingAverageMs:recording?.metrics.averageMs,recordingMaxMs:recording?.metrics.maxMs,
-    recordingFrames:recording?.metrics.frames,recordingElapsedMs:recording?.elapsedMs,recordingBytes:recording?.metrics.bytes})});
+    recordingFrames:recording?.metrics.frames,recordingElapsedMs:recording?.elapsedMs,recordingBytes:recording?.metrics.bytes,
+    recording:recording?.diagnosticSnapshot(),recordingUIError:recordingUI?.error})});
 const setText=(element,text)=>{if(element.textContent!==text)element.textContent=text;};
 
 function syncTrackingUI() {

@@ -44,8 +44,8 @@ export async function checkTracking({evaluate,command,waitFor}) {
   await checkDiagnosticPanel({evaluate,waitFor});
 
   // Inspect raw model geometry directly as a separate integration assertion, without injecting app state.
-  await evaluate(`(async()=>{const {createFaceDetector}=await import('./face-detector.js?v=0.6.0');window.checkDetector=await createFaceDetector();
-    const {landmarksToCrops}=await import('./tracking-geometry.js?v=0.6.0');window.realCrops=()=>landmarksToCrops(window.checkDetector.detect(window.faceCanvas,performance.now()),640,480);
+  await evaluate(`(async()=>{const {createFaceDetector}=await import('./face-detector.js?v=0.6.2');window.checkDetector=await createFaceDetector();
+    const {landmarksToCrops}=await import('./tracking-geometry.js?v=0.6.2');window.realCrops=()=>landmarksToCrops(window.checkDetector.detect(window.faceCanvas,performance.now()),640,480);
     window.baseCrops=window.realCrops();})()`);
   const base=await evaluate('window.baseCrops');assert.deepEqual(Object.keys(base),['mouth','leftEye','rightEye','nose']);assert.ok(base.leftEye.x>base.rightEye.x);
   await evaluate('window.drawFace({dx:32})');const moved=await evaluate('window.realCrops()');assert.ok(moved.mouth.x-base.mouth.x>.025);
@@ -105,14 +105,14 @@ export async function checkTracking({evaluate,command,waitFor}) {
   // New schema retains preference/corrections but never serializes dynamic detections.
   await click('templates-open');await waitFor("document.querySelector('#template-manager').getAttribute('aria-busy')==='false'");
   await click('template-export');await waitFor("document.querySelector('#template-manager').getAttribute('aria-busy')==='false'&&!document.querySelector('#template-download').hidden");
-  await evaluate(`(async()=>{const {importTemplate}=await import('./template-zip.js?v=0.6.0');window.trackingZIP=await (await fetch(document.querySelector('#template-download').href)).blob();window.trackingDoc=(await importTemplate(window.trackingZIP)).doc;})()`);
+  await evaluate(`(async()=>{const {importTemplate}=await import('./template-zip.js?v=0.6.2');window.trackingZIP=await (await fetch(document.querySelector('#template-download').href)).blob();window.trackingDoc=(await importTemplate(window.trackingZIP)).doc;})()`);
   const saved=await evaluate('window.trackingDoc');assert.equal(saved.schemaVersion,3);assert.equal(saved.trackingEnabled,true);
   assert.equal(saved.parts.find(p=>p.partType==='mouth').tracking.offsetX,.2);
   assert.equal(JSON.stringify(saved).includes('landmarks'),false);assert.equal(JSON.stringify(saved).includes('baseCrops'),false);
   assert.equal(JSON.stringify(saved).includes('drawFps'),false);assert.equal(JSON.stringify(saved).includes('inferenceAverageMs'),false);
   await click('template-save-as');await evaluate("document.querySelector('#template-name').value='自動追従';document.querySelector('#template-name-form').requestSubmit()");
   await waitFor("!document.querySelector('#template-name-dialog').open&&document.querySelector('#template-manager').getAttribute('aria-busy')==='false'");
-  assert.equal(await evaluate(`(async()=>{const {TemplateStore}=await import('./template-store.js?v=0.6.0'),store=new TemplateStore();
+  assert.equal(await evaluate(`(async()=>{const {TemplateStore}=await import('./template-store.js?v=0.6.2'),store=new TemplateStore();
     const record=(await store.list()).find(r=>r.doc.name==='自動追従');store.close();return record.doc.trackingEnabled&&record.doc.parts.find(p=>p.partType==='mouth').tracking.offsetX===.2;})()`),true);
   await click('templates-close');await click('tracking-manual');await click('templates-open');
   await waitFor("document.querySelector('#template-manager').getAttribute('aria-busy')==='false'");
@@ -152,7 +152,7 @@ export async function checkTracking({evaluate,command,waitFor}) {
   // Actual old ZIP format, not just a mocked schema validator. Old auto fields must not activate detection.
   await click('templates-open');await waitFor("document.querySelector('#template-manager').getAttribute('aria-busy')==='false'");
   await evaluate(`(async()=>{
-    const {importTemplate}=await import('./template-zip.js?v=0.6.0'),{zipSync,strToU8}=await import('./vendor/fflate-0.8.2.js');
+    const {importTemplate}=await import('./template-zip.js?v=0.6.2'),{zipSync,strToU8}=await import('./vendor/fflate-0.8.2.js');
     const r=await importTemplate(window.trackingZIP),old=structuredClone(r.doc);old.schemaVersion=1;old.appVersion='0.3.0';delete old.trackingEnabled;for(const p of old.parts)delete p.tracking;
     const archive=zipSync({'template.json':strToU8(JSON.stringify(old)),[old.background.path]:new Uint8Array(await r.background.arrayBuffer())});
     const dt=new DataTransfer();dt.items.add(new File([archive],'legacy.zip',{type:'application/zip'}));const e=document.querySelector('#template-import');e.files=dt.files;e.dispatchEvent(new Event('change'));

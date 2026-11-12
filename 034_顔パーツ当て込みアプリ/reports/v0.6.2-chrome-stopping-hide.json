@@ -1,0 +1,20 @@
+{
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+  "cases": [
+    {
+      "name": "stopping-hide",
+      "file": "reports/v0.6.2-chrome-stopping-hide.mp4",
+      "bytes": 80460,
+      "duration": 3.348833,
+      "videoCodec": "h264",
+      "audioCodec": null,
+      "width": 480,
+      "height": 720,
+      "frameRate": "390000/20093",
+      "uniqueFrames": 65,
+      "startOffset": null,
+      "audioDuration": null,
+      "audioVideoDurationDifference": null
+    }
+  ]
+}

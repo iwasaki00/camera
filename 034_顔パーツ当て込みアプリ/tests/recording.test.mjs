@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {VideoRecording,recordingPlan,recordingTypes,recordingContainer,shareableRecording,RECORDING_LIMIT_BYTES} from '../recording.js';
+import {recordingDiagnosticText} from '../diagnostics.js';
 const mp4=new Uint8Array([0,0,0,16,102,116,121,112,105,115,111,109,0,0,0,0]);
 const webm=new Uint8Array([0x1a,0x45,0xdf,0xa3,1,2,3,4]);
 class Track extends EventTarget {constructor(kind){super();this.kind=kind;this.readyState='live';this.stops=0;this.requests=0;}stop(){this.stops++;this.readyState='ended';}requestFrame(){this.requests++;}}
@@ -17,7 +18,7 @@ function fixture(options={}) {
   const microphone=new Stream([new Track('audio')]);
   const canvas={width:0,height:0,getContext:()=>({fillRect(){},drawImage(...args){copies.push(args);}}),captureStream:()=>new Stream([new Track('video')])};
   const source={width:400,height:600,captureStream(){}};
-  const recording=new VideoRecording({Recorder,Stream,mediaDevices:{getUserMedia:async()=>microphone},createCanvas:()=>canvas,now:()=>clock,changed:r=>states.push(r.state),
+  const recording=new VideoRecording({Recorder,Stream,mediaDevices:{getUserMedia:async()=>microphone},createCanvas:()=>canvas,captureSupported:()=>true,now:()=>clock,wallNow:()=> '2026-11-10T00:00:00.000Z',changed:r=>states.push(r.state),
     schedule:fn=>{intervals.set(++id,fn);return id;},unschedule:i=>intervals.delete(i),timeout:fn=>{timeouts.set(++id,fn);return id;},clearTimeout:i=>timeouts.delete(i),...options});
   return {recording,source,canvas,microphone,copies,states,intervals,timeouts,advance:ms=>{clock+=ms;},timer:()=>{for(const fn of [...intervals.values()])fn();}};
 }
@@ -85,7 +86,7 @@ test('all synchronous encoding failures release microphone/canvas tracks',async(
   const f=fixture({Recorder:Broken});assert.equal(await f.recording.start({source:f.source,microphone:true}),false);assert.equal(f.recording.state,'error');assert.equal(f.microphone.getTracks()[0].stops,1);
 });
 test('asynchronous encoder errors retain final chunks, with an explicit partial-file warning',async()=>{
-  const f=fixture();await f.recording.start({source:f.source});const s=f.recording.session;s.recorder.state='inactive';s.recorder.onerror({error:new Error('encoder failed')});assert.equal(s.chunks.length,0);s.recorder.chunk();s.recorder.onstop();const r=await s.done;assert.equal(r.partial,true);assert.match(f.recording.error,/encoder failed/);
+  const f=fixture();await f.recording.start({source:f.source});const s=f.recording.session;s.recorder.state='inactive';s.recorder.onerror({error:new Error('encoder failed')});assert.equal(s.chunks.length,0);s.recorder.chunk();s.recorder.onstop();const r=await s.done;assert.equal(r.partial,true);assert.match(f.recording.error,/encoder failed/);assert.equal(f.recording.diagnosticSnapshot().state,'ERROR');assert.equal(f.recording.busy,false);await f.recording.start({source:f.source});assert.equal(f.recording.state,'recording');await f.recording.stop();
 });
 test('empty output and unknown file signatures are rejected',async()=>{
   class Empty extends Recorder {chunk(){}}
@@ -104,4 +105,55 @@ test('sharing checks actual file support and handles exceptions safely',()=>{
   const r={blob:new Blob([mp4],{type:'video/mp4'}),filename:'record.mp4',mime:'video/mp4'};
   assert.equal(shareableRecording(r,{share(){},canShare(){return false;}}),null);assert.equal(shareableRecording(r,{share(){},canShare(){throw new Error();}}),null);
   assert.equal(shareableRecording(r,{share(){},canShare:({files})=>files[0].name==='record.mp4'}).name,'record.mp4');
+});
+test('diagnostics distinguish recorder/canvas support without acquiring media',()=>{
+  const f=fixture({captureSupported:()=>false});const d=f.recording.diagnosticSnapshot();assert.equal(d.mediaRecorderSupported,true);assert.equal(d.captureStreamSupported,false);assert.equal(d.state,'IDLE');assert.equal(f.recording.supported,false);assert.equal(f.recording.session,undefined);
+});
+test('live diagnostics include negotiated MIME, wall start, native audio and chunk count',async()=>{
+  const f=fixture();f.source.secretFace='not diagnostic';await f.recording.start({source:f.source,microphone:true});f.recording.session.recorder.chunk();f.advance(500);const d=f.recording.diagnosticSnapshot();assert.equal(d.state,'RECORDING');assert.equal(d.width,400);assert.equal(d.height,600);assert.equal(d.fps,24);assert.equal(d.startedAt,'2026-11-10T00:00:00.000Z');assert.equal(d.elapsedMs,500);assert.equal(d.microphoneStatus,'acquired');assert.equal(d.audioTracks[0].state,'live');assert.equal(d.chunks,1);assert.ok(d.selectedMime.startsWith('video/mp4'));assert.equal(d.actualMime,d.selectedMime);assert.equal(JSON.stringify(d).includes('secretFace'),false);assert.equal('source' in d,false);assert.equal('blob' in d,false);assert.equal('stream' in d,false);await f.recording.stop();
+});
+test('finished diagnostics retain final data counters and released anonymous tracks',async()=>{
+  const f=fixture();await f.recording.start({source:f.source,microphone:true});f.recording.session.recorder.chunk();f.advance(1234);await f.recording.stop('test stop');const d=f.recording.diagnosticSnapshot();assert.equal(d.state,'READY');assert.equal(d.chunks,2);assert.ok(d.bytes>0);assert.equal(d.microphoneStatus,'released');assert.equal(d.audioTracks[0].state,'ended');assert.equal(d.reason,'test stop');assert.equal(d.elapsedMs,1234);f.recording.clearResult();assert.equal(f.recording.diagnosticSnapshot().startedAt,undefined);
+});
+test('denial diagnostics retain ERROR details and a fresh silent recording resets them',async()=>{
+  const f=fixture({mediaDevices:{getUserMedia:async()=>{throw new DOMException('denied','NotAllowedError')}}});await f.recording.start({source:f.source,microphone:true});const d=f.recording.diagnosticSnapshot();assert.equal(d.state,'ERROR');assert.equal(d.microphoneStatus,'denied');assert.match(d.lastError,/マイク/);await f.recording.start({source:f.source});assert.equal(f.recording.diagnosticSnapshot().microphoneStatus,'off');assert.equal(f.recording.diagnosticSnapshot().lastError,'');await f.recording.stop();
+});
+test('canceled microphone preparation has an explicit non-media diagnostic snapshot',async()=>{
+  let resolve;const f=fixture({mediaDevices:{getUserMedia:()=>new Promise(r=>resolve=r)}});const pending=f.recording.start({source:f.source,microphone:true});assert.equal(f.recording.diagnosticSnapshot().state,'PREPARING');await f.recording.stop();assert.equal(f.recording.diagnosticSnapshot().microphoneStatus,'canceled');resolve(f.microphone);await pending;assert.equal(f.microphone.getTracks()[0].readyState,'ended');
+});
+test('copyable recording diagnostic text includes zero values, errors and safe track states',()=>{
+  const text=recordingDiagnosticText({mediaRecorderSupported:false,captureStreamSupported:true,state:'ERROR',bytes:0,chunks:0,reason:'stopped',lastError:'encoder'});assert.match(text,/MediaRecorder: 非対応/);assert.match(text,/Canvas.captureStream: 対応/);assert.match(text,/0 bytes/);assert.match(text,/encoder/);assert.match(recordingDiagnosticText({},'link failed'),/link failed/);
+});
+test('successful lifecycle maps to PREPARING RECORDING STOPPING READY with final counters',async()=>{
+  const f=fixture();assert.equal(f.recording.diagnosticSnapshot().state,'IDLE');await f.recording.start({source:f.source});const promise=f.recording.stop();assert.equal(f.recording.diagnosticSnapshot().state,'STOPPING');await promise;assert.deepEqual(f.states.filter((s,i,a)=>i===0||s!==a[i-1]),['initializing','recording','stopping','completed']);assert.equal(f.recording.diagnosticSnapshot().state,'READY');assert.equal(f.recording.diagnosticSnapshot().chunks,1);
+});
+test('captureStream(0) failure falls back to the same configured fps',async()=>{
+  const f=fixture(),rates=[];f.canvas.captureStream=rate=>{rates.push(rate);if(rate===0)throw new Error('manual capture unavailable');return new Stream([new Track('video')]);};assert.equal(await f.recording.start({source:f.source}),true);assert.deepEqual(rates,[0,24]);await f.recording.stop();
+});
+test('failed replacement preserves the previous video and permits another recording',async()=>{
+  const f=fixture();await f.recording.start({source:f.source});const original=await f.recording.stop();const capture=f.canvas.captureStream;f.canvas.captureStream=()=>{throw new Error('capture failed')};assert.equal(await f.recording.start({source:f.source}),false);assert.equal(f.recording.result,original);assert.equal(f.recording.busy,false);f.canvas.captureStream=capture;await f.recording.start({source:f.source});assert.equal(f.recording.result,original);const next=await f.recording.stop();assert.notEqual(next,original);
+});
+test('runtime frame failures cannot escape into the application render loop',async()=>{
+  const f=fixture();await f.recording.start({source:f.source});const s=f.recording.session;s.track.requestFrame=()=>{throw new Error('frame request failed')};f.advance(100);assert.doesNotThrow(()=>f.recording.pushFrame(f.source));await s.done;assert.equal(f.recording.state,'error');assert.equal(f.recording.busy,false);assert.match(f.recording.error,/frame request failed/);
+});
+test('unusable manual requestFrame falls back without changing quality',async()=>{
+  const f=fixture(),tracks=[],rates=[];f.canvas.captureStream=rate=>{rates.push(rate);const t=new Track('video');t.requestFrame=()=>{throw new Error('not supported')};tracks.push(t);return new Stream([t]);};assert.equal(await f.recording.start({source:f.source}),true);assert.deepEqual(rates,[0,24]);assert.equal(tracks[0].stops,1);assert.equal(f.recording.diagnosticSnapshot().captureMode,'native-fps');f.advance(100);assert.doesNotThrow(()=>f.recording.pushFrame(f.source));await f.recording.stop();assert.equal(tracks[1].stops,1);
+});
+test('failed constructors or start release owned tracks and retain the previous video',async()=>{
+  for(const mode of ['constructor','start']){const f=fixture();await f.recording.start({source:f.source});const old=await f.recording.stop();let track;f.canvas.captureStream=()=>new Stream([track=new Track('video')]);class Broken extends Recorder{constructor(s,o){if(mode==='constructor')throw new Error('constructor');super(s,o)}start(){throw new Error('start')}}f.recording.Recorder=Broken;assert.equal(await f.recording.start({source:f.source,microphone:true}),false);assert.equal(track.stops,1);assert.equal(f.microphone.getTracks()[0].stops,1);assert.equal(f.recording.result,old);f.recording.Recorder=Recorder;assert.equal(await f.recording.start({source:f.source}),true);await f.recording.stop();}
+});
+test('canceling a replacement microphone prompt preserves the previous video',async()=>{
+  let resolve;const f=fixture({mediaDevices:{getUserMedia:()=>new Promise(r=>resolve=r)}});await f.recording.start({source:f.source});const old=await f.recording.stop();const pending=f.recording.start({source:f.source,microphone:true});assert.equal(f.recording.elapsedMs,0);await f.recording.stop();assert.equal(f.recording.result,old);resolve(f.microphone);await pending;assert.equal(f.microphone.getTracks()[0].readyState,'ended');assert.equal(f.recording.diagnosticSnapshot().retainedPrevious,true);
+});
+test('empty or invalid replacement output never erases the previous video',async()=>{
+  for(const invalid of [false,true]){const f=fixture();await f.recording.start({source:f.source});const old=await f.recording.stop();class Broken extends Recorder{chunk(){if(invalid)this.ondataavailable?.({data:new Blob(['invalid'])})}}f.recording.Recorder=Broken;await f.recording.start({source:f.source});assert.equal(await f.recording.stop(),old);assert.equal(f.recording.state,'error');assert.equal(f.recording.retainedPrevious,true);}
+});
+test('an encoding error with a partial replacement retains the earlier completed video',async()=>{
+  const f=fixture();await f.recording.start({source:f.source});const old=await f.recording.stop();await f.recording.start({source:f.source});const s=f.recording.session;s.recorder.onerror({error:new Error('encoder interrupted')});await s.done;assert.equal(f.recording.result,old);assert.equal(f.recording.state,'error');assert.match(f.recording.error,/encoder interrupted/);
+});
+test('MIME becoming unavailable permits a later retry without losing the result',async()=>{
+  const f=fixture();await f.recording.start({source:f.source});const old=await f.recording.stop();class NoMime extends Recorder{static isTypeSupported(){return false}}f.recording.Recorder=NoMime;assert.equal(await f.recording.start({source:f.source}),false);assert.equal(f.recording.result,old);assert.equal(f.recording.busy,false);f.recording.Recorder=Recorder;assert.equal(await f.recording.start({source:f.source}),true);await f.recording.stop();
+});
+test('missing final stop data times out without destroying a previous video',async()=>{
+  const f=fixture();await f.recording.start({source:f.source});const old=await f.recording.stop();class NoFinal extends Recorder{stop(){this.state='inactive'}}f.recording.Recorder=NoFinal;await f.recording.start({source:f.source});const pending=f.recording.stop();for(const fn of [...f.timeouts.values()])fn();assert.equal(await pending,old);assert.equal(f.recording.state,'error');assert.equal(f.recording.session,null);
 });
