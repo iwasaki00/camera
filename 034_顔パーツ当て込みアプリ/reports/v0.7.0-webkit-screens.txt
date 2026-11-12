@@ -1,0 +1,4 @@
+PASS WEBKIT SCREEN: native image chooser and rendering in reorganized screen
+PASS WEBKIT SCREEN: three tabs retain canvas and fit 375/390px
+PASS WEBKIT SCREEN: 200% editing after tab restore; finished guide exclusion preserves guide preference
+PASS WEBKIT SCREEN: bounded settings, live mode status and landscape layout

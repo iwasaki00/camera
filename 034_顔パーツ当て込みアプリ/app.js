@@ -1,17 +1,18 @@
-import { Camera } from './camera.js?v=0.6.2';
-import { CompositeRenderer, sourceRect } from './renderer.js?v=0.6.2';
-import { TouchEditor, sourceFromBox } from './editor.js?v=0.6.2';
-import { Viewport } from './viewport.js?v=0.6.2';
-import { Magnifier } from './magnifier.js?v=0.6.2';
-import { PartCollection, PART_TYPES, sourceForDisplay, setDisplaySource } from './parts.js?v=0.6.2';
-import { TemplateUI } from './template-ui.js?v=0.6.2';
-import { FaceTracker } from './tracking.js?v=0.6.2';
-import { correctionFor, DEFAULT_CORRECTION, displayCrop } from './tracking-geometry.js?v=0.6.2';
-import { Diagnostics, DiagnosticPanel } from './diagnostics.js?v=0.6.2';
-import { DEFAULT_COMPOSITE } from './composite-color.js?v=0.6.2';
-import { CompositeUI } from './composite-ui.js?v=0.6.2';
-import { VideoRecording } from './recording.js?v=0.6.2';
-import { RecordingUI } from './recording-ui.js?v=0.6.2';
+import { Camera } from './camera.js?v=0.7.0';
+import { CompositeRenderer, sourceRect } from './renderer.js?v=0.7.0';
+import { TouchEditor, sourceFromBox } from './editor.js?v=0.7.0';
+import { Viewport } from './viewport.js?v=0.7.0';
+import { Magnifier } from './magnifier.js?v=0.7.0';
+import { PartCollection, PART_TYPES, sourceForDisplay, setDisplaySource } from './parts.js?v=0.7.0';
+import { TemplateUI } from './template-ui.js?v=0.7.0';
+import { FaceTracker } from './tracking.js?v=0.7.0';
+import { correctionFor, DEFAULT_CORRECTION, displayCrop } from './tracking-geometry.js?v=0.7.0';
+import { Diagnostics, DiagnosticPanel } from './diagnostics.js?v=0.7.0';
+import { DEFAULT_COMPOSITE } from './composite-color.js?v=0.7.0';
+import { CompositeUI } from './composite-ui.js?v=0.7.0';
+import { VideoRecording } from './recording.js?v=0.7.0';
+import { RecordingUI } from './recording-ui.js?v=0.7.0';
+import { ScreenUI } from './screen-ui.js?v=0.7.0';
 
 const $ = id => document.getElementById(id);
 const canvas = $('composition'), ctx = canvas.getContext('2d');
@@ -33,6 +34,7 @@ let frame = 0, imageGeneration = 0, exportUrl = null, lastDraw = -Infinity;
 let photoEditor, cameraEditor;
 let photoMagnifier, cameraMagnifier;
 let templates;
+const screens = new ScreenUI({changed:()=>{cancelEditors();render();}});
 const photoView = new Viewport(canvas, { min: .5, changed: () => { syncViewControls(); render(); } });
 const cameraView = new Viewport($('camera-preview'), { changed: () => { syncViewControls(); render(); } });
 const controls = [];
@@ -308,7 +310,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { dia
 window.addEventListener('pagehide', () => { diagnosticPanel.pause();photoEditor.cancel(); stopCamera(); clearExport();if(recordingUI){recordingUI.suspended=true;if($('record-result').open)$('record-result').close();recordingUI.releasePreview();} });
 window.addEventListener('pageshow', () => {if(recordingUI){recordingUI.suspended=false;recordingUI.sync();}});
 photoEditor = new TouchEditor(canvas, {
-  color: '#24e3cd', editable: () => !recording?.busy, enabled: () => !!selected()?.guides.photo && !!state.image, viewport: photoView, mode: () => state.mode,
+  color: '#24e3cd', editable: () => !recording?.busy && screens.screen === 'photo', enabled: () => screens.screen === 'photo' && !!selected()?.guides.photo && !!state.image, viewport: photoView, mode: () => screens.screen === 'finished' ? 'view' : state.mode,
   snapshot: () => ({ targetRect: { ...selected().targetRect }, rotation: selected().rotation }), restore: saved => { Object.assign(selected(), saved); update(); },
   getBox: size => { if (!selected()) return null; const p = selected().targetRect; return { x: p.x / 100 * size.width, y: p.y / 100 * size.height,
     width: p.width / 100 * size.width, height: p.height / 100 * size.height, angle: selected().rotation * Math.PI / 180 }; },
@@ -321,8 +323,8 @@ photoEditor = new TouchEditor(canvas, {
 });
 cameraEditor = new TouchEditor($('camera-preview'), {
   color: '#ffba69', rotation: false,
-  editable: () => !state.trackingEnabled && !recording?.busy,
-  enabled: () => !!selected()?.guides.camera && state.running && video.readyState >= 2, viewport: cameraView, mode: () => state.mode,
+  editable: () => !state.trackingEnabled && !recording?.busy && screens.screen === 'camera',
+  enabled: () => screens.screen === 'camera' && !!selected()?.guides.camera && state.running && video.readyState >= 2, viewport: cameraView, mode: () => state.mode,
   snapshot: () => ({ ...selected().sourceRect }), restore: saved => { selected().sourceRect = { ...saved }; update(); },
   getBox: size => {
     if (!video.videoWidth || !selected()) return null;

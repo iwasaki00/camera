@@ -141,3 +141,72 @@ dialog::backdrop { background: #102b2ba0; }
 .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
 #template-download { max-width: 100%; overflow-wrap: anywhere; font-size: 12px; }
 @media (max-width: 400px) { .title-row h1 { font-size: 18px; } dialog { padding: 12px; } }
+
+/* v0.7: a single stable preview slot; inactive canvases retain their geometry. */
+:root { --preview-height: clamp(180px, calc(100dvh - 410px), 520px); }
+main { max-width: 900px; padding: 10px max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+header { margin-bottom: 6px; }
+.preview-panel { padding: 8px; }
+.screen-navigation { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.screen-tabs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); flex: 1; min-width: 0; gap: 4px; }
+.screen-tabs button { padding: 5px; }
+#interaction-mode { width: 126px; min-width: 0; }
+.screen-tabs button[aria-selected=true] { background: #d9f2ed; border-color: var(--accent); color: var(--accent); }
+.preview-panel > .panel-heading { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); margin: 0; }
+.part-bar { margin: 0; }
+.part-tabs { width: 100%; }
+#screen-state { min-height: 24px; display: flex; align-items: center; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+#screen-state[data-recording=true] { color: #a52e25; }
+#screen-state[data-warning=true] { color: #8a5d00; }
+#screen-state[data-error=true] { color: #a52e25; }
+.workspace { display: block; position: relative; height: calc(var(--preview-height) + 46px); }
+.workspace > #photo-panel, .workspace > #camera-panel { position: absolute; inset: 0; min-width: 0; visibility: hidden; pointer-events: none; }
+.workspace > [data-active=true] { visibility: visible !important; pointer-events: auto !important; }
+#camera { position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: .01; pointer-events: none; }
+.stage, .camera-stage { height: var(--preview-height); min-height: 0; width: 100%; align-items: center; }
+#composition, #camera-preview { width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; }
+.view-tools { height: 46px; margin: 0; gap: 5px; }
+.view-tools button { min-height: 44px; min-width: 44px; padding: 5px; }
+input[type=range] { height: 44px; margin: 0; }
+select { font-size: 16px; max-width: 100%; }
+.composite-bar select, .record-options select { font-size: 16px; }
+.camera-panel > .tracking-bar { position: absolute; top: 4px; left: 4px; right: 4px; z-index: 3; background: #ffffffed; border-radius: 8px; padding: 0 6px; margin: 0; width: fit-content; max-width: calc(100% - 8px); }
+.preview-panel[data-screen=finished] #photo-panel .magnifier { visibility: hidden; pointer-events: none; }
+.preview-panel[data-screen=finished] #photo-panel .view-tools .toggle,
+.preview-panel[data-screen=finished] #interaction-mode { visibility: hidden; }
+#settings-panel { border-top: 1px solid var(--line); margin: 0; }
+#settings-panel > summary { font-size: 12px; min-height: 0; height: 0; padding: 0; overflow: hidden; list-style: none; }
+/* The named toggle in the operation bar controls this disclosure. */
+#settings-panel > summary:focus-visible { height: 44px; }
+.settings-body { max-height: min(34dvh,360px); overflow-y: auto; overscroll-behavior-y: contain; padding: 0 6px; scrollbar-gutter: stable; }
+.settings-body > details { margin: 0; }
+.settings-body summary { font-size: 13px; }
+.part-management { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+#part-delete { color: #a52e25; margin-left: auto; }
+#basic-bar { position: sticky; bottom: 0; z-index: 5; background: #fff; border-top: 1px solid var(--line); padding: 4px 0 max(4px, env(safe-area-inset-bottom)); }
+#basic-bar .actions { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 4px; margin: 0; }
+#basic-bar button, #basic-bar .button { font-size: 12px; padding: 5px; min-width: 0; min-height: 44px; }
+#basic-bar #image-trigger > span { font-size: 0; }
+#basic-bar #image-trigger { min-height: 46px; }
+#basic-bar #image-trigger > span::after { content: '画像読込'; font-size: 12px; }
+#recording-panel { padding: 4px 0 0; margin: 4px 0 0; border-top: 0; display: grid; grid-template-columns: minmax(100px,1fr) minmax(0,1fr); gap: 6px; align-items: center; }
+.record-actions { display: flex; gap: 4px; }
+.record-actions button { flex: 1; }
+.record-state { margin: 0; display: block; font-size: 11px; overflow-wrap: anywhere; }
+#record-elapsed { margin-right: 5px; }
+#status { font-size: 11px; margin: 2px 0; line-height: 1.4; }
+#status:not([data-error=true]) { max-height: 2.8em; overflow-y: auto; }
+.magnifier, #camera-magnifier { width: 148px; }
+.magnifier-heading { height: 44px; }
+.magnifier-heading select, .magnifier-heading button { min-height: 44px; height: 44px; min-width: 44px; padding: 2px; font-size: 16px; }
+.magnifier-heading span { min-height: 44px; min-width: 44px; display: flex; align-items: center; }
+.magnifier canvas, #camera-magnifier canvas { width: 128px; height: 84px; margin: auto; }
+.screen-tabs button, #basic-bar button, .part-tabs button, summary { touch-action: manipulation; }
+.touch-editor, .magnifier { -webkit-touch-callout: none; }
+.screen-tabs button, .part-tabs button, #basic-bar button, .view-tools button { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+@media (max-height: 500px) {
+  :root { --preview-height: 220px; }
+  #basic-bar { position: static; }
+  .settings-body { max-height: 200px; }
+}
+@media (min-width: 761px) { :root { --preview-height: clamp(280px,60dvh,600px); } }

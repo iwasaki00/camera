@@ -45,7 +45,7 @@ export function recordingDiagnosticText(r={},uiError='') {
     `終了理由: ${r.reason||'なし'}`,`最終エラー: ${uiError||r.lastError||'なし'}`].join('\n');
 }
 export function diagnosticText(s) {
-  return [`Portrait Face Parts Player v0.6.2`, `計測窓: 直近${s.windowMs/1000}秒（現在${fixed(s.elapsedMs/1000)}秒）`,
+  return [`Portrait Face Parts Player v0.7.0`, `計測窓: 直近${s.windowMs/1000}秒（現在${fixed(s.elapsedMs/1000)}秒）`,
     `描画fps: ${fixed(s.drawFps)}`,`検出/秒: ${fixed(s.detectionFps)} / 完了${s.count}回`,
     `推論ms 直近/平均/最大: ${fixed(s.inferenceLastMs)} / ${fixed(s.inferenceAverageMs)} / ${fixed(s.inferenceMaxMs)}`,
     `合成ms 平均/最大（同じ計測窓）: ${fixed(s.compositeAverageMs)} / ${fixed(s.compositeMaxMs)}`,

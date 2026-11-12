@@ -50,11 +50,12 @@ try {
   });
   socket = new WebSocket(endpoint);
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
-  let id = 0; const pending = new Map(); const errors = []; const choosers = [];
+  let id = 0; const pending = new Map(); const errors = []; const startupErrors = []; const choosers = [];
   socket.onmessage = event => {
     const message = JSON.parse(event.data);
     if (message.id) { const request = pending.get(message.id); pending.delete(message.id); message.error ? request.reject(message.error) : request.resolve(message.result); }
     if (message.method === 'Runtime.exceptionThrown') errors.push(message.params.exceptionDetails.exception?.description || message.params.exceptionDetails.text);
+    if (message.method === 'Runtime.consoleAPICalled' && message.params.type === 'error' && message.params.args[0]?.value === 'Portrait Face Parts Player startup failed:') startupErrors.push(message.params.args.map(a=>a.description||a.value).join(' '));
     if (message.method === 'Page.fileChooserOpened') choosers.push(message.params);
   };
   const call = (method, params = {}, sessionId) => new Promise((resolve, reject) => {
@@ -77,20 +78,32 @@ try {
   const waitFor = async (expression, attempts = 80) => {
     for (let i = 0; i < attempts; i++) { if (await evaluate(expression)) return; await new Promise(r => setTimeout(r, 100)); }
     const state=await evaluate("JSON.stringify({status:document.querySelector('#status')?.textContent,recording:document.querySelector('#record-status')?.textContent,recordingState:document.querySelector('#record-status')?.dataset.state,recordStartDisabled:document.querySelector('#record-start')?.disabled,camera:document.querySelector('#camera-state')?.textContent,tracking:document.querySelector('#tracking-status')?.textContent,template:document.querySelector('#template-message')?.textContent,visibility:document.visibilityState,startDisabled:document.querySelector('#start')?.disabled})");
-    throw new Error(`Timed out: ${expression}; state: ${state}; runtime errors: ${JSON.stringify(errors)}`);
+    throw new Error(`Timed out: ${expression}; state: ${state}; runtime errors: ${JSON.stringify([...errors,...startupErrors])}`);
   };
-  await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/` });
-  if(process.env.PICKER_AUDIT==='1'||process.env.PICKER_ONLY==='1'||process.argv.includes('--picker')) {
+  await command('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/${process.argv.includes('--layout')&&process.env.BASELINE_DIR?'baseline/index.html':''}` });
+  if(process.argv.includes('--layout')) {
+    await waitFor("document.body?.dataset.appState==='ready'");
+    const measure=()=>evaluate(`(()=>{const box=s=>{const r=document.querySelector(s).getBoundingClientRect();return {top:r.top+scrollY,height:r.height,width:r.width};};return {width:innerWidth,height:innerHeight,pageHeight:document.documentElement.scrollHeight,photo:box('.stage'),camera:box('.camera-stage'),image:box('#image-trigger'),record:box('#record-start'),settings:document.querySelector('#settings-panel')?.open??null};})()`);
+    const empty=await measure();
+    await evaluate(`(async()=>{const c=document.createElement('canvas');c.width=400;c.height=600;c.getContext('2d').fillRect(0,0,400,600);const b=await new Promise(r=>c.toBlob(r));const dt=new DataTransfer();dt.items.add(new File([b],'layout.png',{type:'image/png'}));const i=document.querySelector('#image-file');i.files=dt.files;i.dispatchEvent(new Event('change'));document.querySelector('#start').click();})()`);
+    await waitFor("document.querySelector('#camera').readyState>=2&&!document.querySelector('#save').disabled");
+    const loaded=await measure();
+    const report={empty,loaded};console.log(JSON.stringify(report,null,2));
+    if(process.env.LAYOUT_REPORT)await writeFile(process.env.LAYOUT_REPORT,JSON.stringify(report,null,2)+'\n');
+  } else if(process.argv.includes('--screens')) {
+    await waitFor("document.body?.dataset.appState==='ready'");
+    const {checkScreens}=await import('./screens-check.mjs');await checkScreens({evaluate,command,waitFor});assert.deepEqual(errors,[]);
+  } else if(process.env.PICKER_AUDIT==='1'||process.env.PICKER_ONLY==='1'||process.argv.includes('--picker')) {
     const {checkPicker}=await import('./picker-check.mjs');
     await checkPicker({evaluate,command,waitFor,choosers,profile,audit:process.env.PICKER_AUDIT==='1'});
     assert.deepEqual(errors,[]);
   } else if(process.argv.includes('--recording')) {
     await command('Emulation.setFocusEmulationEnabled',{enabled:true});
     await call('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:profile});
-    await waitFor("document.body.dataset.appState==='ready'");
+    await waitFor("document.body?.dataset.appState==='ready'");
     const {checkRecording}=await import('./recording-check.mjs');await checkRecording({evaluate,command,waitFor,profile});assert.deepEqual(errors,[]);
   } else if(process.argv.includes('--composite')) {
-    await waitFor("document.body.dataset.appState==='ready'");
+    await waitFor("document.body?.dataset.appState==='ready'");
     const {checkComposite}=await import('./composite-check.mjs');await checkComposite({evaluate,command,waitFor});assert.deepEqual(errors,[]);
   } else if(process.env.PERFORMANCE_COMPARE==='1') {
     await waitFor("!!document.querySelector('#image-file')&&!document.querySelector('#image-file').disabled");
@@ -109,12 +122,14 @@ try {
   assert.deepEqual(await evaluate("[document.querySelector('#save').disabled, !document.querySelector('#empty-hint').hidden, document.documentElement.scrollWidth <= innerWidth]"), [true, true, true]);
   console.log(`PASS: empty state and ${viewportWidth}x${viewportHeight} layout`);
   assert.equal(await evaluate("document.querySelector('#advanced').open"), false);
-  const collapsedHeight = await evaluate('document.documentElement.scrollHeight');
+  await evaluate("document.querySelector('#settings-toggle')?.click();document.querySelector('#settings-parts').open=true;");
+  const collapsedHeight = await evaluate("document.querySelector('.settings-body').scrollHeight");
   await evaluate("document.querySelector('#advanced summary').click()");
   assert.equal(await evaluate("document.querySelector('#advanced').open"), true);
-  assert.ok(await evaluate('document.documentElement.scrollHeight') > collapsedHeight + 300);
+  assert.ok(await evaluate("document.querySelector('.settings-body').scrollHeight") > collapsedHeight + 300);
   await evaluate("document.querySelector('#advanced summary').click()");
   assert.equal(await evaluate("document.querySelector('#advanced').open"), false);
+  await evaluate("document.querySelector('#settings-panel').open=false");
   console.log('PASS: detail controls start collapsed and expand only on demand');
   await evaluate(`(() => {
     const data = new DataTransfer(); data.items.add(new File(['invalid'], 'broken.png', { type: 'image/png' }));
@@ -144,7 +159,7 @@ try {
     return { x:r.left+r.width*value('x')/100, y:r.top+r.height*value('y')/100,
       width:r.width*value('width')/100,height:r.height*value('height')/100,
       surfaceWidth:r.width,surfaceHeight:r.height,percentX:value('x'),percentY:value('y'),angle:value('rotation') };
-  }; document.querySelector('#composition').scrollIntoView({block:'center',behavior:'instant'});`);
+  }; document.querySelector('#screen-photo')?.click();document.querySelector('#composition').scrollIntoView({block:'center',behavior:'instant'});`);
   await new Promise(r => setTimeout(r, 100));
   const scrollBefore = await evaluate('scrollY');
   let photo = await evaluate('window.photoBox()');
@@ -187,7 +202,7 @@ try {
     const crop = sourceRect(video.videoWidth,video.videoHeight,aspect,{x:value('source-x')/100,y:value('source-y')/100,zoom:value('source-zoom')},document.querySelector('#mirror').checked);
     return {x:r.left+(crop.visualX+crop.width/2)/video.videoWidth*r.width,y:r.top+(crop.y+crop.height/2)/video.videoHeight*r.height,
       width:crop.width/video.videoWidth*r.width,height:crop.height/video.videoHeight*r.height,surfaceWidth:r.width,surfaceHeight:r.height,zoom:value('source-zoom')};
-  }; document.querySelector('#camera-preview').scrollIntoView({block:'center',behavior:'instant'});`);
+  }; document.querySelector('#screen-camera')?.click();document.querySelector('#camera-preview').scrollIntoView({block:'center',behavior:'instant'});`);
   const cameraScroll = await evaluate('scrollY');
   let source = await evaluate('window.cameraBox()');
   await touchDrag(source, {x:source.x+12,y:source.y-9});
@@ -244,7 +259,7 @@ try {
   console.log('PASS: PNG signature, guide excluded from PNG, camera tracks stopped, no runtime errors');
   await evaluate("document.querySelector('#camera-loupe').checked=false;document.querySelector('#camera-loupe').dispatchEvent(new Event('change'));document.querySelector('#start').click()");
   await waitFor("document.querySelector('#camera-state').textContent === '使用中' && document.querySelector('#camera').readyState >= 2");
-  await evaluate("document.querySelector('#camera-preview').scrollIntoView({block:'center',behavior:'instant'})");
+  await evaluate("document.querySelector('#screen-camera')?.click();document.querySelector('#camera-preview').scrollIntoView({block:'center',behavior:'instant'})");
   const restarted = await evaluate('window.cameraBox()');
   await touchDrag(restarted,{x:restarted.x+6,y:restarted.y-3});
   assert.ok(Math.abs((await evaluate('window.cameraBox()')).x-restarted.x-6)<1);

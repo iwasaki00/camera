@@ -1,7 +1,7 @@
-import { TemplateStore, storageMessage } from './template-store.js?v=0.6.2';
-import { validateDocument, newId, validName } from './template-schema.js?v=0.6.2';
-import { canvasBlob, thumbnail, decodeBackground } from './template-images.js?v=0.6.2';
-import { exportTemplate, importTemplate } from './template-zip.js?v=0.6.2';
+import { TemplateStore, storageMessage } from './template-store.js?v=0.7.0';
+import { validateDocument, newId, validName } from './template-schema.js?v=0.7.0';
+import { canvasBlob, thumbnail, decodeBackground } from './template-images.js?v=0.7.0';
+import { exportTemplate, importTemplate } from './template-zip.js?v=0.7.0';
 
 const $ = id => document.getElementById(id);
 const element = (tag,text,className) => {const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(className)e.className=className;return e;};

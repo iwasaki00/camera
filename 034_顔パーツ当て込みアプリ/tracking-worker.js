@@ -4,7 +4,7 @@ self.onmessage = async event => {
   const {id,type,image,time}=event.data;
   try {
     if(type==='init') {
-      const {createFaceDetector}=await import('./face-detector.js?v=0.6.2');
+      const {createFaceDetector}=await import('./face-detector.js?v=0.7.0');
       detector=await createFaceDetector();self.postMessage({id,ready:true});
     } else if(type==='detect') {
       const start=performance.now(),landmarks=detector.detect(image,time);

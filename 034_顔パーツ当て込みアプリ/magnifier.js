@@ -1,4 +1,4 @@
-import { clamp } from './renderer.js?v=0.6.2';
+import { clamp } from './renderer.js?v=0.7.0';
 
 export class Magnifier {
   constructor(parent, { id, label, color, getSource }) {
@@ -52,7 +52,7 @@ export class Magnifier {
   draw() {
     const source = this.getSource(); this.window.hidden = !this.toggle.checked || !source;
     if (this.window.hidden) return;
-    this.place(this.left ?? (this.id === 'photo' ? this.parent.clientWidth - this.window.offsetWidth - 6 : 2), this.top ?? 6);
+    this.place(this.left ?? (this.id === 'photo' ? this.parent.clientWidth - this.window.offsetWidth - 6 : 2), this.top ?? (this.id === 'camera' ? 56 : 6));
     const c = this.canvas.getContext('2d'), { image, x, y, fit, mirror = false } = source;
     c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = '#172c2b'; c.fillRect(0, 0, this.canvas.width, this.canvas.height);
     const ratio = this.zoom * fit * this.canvas.width / this.canvas.getBoundingClientRect().width;

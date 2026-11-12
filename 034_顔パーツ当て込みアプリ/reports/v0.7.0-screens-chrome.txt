@@ -1,0 +1,9 @@
+PASS SCREEN: three tabs preserve editor values, DOM, stream and scroll position without restarting camera
+PASS SCREEN: finished tab clears guides, hides magnifiers and prevents editing without changing saved guide settings
+PASS SCREEN: 100/200/400% direct editing remains accurate after hiding and restoring the canvas
+PASS SCREEN: photo and camera zoom and pan transforms remain independent across tabs
+PASS SCREEN: magnifier storage and independent toggles
+PASS SCREEN: bounded settings disclosure opens and closes, with immediate model updates
+PASS SCREEN: three actual recordings start from all tabs and keep moving during tab changes; decoded frames differ
+PASS SCREEN: finished PNG matches editing-tab PNG exactly and excludes presentation UI
+PASS SCREEN: 375/390px portrait, landscape, short screen and desktop: accurate touch edits after resize, no horizontal overflow, main touch targets ≥44px

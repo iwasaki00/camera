@@ -33,7 +33,7 @@ export async function checkTracking({evaluate,command,waitFor}) {
   }
   await evaluate("window.manualSources={};for(const type of ['mouth','leftEye','rightEye','nose']){document.querySelector('#select-'+type).click();window.manualSources[type]=['source-x','source-y','source-zoom'].map(id=>document.getElementById(id).value)}");
   assert.equal(await evaluate("document.querySelector('#tracking-toggle').checked"),false);
-  await evaluate("document.querySelector('#camera-preview').scrollIntoView({block:'center',behavior:'instant'})");
+  await evaluate("document.querySelector('#screen-camera')?.click();document.querySelector('#camera-preview').scrollIntoView({block:'center',behavior:'instant'})");
   await click('start');await waitFor("document.querySelector('#camera-state').textContent==='使用中'&&document.querySelector('#camera').readyState>=2");
   await click('tracking-toggle');
   await waitFor("['tracking','error'].includes(document.querySelector('#tracking-status').dataset.state)",300);
@@ -41,6 +41,10 @@ export async function checkTracking({evaluate,command,waitFor}) {
   assert.equal(await evaluate("document.querySelector('#tracking-status').dataset.backend"),'worker');
   assert.equal(await evaluate("document.querySelector('#source-x').disabled"),true);
   console.log('PASS REAL MODEL: local VIDEO-mode Worker/WASM inference detects the face and enables live tracking');
+  await evaluate("window.trackedStream=document.querySelector('#camera').srcObject;window.tabDetectionCount=Number(document.querySelector('#tracking-status').dataset.count);for(const id of ['photo','finished','camera'])document.querySelector('#screen-'+id).click()");
+  await waitFor("Number(document.querySelector('#tracking-status').dataset.count)>tabDetectionCount&&document.querySelector('#tracking-status').dataset.state==='tracking'",150);
+  assert.equal(await evaluate("document.querySelector('#tracking-toggle').checked&&document.querySelector('#camera').srcObject===trackedStream"),true);
+  console.log('PASS SCREEN TRACKING: tab switches preserve active real-model inference and the camera stream');
   await checkDiagnosticPanel({evaluate,waitFor});
 
   // Inspect raw model geometry directly as a separate integration assertion, without injecting app state.

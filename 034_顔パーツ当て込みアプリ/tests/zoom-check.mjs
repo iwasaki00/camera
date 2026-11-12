@@ -5,7 +5,7 @@ export async function checkZoom({ evaluate, command, touchDrag, waitFor }) {
   const setZoom = async (id, percent) => evaluate(`(() => {const el=document.querySelector('#${id}-view-zoom');el.value=${percent};el.dispatchEvent(new Event('input'));})()`);
   const model = () => evaluate("JSON.stringify(Array.from(document.querySelectorAll('#part-controls input,#source-controls input,#source-zoom')).map(el=>el.value))");
   const matrix = id => evaluate(`(() => {const m=new DOMMatrix(getComputedStyle(document.querySelector('#${id==='photo'?'composition':'camera-preview'}')).transform);return {scale:m.a,x:m.e,y:m.f};})()`);
-  const stage = async id => evaluate(`(() => {const el=document.querySelector('#${id==='photo'?'composition':'camera-preview'}').parentElement;el.scrollIntoView({block:'center',behavior:'instant'});const r=el.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2,width:r.width,height:r.height};})()`);
+  const stage = async id => evaluate(`(() => {document.querySelector('#screen-${id}')?.click();const el=document.querySelector('#${id==='photo'?'composition':'camera-preview'}').parentElement;el.scrollIntoView({block:'center',behavior:'instant'});const r=el.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2,width:r.width,height:r.height};})()`);
   const reset = async id => evaluate(`document.querySelector('#${id}-view-reset').click()`);
   await evaluate("for(const id of ['photo','camera']){const el=document.querySelector('#'+id+'-loupe');el.checked=false;el.dispatchEvent(new Event('change'));}");
   const png = async () => {

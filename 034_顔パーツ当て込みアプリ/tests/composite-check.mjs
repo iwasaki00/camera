@@ -46,7 +46,7 @@ export async function checkComposite({evaluate,command,waitFor}) {
   console.log('PASS COLOR: selected-part and per-mode settings retain independent manual corrections');
   const corrected=await png();
   const beforeValues=await evaluate("[...document.querySelectorAll('#part-controls input,#source-controls input,#composite-controls input')].map(e=>e.value)");
-  const point=await evaluate("(()=>{const e=document.querySelector('#composite-before');e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};})()");
+  const point=await evaluate("(()=>{const e=document.querySelector('#composite-before');for(let p=e.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};})()");
   await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...point,id:1,radiusX:8,radiusY:8}]});
   await waitFor("document.querySelector('#composite-before').getAttribute('aria-pressed')==='true'");
   const actualPreview=await evaluate("document.querySelector('#composition').toDataURL()");

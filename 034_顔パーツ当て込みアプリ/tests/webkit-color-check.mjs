@@ -12,6 +12,7 @@ export async function checkWebkitColor(page) {
     return values[0]===values[3]&&values[0]!==values[1]&&values[1]!==values[2];
   }),true);
   console.log('PASS WEBKIT COLOR: four-part Canvas ORIGINAL/NATURAL/COMIC; return to ORIGINAL has identical pixels');
+  await page.locator('#settings-toggle').click();await page.locator('#settings-quality > summary').click();
   await page.locator('#composite-mode').selectOption('natural');
   await page.locator('#composite-settings summary').click();await page.locator('#color-temperature').fill('15');await page.locator('#color-temperature').dispatchEvent('input');
   await page.locator('#select-leftEye').click();assert.equal(await page.locator('#color-temperature').inputValue(),'0');await page.locator('#select-mouth').click();assert.equal(await page.locator('#color-temperature').inputValue(),'15');

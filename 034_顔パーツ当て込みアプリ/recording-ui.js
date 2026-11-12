@@ -1,4 +1,4 @@
-import {shareableRecording} from './recording.js?v=0.6.2';
+import {shareableRecording} from './recording.js?v=0.7.0';
 const $=id=>document.getElementById(id);
 const names={idle:'待機',initializing:'初期化中',recording:'録画中',stopping:'録画終了処理中',completed:'録画完了',error:'エラー'};
 export class RecordingUI {
@@ -42,7 +42,7 @@ export class RecordingUI {
   applyLock() {
     const busy=this.recorder.busy;
     const controls=[...document.querySelectorAll('.preview-panel button,.preview-panel input,.preview-panel select,#templates-open')]
-      .filter(e=>!e.closest('#recording-panel')&&!['stop','save','diagnostic-copy'].includes(e.id));
+      .filter(e=>!e.closest('#recording-panel')&&!e.hasAttribute('data-recording-safe')&&!['stop','save','diagnostic-copy'].includes(e.id));
     for(const e of controls) {
       if(busy){if(!this.disabled.has(e))this.disabled.set(e,e.disabled);e.disabled=true;}
       else if(this.disabled.has(e)){e.disabled=this.disabled.get(e);this.disabled.delete(e);}

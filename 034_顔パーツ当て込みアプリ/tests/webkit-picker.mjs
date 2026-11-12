@@ -26,7 +26,9 @@ try {
   page.setDefaultTimeout(8000);
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   await page.waitForFunction(()=>document.body.dataset.appState==='ready');
-  if(process.argv.includes('--recording')) {
+  if(process.argv.includes('--screens')) {
+    const {checkWebkitScreens}=await import('./webkit-screens.mjs');await checkWebkitScreens(page);
+  } else if(process.argv.includes('--recording')) {
     const {checkWebkitRecording}=await import('./webkit-recording.mjs');await checkWebkitRecording(page);
   } else if(process.argv.includes('--composite')) {
     const {checkWebkitColor}=await import('./webkit-color-check.mjs');await checkWebkitColor(page);
@@ -50,6 +52,7 @@ try {
   await choose('#image-trigger',png);
   await page.waitForFunction(()=>document.querySelector('#image-file').value==='');
   console.log('PASS: WebKit cancellation and same-image reselection');
+  await page.locator('#settings-toggle').click();await page.locator('#settings-more summary').first().click();
   await page.locator('#image-picker-help summary').click();await choose('#image-file-native',png);
   await page.waitForFunction(()=>document.querySelector('#image-file-native').value==='');
   console.log('PASS: WebKit native fallback');

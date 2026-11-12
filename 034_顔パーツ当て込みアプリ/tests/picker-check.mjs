@@ -11,7 +11,7 @@ export async function checkPicker({evaluate,command,waitFor,choosers,profile,aud
   await waitFor("!!document.querySelector('#image-file')&&!document.querySelector('#image-file').disabled");
   await command('Page.setInterceptFileChooserDialog',{enabled:true});
   const click=async (selector,touch=false,edge=false)=>{
-    const p=await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:r.x+${edge?'r.width-5':'r.width/2'},y:r.y+${edge?'r.height-5':'r.height/2'}};})()`);
+    const p=await evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});for(let p=e.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:r.x+${edge?'r.width-5':'r.width/2'},y:r.y+${edge?'r.height-5':'r.height/2'}};})()`);
     if(touch) {
       await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...p,id:1,radiusX:8,radiusY:8}]});
       await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
@@ -87,7 +87,7 @@ export async function checkPicker({evaluate,command,waitFor,choosers,profile,aud
   await click('#zip-picker-help summary');await choose('#template-import-native',null);
   console.log('PASS: ZIP chooser, cancellation, import validation and native fallback');
   await click('#templates-close');
-  assert.deepEqual(await evaluate(`(()=>{const e=document.querySelector('#image-file'),r=e.getBoundingClientRect(),b=document.querySelector('#image-trigger').getBoundingClientRect();e.scrollIntoView({block:'center'});const q=e.getBoundingClientRect();return [r.width>=100,r.height>=44,Math.abs(r.width-b.width)<3,document.elementFromPoint(q.x+q.width/2,q.y+q.height/2)===e,document.documentElement.scrollWidth<=innerWidth];})()`),[true,true,true,true,true]);
+  assert.deepEqual(await evaluate(`(()=>{const e=document.querySelector('#image-file'),r=e.getBoundingClientRect(),b=document.querySelector('#image-trigger').getBoundingClientRect();e.scrollIntoView({block:'center'});const q=e.getBoundingClientRect();return [r.width>=44,r.height>=44,Math.abs(r.width-b.width)<3,document.elementFromPoint(q.x+q.width/2,q.y+q.height/2)===e,document.documentElement.scrollWidth<=innerWidth];})()`),[true,true,true,true,true]);
   console.log('PASS: full-size input owns hit target; mobile layout fits');
   await command('Network.enable');await command('Network.setBlockedURLs',{urls:['*app.js*']});await command('Page.reload',{ignoreCache:true});
   await waitFor("document.querySelector('#status')?.dataset.state==='initialization-error'");

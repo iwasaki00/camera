@@ -4,7 +4,7 @@ const APP_DETAILS = {
     type: "FACE COMPOSITE",
     title: "顔パーツ当て込みアプリ",
     description: "口・左右の目・鼻のカメラ映像を人物写真に同時合成。顔の自動追従、色調補正、テンプレート保存、ZIP入出力、PNG保存に対応。合成動画はマイク音声付きで録画・保存・共有できます。映像や音声は端末内で処理します。",
-    tech: "Video Recording · Natural / Comic · MediaPipe · Templates · v0.6.2",
+    tech: "3 Preview Tabs · Video Recording · Natural / Comic · MediaPipe · Templates · v0.7.0",
     icon: "./assets/app-icons/portrait-face-parts.svg"
   },
   "something-behind-you": {

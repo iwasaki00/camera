@@ -82,7 +82,7 @@ export async function checkMultiParts({ evaluate, command, touchDrag, waitFor })
     await choose('leftEye');await evaluate("document.querySelector('#photo-guide').click()");
     await choose('mouth');assert.equal((await read()).photoGuide,true);
     await choose('leftEye');assert.equal((await read()).photoGuide,false);assert.equal((await read()).cameraGuide,true);
-    await evaluate("document.querySelector('#composition').scrollIntoView({block:'center',behavior:'instant'})");
+    await evaluate("document.querySelector('#screen-photo')?.click();document.querySelector('#composition').scrollIntoView({block:'center',behavior:'instant'})");
     const hiddenBefore=await read(),hiddenBox=await evaluate('window.photoBox()');
     await touchDrag(hiddenBox,{x:hiddenBox.x+10,y:hiddenBox.y+4});assert.deepEqual(await read(),hiddenBefore);
     nearColor(await pixel(...centers[1]),colors[1]);
@@ -113,7 +113,7 @@ export async function checkMultiParts({ evaluate, command, touchDrag, waitFor })
     for(let i=0;i<3;i++)await evaluate("document.querySelector('#part-back').click()");
     nearColor(await pixel(200,300),colors[types.indexOf(topType)]);
     const beforeMove=await all();await choose('mouth');
-    await evaluate("document.querySelector('#composition').scrollIntoView({block:'center',behavior:'instant'})");
+    await evaluate("document.querySelector('#screen-photo')?.click();document.querySelector('#composition').scrollIntoView({block:'center',behavior:'instant'})");
     const box=await evaluate('window.photoBox()');await touchDrag(box,{x:box.x+6,y:box.y-3});
     const afterMove=await all();for(const type of ['leftEye','rightEye','nose'])assert.deepEqual(afterMove[type],beforeMove[type]);
     await choose('mouth');await write({'part-x':50,'part-y':50});
@@ -124,7 +124,7 @@ export async function checkMultiParts({ evaluate, command, touchDrag, waitFor })
     const beforePNG=await png(),beforeZoom=await all();
     assert.equal(beforePNG,await evaluate("document.querySelector('#composition').toDataURL()"));
     await write({'photo-view-zoom':200,'camera-view-zoom':400,'interaction-mode':'pan'});
-    await evaluate("document.querySelector('#composition').scrollIntoView({block:'center',behavior:'instant'})");
+    await evaluate("document.querySelector('#screen-photo')?.click();document.querySelector('#composition').scrollIntoView({block:'center',behavior:'instant'})");
     const stage=await evaluate("(()=>{const r=document.querySelector('.stage').getBoundingClientRect();return{x:r.left+r.width/2,y:r.top+r.height/2};})()");
     await touchDrag(stage,{x:stage.x+15,y:stage.y-12});
     assert.deepEqual(await all(),beforeZoom);assert.equal(await png(),beforePNG);
@@ -132,7 +132,7 @@ export async function checkMultiParts({ evaluate, command, touchDrag, waitFor })
     await write({'interaction-mode':'edit'});
     // A non-mouth part remains editable in the zoomed coordinate system.
     await choose('leftEye');await write({'photo-view-zoom':200});
-    await evaluate("document.querySelector('#composition').scrollIntoView({block:'center',behavior:'instant'})");
+    await evaluate("document.querySelector('#screen-photo')?.click();document.querySelector('#composition').scrollIntoView({block:'center',behavior:'instant'})");
     // Center the selected eye for a visible hit target at 200%.
     await write({'part-x':50,'part-y':50}); const zoomBox=await evaluate('window.photoBox()');
     await touchDrag(zoomBox,{x:zoomBox.x+8,y:zoomBox.y+4});
