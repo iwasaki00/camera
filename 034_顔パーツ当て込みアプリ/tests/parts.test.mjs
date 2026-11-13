@@ -1,105 +1,12 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { PartCollection, PART_TYPES, createPart, migrateMouth, orderedParts, sourceForDisplay, setDisplaySource } from '../parts.js';
-import { CompositeRenderer, sourceRect } from '../renderer.js';
-
-test('initial mouth preserves v0.1.2 geometry and settings', () => {
-  const c = new PartCollection(); assert.equal(c.parts.length, 1);
-  assert.equal(c.selected.id, 'mouth'); assert.equal(c.selected.enabled, true);
-  assert.deepEqual(c.selected.targetRect, { x: 50, y: 65, width: 24, height: 10 });
-  assert.deepEqual(sourceForDisplay(c.selected, true), { x: .5, y: .65, zoom: 1.5 });
-});
-test('migration copies custom mouth settings and keeps the same crop under mirror', () => {
-  const legacy = { x: 24, y: 67, width: 31, height: 12, rotation: 38, shape: 'rectangle', feather: 62 };
-  const source = { x: .25, y: .7, zoom: 3 };
-  const part = migrateMouth(legacy, source, true);
-  assert.deepEqual(part.targetRect, { x: 24, y: 67, width: 31, height: 12 });
-  assert.equal(part.rotation, 38); assert.equal(part.shape, 'rectangle'); assert.equal(part.feather, 62);
-  assert.deepEqual(sourceForDisplay(part, true), source);
-  part.targetRect.x = 12; part.sourceRect.y = .2;
-  assert.equal(legacy.x, 24); assert.equal(source.y, .7);
-});
-test('all four types can be added, and unknown types cannot exceed the limit', () => {
-  const c = new PartCollection(); for (const type of Object.keys(PART_TYPES)) c.add(type);
-  assert.equal(c.parts.length, 4); assert.equal(new Set(c.parts.map(p => p.id)).size, 4);
-  for (const p of c.parts.filter(p => p.id !== 'mouth')) assert.deepEqual([p.targetRect.x, p.targetRect.y], [50, 50]);
-  assert.equal(c.add('extra'), null); assert.equal(c.add('__proto__'), null); assert.equal(c.parts.length, 4);
-});
-test('adding an existing type selects it without overwriting any settings', () => {
-  const c = new PartCollection(); const eye = c.add('leftEye'); eye.rotation = 32; eye.enabled = false;
-  c.add('nose'); assert.equal(c.add('leftEye'), eye); assert.equal(c.selected, eye);
-  assert.equal(eye.rotation, 32); assert.equal(eye.enabled, false); assert.equal(c.parts.length, 3);
-});
-test('each target, source, rotation, feather and shape is independent', () => {
-  const c = new PartCollection(); const left = c.add('leftEye'), right = c.add('rightEye');
-  const before = structuredClone(right);
-  left.targetRect.x = 14; left.sourceRect.x = .8; left.sourceRect.zoom = 5;
-  left.rotation = 48; left.feather = 85; left.shape = 'rectangle';
-  left.guides.photo = false;
-  assert.deepEqual(right, before); assert.notEqual(left.targetRect, right.targetRect); assert.notEqual(left.sourceRect, right.sourceRect);
-});
-test('selection changes never mutate model settings and invalid selection is ignored', () => {
-  const c = new PartCollection(); c.add('leftEye'); const before = structuredClone(c.parts);
-  assert.equal(c.select('mouth'), true); assert.equal(c.select('missing'), false);
-  assert.equal(c.selected.id, 'mouth'); assert.deepEqual(c.parts, before);
-});
-test('deletion and disabled state differ; re-adding a deleted type creates a fresh center placement', () => {
-  const c = new PartCollection(); c.selected.enabled = false;
-  assert.equal(c.parts.length, 1); c.selected.targetRect.x = 12;
-  assert.equal(c.removeSelected(), true); assert.equal(c.selected, null);
-  const mouth = c.add('mouth'); assert.equal(mouth.enabled, true); assert.equal(mouth.targetRect.x, 50); assert.equal(mouth.targetRect.y, 50);
-});
-test('deleting the selected part safely falls back until all parts are gone', () => {
-  const c = new PartCollection(); c.add('leftEye'); c.add('rightEye'); c.add('nose');
-  for (let remaining = 3; remaining >= 0; remaining--) {
-    assert.equal(c.removeSelected(), true); assert.equal(c.parts.length, remaining);
-    assert.equal(!!c.selected, remaining > 0);
-  }
-  assert.equal(c.removeSelected(), false); assert.equal(c.reorder(1), false);
-});
-test('mirror changes visual orientation but retains the same physical eye crop', () => {
-  const p = createPart('leftEye'); p.sourceRect = { x: .7, y: .4, zoom: 4 };
-  const original = structuredClone(p.sourceRect);
-  const a = sourceRect(1280, 720, 2, sourceForDisplay(p, false), false);
-  const b = sourceRect(1280, 720, 2, sourceForDisplay(p, true), true);
-  assert.ok(Math.abs(a.x - b.x) < 1e-8); assert.equal(a.y, b.y); assert.deepEqual(p.sourceRect, original);
-  setDisplaySource(p, { x: .2, y: .3, zoom: 5 }, true);
-  assert.deepEqual(p.sourceRect, { x: .8, y: .3, zoom: 5 });
-});
-test('layer moves include disabled parts and leave all other settings intact', () => {
-  const c = new PartCollection(); c.add('leftEye'); c.add('nose'); c.select('mouth');
-  const before = structuredClone(c.selected.targetRect); c.parts[1].enabled = false;
-  c.reorder(1); c.reorder(1); assert.equal(orderedParts(c.parts).at(-1).id, 'mouth');
-  assert.equal(c.reorder(1), false); c.reorder(-1); c.reorder(-1);
-  assert.equal(orderedParts(c.parts)[0].id, 'mouth'); assert.deepEqual(c.selected.targetRect, before);
-});
-function rendererFixture() {
-  const calls = [], instances = [];
-  const renderer = new CompositeRenderer(() => { const instance = { draw: (...args) => calls.push(args) }; instances.push(instance); return instance; });
-  return { renderer, calls, instances };
-}
-test('composite draws enabled parts in z order with independent crop and mask settings', () => {
-  const c = new PartCollection(); c.add('leftEye'); c.add('rightEye'); c.add('nose');
-  c.parts[1].enabled = false; c.parts[0].zIndex = 8;
-  c.parts[0].rotation = 44; c.parts[0].feather = 66; c.parts[2].shape = 'rectangle';
-  const f = rendererFixture(), ctx = {}, video = {};
-  f.renderer.draw(ctx, video, c.parts, true);
-  assert.equal(f.calls.length, 3);
-  assert.deepEqual(f.calls.map(call => call[3].x), [.65, .5, .5]);
-  assert.equal(f.calls[0][2].shape, 'rectangle'); assert.equal(f.calls[0][2].rotation, 0);
-  assert.equal(f.calls[2][2].rotation, 44); assert.equal(f.calls[2][2].feather, 66);
-  assert.ok(f.calls.every(call => call[5] === false)); // No guides enter the export canvas.
-});
-test('each part retains its own renderer between frames and disable/enable cycles', () => {
-  const c = new PartCollection(); c.add('nose'); const f = rendererFixture();
-  f.renderer.draw({}, {}, c.parts, true); const mouthRenderer = f.renderer.renderers.get('mouth');
-  c.parts[0].enabled = false; f.renderer.draw({}, {}, c.parts, true);
-  c.parts[0].enabled = true; f.renderer.draw({}, {}, c.parts, true);
-  assert.equal(f.instances.length, 2); assert.equal(f.renderer.renderers.get('mouth'), mouthRenderer);
-});
-test('deleting a part releases its renderer without evicting other parts', () => {
-  const c = new PartCollection(); c.add('nose'); const f = rendererFixture();
-  f.renderer.draw({}, {}, c.parts, true); c.removeSelected(); f.renderer.draw({}, {}, c.parts, true);
-  assert.equal(f.renderer.renderers.size, 1); assert.equal(f.renderer.renderers.has('mouth'), true);
-  c.add('nose'); f.renderer.draw({}, {}, c.parts, true); assert.equal(f.instances.length, 3);
-});
+import test from 'node:test';import assert from 'node:assert/strict';
+import {PartCollection,createPart,orderedParts,sourceForDisplay,setDisplaySource} from '../parts.js';
+import {CompositeRenderer,sourceRect} from '../renderer.js';
+test('new session has one centered generic enabled oval with an immutable identity',()=>{const c=new PartCollection(),p=c.selected;assert.equal(c.parts.length,1);assert.equal(p.name,'パーツ1');assert.equal(p.enabled,true);assert.equal(p.shape,'oval');assert.equal(p.targetRect.x,50);assert.equal(p.sourceRect.y,.5);assert.equal('partType'in p,false);assert.equal('tracking'in p,false);});
+test('adding selects unique IDs/names, does not mutate existing data, and stops at eight',()=>{const c=new PartCollection(),before=structuredClone(c.selected);for(let i=1;i<8;i++){const p=c.add();assert.equal(c.selected,p);assert.equal(p.zIndex,i);}assert.equal(c.add(),null);assert.deepEqual(c.parts[0],before);assert.equal(new Set(c.parts.map(p=>p.id)).size,8);assert.equal(new Set(c.parts.map(p=>p.name)).size,8);});
+test('rename accepts Japanese and plain HTML text, keeps identity and rejects empty/long names',()=>{const c=new PartCollection(),id=c.selected.id;c.rename('口＋鼻');assert.equal(c.selected.id,id);c.rename('<b>左手</b>');assert.equal(c.selected.name,'<b>左手</b>');for(const name of ['', '  ','あ'.repeat(41)])assert.throws(()=>c.rename(name));});
+test('duplicate deep copies per-part data, uses a new ID/name, shifts target only and becomes frontmost',()=>{const c=new PartCollection();c.selected.enabled=false;c.selected.sourceRect.x=.2;c.selected.appearance.natural.brightness=12;const old=structuredClone(c.selected),p=c.duplicate();assert.notEqual(p.id,old.id);assert.match(p.name,/コピー/);assert.deepEqual(p.sourceRect,old.sourceRect);assert.equal(p.targetRect.x,old.targetRect.x+3);assert.equal(p.enabled,false);p.appearance.natural.brightness=30;assert.deepEqual(c.parts[0],old);});
+test('select and delete preserve other identities/settings and select an adjacent part; last part survives',()=>{const c=new PartCollection(),a=c.selected,b=c.add(),d=c.add();c.select(b.id);assert.equal(c.removeSelected(),true);assert.equal(c.selected,d);assert.deepEqual(c.parts,[a,d]);c.removeSelected();assert.equal(c.selected,a);assert.equal(c.removeSelected(),false);assert.equal(c.select('missing'),false);});
+test('enable toggles keep full settings and all four layer commands preserve coordinates',()=>{const c=new PartCollection();c.add();c.add();const p=c.selected,before=structuredClone(p);p.enabled=false;assert.equal(orderedParts(c.parts).length,2);p.enabled=true;assert.deepEqual(p,before);c.reorder(-1);assert.equal(orderedParts(c.parts)[1],p);c.reorder('last');assert.equal(orderedParts(c.parts)[0],p);c.reorder('first');assert.equal(orderedParts(c.parts).at(-1),p);c.reorder(-1);c.reorder(1);assert.deepEqual(p.targetRect,before.targetRect);assert.deepEqual(p.sourceRect,before.sourceRect);});
+test('multiple generic parts may share the identical camera range and mirror remains reversible',()=>{const a=createPart(),b=createPart();b.sourceRect={...a.sourceRect};setDisplaySource(a,{x:.2,y:.4,zoom:3,aspect:2},true);assert.equal(a.sourceRect.x,.8);assert.deepEqual(sourceForDisplay(a,true),{x:1-.8,y:.4,zoom:3,aspect:2});assert.equal(b.sourceRect.x,.5);const crop=sourceRect(640,480,1,{x:.5,y:.5,zoom:2,aspect:2},false);assert.equal(crop.width/crop.height,2);});
+test('compositor reuses independent renderers, respects eight-part order and frees only deleted renderer',()=>{const c=new PartCollection();while(c.parts.length<8)c.add();const calls=[],renderer=new CompositeRenderer(()=>({draw(...args){calls.push(args)}}));c.parts[2].enabled=false;c.parts[0].zIndex=10;renderer.draw({}, {},c.parts,true);assert.equal(calls.length,7);assert.equal(calls.at(-1)[2].width,c.parts[0].targetRect.width);assert.ok(calls.every(a=>a[5]===false));const first=renderer.renderers.get(c.parts[0].id);c.removeSelected();renderer.draw({}, {},c.parts,true);assert.equal(renderer.renderers.get(c.parts[0].id),first);assert.equal(renderer.renderers.size,6);});
+test('generic crop can cover the entire camera without changing destination geometry',()=>{const part=createPart(),before=structuredClone(part.targetRect);part.sourceRect={x:.5,y:.5,zoom:.6,aspect:640/480};const crop=sourceRect(640,480,.5,part.sourceRect,false);assert.deepEqual([crop.x,crop.y,crop.width,crop.height],[0,0,640,480]);assert.deepEqual(part.targetRect,before);});

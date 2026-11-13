@@ -109,11 +109,6 @@ footer { font-size: 10px; color: var(--muted); line-height: 1.8; margin-top: 12p
 #part-delete { padding: 7px; font-size: 12px; }
 .layer-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 12px; }
 .layer-controls button { font-size: 12px; }
-.tracking-bar { display: flex; align-items: center; gap: 7px; min-height: 44px; }
-.tracking-bar output { flex: 1; font-size: 11px; font-weight: 500; }
-.tracking-bar button { padding: 6px; font-size: 11px; }
-#tracking-status[data-state=error] { color: #a52e25; }
-#tracking-settings summary { padding: 8px 0; }
 #diagnostic-values { white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.7 ui-monospace, monospace; }
 #diagnostic-text { width: 100%; min-height: 180px; font-size: 16px; }
 .title-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
@@ -170,7 +165,6 @@ header { margin-bottom: 6px; }
 input[type=range] { height: 44px; margin: 0; }
 select { font-size: 16px; max-width: 100%; }
 .composite-bar select, .record-options select { font-size: 16px; }
-.camera-panel > .tracking-bar { position: absolute; top: 4px; left: 4px; right: 4px; z-index: 3; background: #ffffffed; border-radius: 8px; padding: 0 6px; margin: 0; width: fit-content; max-width: calc(100% - 8px); }
 .preview-panel[data-screen=finished] #photo-panel .magnifier { visibility: hidden; pointer-events: none; }
 .preview-panel[data-screen=finished] #photo-panel .view-tools .toggle,
 .preview-panel[data-screen=finished] #interaction-mode { visibility: hidden; }
@@ -211,7 +205,7 @@ select { font-size: 16px; max-width: 100%; }
 }
 @media (min-width: 761px) { :root { --preview-height: clamp(280px,60dvh,600px); } }
 
-/* v0.8.0: the same layout, with clearer controls and unobstructed camera input. */
+/* v0.9.0: the same layout, with clearer controls and unobstructed camera input. */
 :root { --ink: #193732; --muted: #536c64; --line: #d9e5df; }
 button, .button { min-width: 44px; min-height: 44px; border-radius: 10px; line-height: 1.25; }
 button:disabled, .file-picker[aria-disabled=true] { opacity: .42; filter: saturate(.25); }
@@ -230,7 +224,6 @@ input[type=range]:disabled { opacity: .4; }
 .view-tools .toggle { min-width: 44px; }
 .view-tools .toggle:has(input:checked) { color: var(--accent); }
 #photo-view-focus[aria-pressed=true], #camera-view-focus[aria-pressed=true] { border-color: var(--accent); background: #e1f4ed; }
-.camera-panel > .tracking-bar { position: static; height: 44px; width: 100%; max-width: 100%; padding: 0 2px; border-radius: 0; background: transparent; }
 .camera-stage { height: calc(var(--preview-height) - 44px); }
 #finished-mode-host { width: 126px; flex: 0 0 126px; }
 #finished-mode-host select { width: 100%; min-width: 0; min-height: 44px; padding: 4px; font-size: 16px; border-color: var(--accent); }
@@ -249,7 +242,7 @@ input[type=range]:disabled { opacity: .4; }
 #recording-panel[data-unsaved=true] #record-status { color: #805509; font-weight: 600; }
 .settings-body > details > summary { font-weight: 650; color: #244b43; }
 .magnifier-heading { background: #163a33; }
-.view-tools button, .view-tools .toggle, .tracking-bar .toggle { touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.view-tools button, .view-tools .toggle { touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 /* Recording-only tools stay inside the bounded settings scroller. */
 #record-countdown-overlay:not([hidden]) {position:absolute;inset:0;z-index:20;border-radius:10px;background:rgba(10,30,29,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:white;touch-action:manipulation;}
 #record-countdown-number {font-size:clamp(60px,16vh,112px);line-height:1.2;font-weight:700;font-variant-numeric:tabular-nums;}
@@ -261,3 +254,14 @@ input[type=range]:disabled { opacity: .4; }
 #record-output-preview {display:block;max-width:100%;max-height:200px;width:auto;height:auto;margin:8px auto;background:#202b2b;scroll-margin-bottom:150px;}
 .record-output-preview label {display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .record-output-preview output {font-variant-numeric:tabular-nums;}
+.part-bar {min-width:0;display:flex;gap:6px;}
+#part-list {display:flex;flex:1 1 0;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin;}
+#part-list button {flex:0 0 auto;max-width:130px;min-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#part-add {flex:0 0 auto;}
+#part-management {display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0;}
+#part-management label:has(#part-name) {width:100%;}
+#part-name {width:100%;max-width:100%;min-height:44px;font-size:16px;}
+#selected-part-name,#camera-part-name {overflow-wrap:anywhere;}
+.layer-controls {flex-wrap:wrap;}
+.camera-stage {height:var(--preview-height);}
+#screen-state {white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}

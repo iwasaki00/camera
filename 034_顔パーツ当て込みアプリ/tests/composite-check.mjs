@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {writeFile} from 'node:fs/promises';
 export async function checkComposite({evaluate,command,waitFor}) {
-  const click=id=>evaluate(`document.getElementById('${id}').click()`);
+  const click=id=>{const index={mouth:0,leftEye:1,rightEye:2,nose:3}[id.replace('select-','')];return index===undefined?evaluate(`document.getElementById('${id}').click()`):evaluate(`(()=>{while(document.querySelectorAll('#part-list button').length<=${index})document.querySelector('#part-add').click();document.querySelectorAll('#part-list button')[${index}].click()})()`);};
   const write=(id,value)=>evaluate(`(()=>{const e=document.getElementById('${id}');e.value=${JSON.stringify(value)};e.dispatchEvent(new Event(e.type==='range'?'input':'change'));})()`);
   const startCamera=async()=>{
     await evaluate("clearInterval(colorTimer);colorTimer=setInterval(()=>colorFeed.getContext('2d').fillRect(0,0,1,1),33)");
@@ -24,12 +24,12 @@ export async function checkComposite({evaluate,command,waitFor}) {
   await startCamera();
   // Frozen old renderer, actual Canvas RGBA comparison across mirror/shape/rotation cases.
   assert.equal(await evaluate(`(async()=>{
-    const {CompositeRenderer}=await import('./renderer.js?v=0.6.2'),{CompositeRenderer:Legacy}=await import('./tests/fixtures/original-renderer.mjs'),{createPart}=await import('./parts.js?v=0.6.2');
+    const {CompositeRenderer}=await import('./renderer.js?v=0.6.2'),{CompositeRenderer:Legacy}=await import('./tests/fixtures/original-renderer.mjs'),{createLegacyPart:createPart}=await import('./tests/fixtures/legacy-parts.mjs');
     for(const mirror of [true,false])for(const shape of ['oval','rectangle']) {
       const a=document.createElement('canvas'),b=document.createElement('canvas');a.width=b.width=400;a.height=b.height=600;
       const parts=['mouth','leftEye','rightEye','nose'].map((t,i)=>({...createPart(t,i),shape,rotation:i*17,feather:i*17}));
       new Legacy().draw(a.getContext('2d'),document.querySelector('#camera'),parts,mirror);
-      new CompositeRenderer().draw(b.getContext('2d'),document.querySelector('#camera'),parts,mirror,null,{composite:{mode:'original'},time:performance.now()});
+      new CompositeRenderer().draw(b.getContext('2d'),document.querySelector('#camera'),parts,mirror,{composite:{mode:'original'},time:performance.now()});
       const aa=a.getContext('2d').getImageData(0,0,400,600).data,bb=b.getContext('2d').getImageData(0,0,400,600).data;if(!aa.every((v,i)=>v===bb[i]))return false;
     }return true;
   })()`),true);
@@ -75,7 +75,7 @@ export async function checkComposite({evaluate,command,waitFor}) {
   await evaluate("document.querySelector('#template-name').value='Color fixture';document.querySelector('#template-name-form').requestSubmit()");
   await waitFor("!document.querySelector('#template-name-dialog').open&&document.querySelector('#template-manager').getAttribute('aria-busy')==='false'");
   const saved=await evaluate(`(async()=>{const {TemplateStore}=await import('./template-store.js?v=0.6.2');const s=new TemplateStore(),rows=await s.list();s.close();return rows.find(r=>r.doc.name==='Color fixture').doc;})()`);
-  assert.equal(saved.schemaVersion,3);assert.equal(saved.composite.mode,'natural');assert.equal(saved.parts.find(p=>p.partType==='mouth').appearance.natural.brightness,18);
+  assert.equal(saved.schemaVersion,4);assert.equal(saved.composite.mode,'natural');assert.equal(saved.parts[0].appearance.natural.brightness,18);
   await click('template-export');await waitFor("!document.querySelector('#template-download').hidden&&document.querySelector('#template-manager').getAttribute('aria-busy')==='false'");
   const zipDoc=await evaluate(`(async()=>{const {importTemplate}=await import('./template-zip.js?v=0.6.2');window.colorZip=await(await fetch(document.querySelector('#template-download').href)).blob();return(await importTemplate(colorZip)).doc;})()`);
   assert.deepEqual(zipDoc.parts,saved.parts);assert.deepEqual(zipDoc.composite,saved.composite);
@@ -89,7 +89,7 @@ export async function checkComposite({evaluate,command,waitFor}) {
     const {CompositeRenderer}=await import('./renderer.js?v=0.6.2'),{importTemplate}=await import('./template-zip.js?v=0.6.2');
     const record=await importTemplate(colorZip),bg=new Image();bg.src=URL.createObjectURL(record.background);await bg.decode();URL.revokeObjectURL(bg.src);
     Object.assign(colorFeed,{videoWidth:640,videoHeight:480,readyState:4});const results=[];
-    for(const doc of [${JSON.stringify(saved)},record.doc]){const c=document.createElement('canvas');c.width=400;c.height=600;const ctx=c.getContext('2d');ctx.drawImage(bg,0,0);new CompositeRenderer().draw(ctx,colorFeed,doc.parts,doc.mirror,null,{composite:doc.composite,background:bg,time:0});results.push(c.toDataURL());}
+    for(const doc of [${JSON.stringify(saved)},record.doc]){const c=document.createElement('canvas');c.width=400;c.height=600;const ctx=c.getContext('2d');ctx.drawImage(bg,0,0);new CompositeRenderer().draw(ctx,colorFeed,doc.parts,doc.mirror,{composite:doc.composite,background:bg,time:0});results.push(c.toDataURL());}
     return results[0]===results[1];
   })()`),true);
   console.log('PASS COLOR: IndexedDB and ZIP retain all four mode settings; same-source restored PNG pixels match');

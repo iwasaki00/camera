@@ -1,0 +1,88 @@
+{
+  "groups": 12,
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36 Edg/157.0.0.0",
+  "rows": [
+    {
+      "name": "fit-fade-title-end",
+      "file": "reports/v0.9.0-edge-short-fit-fade-title-end.mp4",
+      "width": 360,
+      "height": 640,
+      "duration": 15.043667,
+      "frames": 359,
+      "actualFps": 23.863862447899173,
+      "bytes": 288490,
+      "audio": false,
+      "uniqueFrames": 323
+    },
+    {
+      "name": "fill-left",
+      "file": "reports/v0.9.0-edge-short-fill-left.mp4",
+      "width": 360,
+      "height": 640,
+      "duration": 2.180533,
+      "frames": 54,
+      "actualFps": 24.764587373820987,
+      "bytes": 3205,
+      "audio": false,
+      "uniqueFrames": 3
+    },
+    {
+      "name": "fill-right",
+      "file": "reports/v0.9.0-edge-short-fill-right.mp4",
+      "width": 360,
+      "height": 640,
+      "duration": 2.1917,
+      "frames": 54,
+      "actualFps": 24.638408541314963,
+      "bytes": 2803,
+      "audio": false,
+      "uniqueFrames": 2
+    },
+    {
+      "name": "natural-title-audio-low",
+      "file": "reports/v0.9.0-edge-short-natural-title-audio-low.mp4",
+      "width": 270,
+      "height": 480,
+      "duration": 2.331733,
+      "frames": 36,
+      "actualFps": 15.439160487071206,
+      "bytes": 63327,
+      "audio": true,
+      "uniqueFrames": 36
+    },
+    {
+      "name": "title-start-manual-stop",
+      "file": "reports/v0.9.0-edge-short-title-start-manual-stop.mp4",
+      "width": 360,
+      "height": 640,
+      "duration": 3.397667,
+      "frames": 82,
+      "actualFps": 24.134207384066773,
+      "bytes": 123464,
+      "audio": false,
+      "uniqueFrames": 75
+    },
+    {
+      "name": "comic-original",
+      "file": "reports/v0.9.0-edge-short-comic-original.mp4",
+      "width": 720,
+      "height": 360,
+      "duration": 1.7037,
+      "frames": 42,
+      "actualFps": 24.6522275048424,
+      "bytes": 61816,
+      "audio": false,
+      "uniqueFrames": 39
+    },
+    {
+      "layoutWidth": 375,
+      "height": 877,
+      "button": 44
+    },
+    {
+      "layoutWidth": 390,
+      "height": 877,
+      "button": 44
+    }
+  ]
+}

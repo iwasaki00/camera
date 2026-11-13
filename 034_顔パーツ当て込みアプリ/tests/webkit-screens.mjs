@@ -44,4 +44,10 @@ export async function checkWebkitScreens(page) {
   await page.setViewportSize({width:844,height:390});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   console.log('PASS WEBKIT SCREEN: bounded settings, live mode status and landscape layout');
+  await page.setViewportSize({width:390,height:844});await page.locator('#screen-photo').tap();
+  for(let i=1;i<8;i++)await page.locator('#part-add').tap();
+  assert.equal(await page.locator('#part-list button').count(),8);assert.equal(await page.locator('#part-add').isDisabled(),true);
+  assert.equal(await page.evaluate(()=>{const list=document.querySelector('#part-list'),selected=list.querySelector('[aria-pressed=true]'),a=list.getBoundingClientRect(),b=selected.getBoundingClientRect();return document.documentElement.scrollWidth<=innerWidth&&b.left>=a.left-1&&b.right<=a.right+1&&!document.querySelector('#tracking-toggle')}),true);
+  await page.locator('#settings-toggle').tap();await page.locator('#settings-parts > summary').tap();await page.locator('#part-name').fill('手と物体');await page.evaluate(()=>document.querySelector('#part-rename').click());assert.match(await page.locator('#part-list').textContent(),/手と物体/);
+  console.log('PASS WEBKIT FREE: eight generic parts, limit, selected-item horizontal scrolling and Japanese rename');
 }

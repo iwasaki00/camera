@@ -1,4 +1,4 @@
-import {outputOptions,drawRecordingOutput} from './recording-output.js?v=0.8.0';
+import {outputOptions,drawRecordingOutput} from './recording-output.js?v=0.9.0';
 // Owns only recording canvas/microphone tracks. The application's camera is never acquired here.
 export const RECORDING_LIMIT_BYTES = 64 * 1024 * 1024;
 export const RECORDING_QUALITIES = Object.freeze({normal:{edge:720,fps:24,bitrate:2500000},low:{edge:480,fps:15,bitrate:1200000}});

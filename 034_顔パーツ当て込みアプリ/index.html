@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#172c2b">
   <title>顔パーツ当て込みアプリ / Portrait Face Parts Player</title>
-  <link rel="stylesheet" href="style.css?v=0.8.0">
+  <link rel="stylesheet" href="style.css?v=0.9.0">
   <script type="module">
-    import('./app.js?v=0.8.0').catch(error => {
+    import('./app.js?v=0.9.0').catch(error => {
       const status = document.getElementById('status');
       document.body.dataset.appState = 'error';
       for (const input of document.querySelectorAll('input[type="file"]')) input.disabled = true;
@@ -21,16 +21,16 @@
 </head>
 <body data-app-state="initializing">
   <main>
-    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.8.0</span></p><div class="title-row"><h1>顔パーツ当て込みアプリ</h1><button id="templates-open" type="button">保存・読込</button></div></header>
+    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.9.0</span></p><div class="title-row"><h1>顔パーツ当て込みアプリ</h1><button id="templates-open" type="button">保存・読込</button></div></header>
     <section class="preview-panel" aria-labelledby="preview-title">
-      <div class="panel-heading"><h2 id="preview-title">絵画側 / <span id="selected-part-name">口</span></h2><select id="interaction-mode" aria-label="操作モード"><option value="edit">枠を編集</option><option value="pan">画像を移動</option><option value="view">鑑賞</option></select></div>
-      <div class="part-bar" aria-label="顔パーツの追加と選択">
-        <div class="part-tabs"><button id="select-mouth" type="button">口 ●</button><button id="select-leftEye" type="button">＋左目</button><button id="select-rightEye" type="button">＋右目</button><button id="select-nose" type="button">＋鼻</button></div>
-        <label class="toggle"><input id="part-enabled" type="checkbox" checked>合成</label><button id="part-delete" type="button" aria-label="選択パーツを削除">削除</button>
+      <div class="panel-heading"><h2 id="preview-title">絵画側 / <span id="selected-part-name">パーツ1</span></h2><select id="interaction-mode" aria-label="操作モード"><option value="edit">枠を編集</option><option value="pan">画像を移動</option><option value="view">鑑賞</option></select></div>
+      <div class="part-bar" aria-label="パーツの追加と選択">
+        <div id="part-list" class="part-tabs" aria-label="パーツ選択"></div><button id="part-add" type="button">＋ パーツ追加</button>
+        <div id="part-management"><label class="toggle"><input id="part-enabled" type="checkbox" checked>合成</label><span id="part-limit" class="help">1 / 8</span><label for="part-name">パーツ名 <input id="part-name" type="text" maxlength="40" value="パーツ1"></label><button id="part-rename" type="button">名前変更</button><button id="part-duplicate" type="button">複製</button><button id="part-delete" type="button">削除</button></div>
       </div>
       <div class="workspace">
         <div>
-          <div class="stage"><canvas id="composition" width="900" height="1200" aria-label="画像と口元の合成結果。枠の内側で移動、四隅でサイズ変更、上の丸で回転"></canvas><p id="empty-hint">人物画像を読み込んでください。<br>画像・映像は端末内だけで処理します。</p></div>
+          <div class="stage"><canvas id="composition" width="900" height="1200" aria-label="画像とパーツの合成結果。枠の内側で移動、四隅でサイズ変更、上の丸で回転"></canvas><p id="empty-hint">画像を読み込んでください。<br>画像・映像は端末内だけで処理します。</p></div>
           <div class="view-tools" aria-label="絵画側の表示設定">
             <input id="photo-view-zoom" type="range" min="50" max="400" value="100" aria-label="絵画側の表示倍率"><output id="photo-view-value">100%</output>
             <button id="photo-view-reset" aria-label="絵画側の倍率と表示位置をリセット">戻す</button>
@@ -70,7 +70,7 @@
               <div class="record-output-preview"><p class="help">動画出力プレビュー（最大5回/秒）。時間指定でタイトルとフェードを確認できます。</p><label>確認する時点 <input id="record-preview-time" type="range" min="0" max="30" step="0.1" value="1" data-recording-safe><output id="record-preview-value">1.0秒</output></label><canvas id="record-output-preview" width="360" height="640" aria-label="録画出力の画角・タイトル確認"></canvas></div>
             </div></details><button id="record-silent" type="button" hidden>音声なしで録画</button>
           </section>
-          <details id="composite-settings"><summary>色調・質感・境界 / <span id="composite-part-name">口</span></summary>
+          <details id="composite-settings"><summary>色調・質感・境界 / <span id="composite-part-name">パーツ1</span></summary>
             <p class="help">選択パーツだけを調整。NATURALとCOMICは別々の値を保持します。ORIGINALは補正なし。全体強度0%でも従来の描画に戻ります。</p>
             <label class="toggle"><input id="composite-auto" type="checkbox">自動色合わせ（NATURALのみ）</label>
             <p class="help">周辺の暖色の肌候補を参考にします。髪・服などとの判別には限界があります。合わない場合はOFFで手動調整してください。</p>
@@ -79,31 +79,28 @@
           </details>
         </div>
         <section class="camera-panel" aria-labelledby="camera-title">
-          <div class="panel-heading"><h2 id="camera-title">カメラ側 / <span id="camera-part-name">口</span></h2><label class="toggle"><input id="mirror" type="checkbox" checked>左右反転</label><span id="camera-state">停止中</span></div>
-          <div class="tracking-bar"><label class="toggle"><input id="tracking-toggle" type="checkbox">自動追従</label><output id="tracking-status" role="status" aria-live="polite">手動</output><button id="tracking-manual" type="button" hidden>手動に戻す</button></div>
+          <div class="panel-heading"><h2 id="camera-title">カメラ側 / <span id="camera-part-name">パーツ1</span></h2><label class="toggle"><input id="mirror" type="checkbox" checked>左右反転</label><span id="camera-state">停止中</span></div>
           <div class="camera-stage"><video id="camera" autoplay muted playsinline aria-hidden="true"></video><canvas id="camera-preview" width="480" height="360" aria-label="切り抜き枠の内側で移動、四隅でサイズ変更"></canvas><p id="camera-hint">カメラを開始してください</p></div>
           <div class="view-tools" aria-label="カメラ側の表示設定">
             <input id="camera-view-zoom" type="range" min="100" max="400" value="100" aria-label="カメラ側の表示倍率"><output id="camera-view-value">100%</output>
             <button id="camera-view-reset" aria-label="カメラ側の倍率と表示位置をリセット">戻す</button>
             <label class="toggle"><input id="camera-guide" type="checkbox" checked>枠</label><label class="toggle"><input id="camera-loupe" type="checkbox">拡大鏡</label>
           </div>
-          <p id="eye-convention" class="help">左右は映る本人基準。反転ON：本人の左目は画面左。</p>
-          <details id="tracking-settings"><summary>追従の補正 / <span id="tracking-part-name">口</span></summary><p class="help">自動中は補正で調整します。手動に戻すと枠を直接編集できます。位置は反転前の部位基準で、幅・高さに対する割合です。</p><div id="tracking-controls"></div><button id="tracking-correction-reset" type="button">このパーツの補正を戻す</button><p id="tracking-metrics" class="help"></p></details>
         </section>
       </div>
-      <details id="diagnostics"><summary>追従・録画の診断（初期OFF）</summary><p class="help">描画・検出・合成は直近5秒の移動窓。録画の件数・サイズは今回の録画全体です。映像・音声・顔画像は診断に含めません。</p><pre id="diagnostic-values"></pre><button id="diagnostic-copy" type="button">診断テキストをコピー</button><p id="diagnostic-copy-status" class="help" role="status"></p><textarea id="diagnostic-text" readonly hidden aria-label="コピー用診断テキスト"></textarea></details>
+      <details id="diagnostics"><summary>描画・録画の診断（初期OFF）</summary><p class="help">描画・合成は直近5秒の移動窓。録画の件数・サイズは今回の録画全体です。映像・音声・顔画像は診断に含めません。</p><pre id="diagnostic-values"></pre><button id="diagnostic-copy" type="button">診断テキストをコピー</button><p id="diagnostic-copy-status" class="help" role="status"></p><textarea id="diagnostic-text" readonly hidden aria-label="コピー用診断テキスト"></textarea></details>
       <p id="status" data-state="initializing" role="status" aria-live="polite">アプリを初期化しています…</p>
       <details id="image-picker-help"><summary>画像を選べない場合 / 標準入力</summary><p class="help">下の標準入力からも同じ画像読込ができます。初期化に失敗した場合は、先にページを再読み込みしてください。</p><label for="image-file-native">画像の標準入力</label><input id="image-file-native" class="native-file-input" type="file" accept="image/*" aria-describedby="status" disabled></details>
       <details id="advanced"><summary>詳細設定 / 数値で微調整</summary>
         <p class="help">写真側のX・Yは中心位置、幅・高さは画像に対する割合です。ガイドは保存されません。</p>
-        <div class="layer-controls"><span>重なり順 <output id="part-order-value">1 / 1</output></span><button id="part-back" type="button">背面へ</button><button id="part-front" type="button">前面へ</button></div>
+        <div class="layer-controls"><span>重なり順 <output id="part-order-value">1 / 1</output></span><button id="part-back" type="button">背面へ</button><button id="part-front" type="button">前面へ1段</button><button id="part-top" type="button">最前面へ</button><button id="part-bottom" type="button">最背面へ</button></div>
         <div id="part-controls"></div>
-        <label class="slider-label" for="source-zoom">カメラ側 / 切り抜き倍率 <output id="source-zoom-value">1.5×</output></label><input id="source-zoom" type="range" min="1" max="6" step="0.01" value="1.5">
-        <div id="source-controls"></div>
+        <label class="slider-label" for="source-zoom">カメラ側 / 切り抜き倍率 <output id="source-zoom-value">1.5×</output></label><input id="source-zoom" type="range" min="0.6" max="6" step="0.01" value="1.5">
+        <div id="source-controls"></div><div id="source-aspect-control"><label class="slider-label" for="source-aspect">切り抜きの縦横比 <output id="source-aspect-value">1 : 1</output></label><input id="source-aspect" type="range" min="0.1" max="10" step="0.01" value="1"></div>
       </details>
-      <div id="export-result" hidden><p>PNGを作成しました。画像を長押しして保存することもできます。</p><a id="download" class="button" download="portrait-mouth.png">PNGをダウンロード</a><img id="export-image" alt="保存用の合成画像"></div>
+      <div id="export-result" hidden><p>PNGを作成しました。画像を長押しして保存することもできます。</p><a id="download" class="button" download="portrait-parts.png">PNGをダウンロード</a><img id="export-image" alt="保存用の合成画像"></div>
     </section>
-    <footer>Version 0.8.0 — SHORT VIDEO CREATOR · カメラは HTTPS / localhost で利用できます。</footer>
+    <footer>Version 0.9.0 — FREE PARTS FOUNDATION · カメラは HTTPS / localhost で利用できます。</footer>
   </main>
   <div id="record-countdown-overlay" hidden role="status" aria-live="assertive"><span>録画まで</span><output id="record-countdown-number">3</output><button id="record-countdown-cancel" type="button" data-recording-safe>キャンセル</button></div>
   <dialog id="record-result" aria-labelledby="record-result-title"><div class="panel-heading"><h2 id="record-result-title">録画済み動画 / ライブではありません</h2><button id="record-close" type="button">閉じる</button></div>

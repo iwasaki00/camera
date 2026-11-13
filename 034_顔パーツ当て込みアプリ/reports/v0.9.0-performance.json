@@ -1,0 +1,149 @@
+{
+  "conditions": "Desktop Chrome, moving 640x480 synthetic camera at30fps; background400x600; 1/4/8 parts, ORIGINAL/NATURAL, recording OFF/9:16 FIT ON(360x640,24fps), six native recordings. 3.5s samples after600ms settling, diagnostics ON, output preview closed, sequential single browser. Runtime.getHeapUsage measures JS heap, excluding GPU/media/native memory. Actual fps = decoded frames/file duration. Not iPhone results.",
+  "rows": [
+    {
+      "parts": 1,
+      "mode": "original",
+      "recording": false,
+      "drawFps": 29.421006027021427,
+      "compositeAverageMs": 2.3,
+      "transferAverageMs": null,
+      "jsHeapBefore": 2183860,
+      "jsHeapAfter": 2343740
+    },
+    {
+      "parts": 1,
+      "mode": "original",
+      "recording": true,
+      "drawFps": 29.994858024338885,
+      "compositeAverageMs": 2.1,
+      "transferAverageMs": 0.1,
+      "jsHeapBefore": 2692144,
+      "jsHeapAfter": 2751280,
+      "duration": 4.306333,
+      "bytes": 36680,
+      "actualFps": 24.15047791241411,
+      "file": "reports/v0.9.0-1-parts-original.mp4"
+    },
+    {
+      "parts": 1,
+      "mode": "natural",
+      "recording": false,
+      "drawFps": 29.994858024338885,
+      "compositeAverageMs": 7.1,
+      "transferAverageMs": null,
+      "jsHeapBefore": 2355036,
+      "jsHeapAfter": 2695124
+    },
+    {
+      "parts": 1,
+      "mode": "natural",
+      "recording": true,
+      "drawFps": 29.989717811035618,
+      "compositeAverageMs": 7.4,
+      "transferAverageMs": 0.08,
+      "jsHeapBefore": 3072044,
+      "jsHeapAfter": 2754952,
+      "duration": 4.335833,
+      "bytes": 36766,
+      "actualFps": 24.21679986290985,
+      "file": "reports/v0.9.0-1-parts-natural.mp4"
+    },
+    {
+      "parts": 4,
+      "mode": "original",
+      "recording": false,
+      "drawFps": 29.985435645542996,
+      "compositeAverageMs": 2.8,
+      "transferAverageMs": null,
+      "jsHeapBefore": 4605296,
+      "jsHeapAfter": 4031280
+    },
+    {
+      "parts": 4,
+      "mode": "original",
+      "recording": true,
+      "drawFps": 29.88473032588587,
+      "compositeAverageMs": 2.7,
+      "transferAverageMs": 0.1,
+      "jsHeapBefore": 4403848,
+      "jsHeapAfter": 3891104,
+      "duration": 4.280667,
+      "bytes": 138785,
+      "actualFps": 24.295279217000527,
+      "file": "reports/v0.9.0-4-parts-original.mp4"
+    },
+    {
+      "parts": 4,
+      "mode": "natural",
+      "recording": false,
+      "drawFps": 29.921349595348772,
+      "compositeAverageMs": 14.2,
+      "transferAverageMs": null,
+      "jsHeapBefore": 6693452,
+      "jsHeapAfter": 3557612
+    },
+    {
+      "parts": 4,
+      "mode": "natural",
+      "recording": true,
+      "drawFps": 29.996571820363187,
+      "compositeAverageMs": 17.1,
+      "transferAverageMs": 0.14,
+      "jsHeapBefore": 2296380,
+      "jsHeapAfter": 2407440,
+      "duration": 4.376,
+      "bytes": 126046,
+      "actualFps": 24.223034734917732,
+      "file": "reports/v0.9.0-4-parts-natural.mp4"
+    },
+    {
+      "parts": 8,
+      "mode": "original",
+      "recording": false,
+      "drawFps": 29.991431019708656,
+      "compositeAverageMs": 3.1,
+      "transferAverageMs": null,
+      "jsHeapBefore": 1929824,
+      "jsHeapAfter": 3225980
+    },
+    {
+      "parts": 8,
+      "mode": "original",
+      "recording": true,
+      "drawFps": 30.190828823696954,
+      "compositeAverageMs": 2.8,
+      "transferAverageMs": 0.1,
+      "jsHeapBefore": 2134256,
+      "jsHeapAfter": 3490232,
+      "duration": 4.270833,
+      "bytes": 265590,
+      "actualFps": 24.35122141277826,
+      "file": "reports/v0.9.0-8-parts-original.mp4"
+    },
+    {
+      "parts": 8,
+      "mode": "natural",
+      "recording": false,
+      "drawFps": 26.115589871692627,
+      "compositeAverageMs": 27.9,
+      "transferAverageMs": null,
+      "jsHeapBefore": 3626964,
+      "jsHeapAfter": 3559112
+    },
+    {
+      "parts": 8,
+      "mode": "natural",
+      "recording": true,
+      "drawFps": 28.55931005231161,
+      "compositeAverageMs": 31.3,
+      "transferAverageMs": 0.13,
+      "jsHeapBefore": 2245744,
+      "jsHeapAfter": 2112228,
+      "duration": 4.588033,
+      "bytes": 183931,
+      "actualFps": 23.757457716629325,
+      "file": "reports/v0.9.0-8-parts-natural.mp4"
+    }
+  ]
+}

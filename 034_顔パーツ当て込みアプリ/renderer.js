@@ -1,9 +1,10 @@
-import { orderedParts, sourceForDisplay } from './parts.js?v=0.8.0';
-import { activeCorrection, ColorProcessor } from './composite-color.js?v=0.8.0';
+import { orderedParts, sourceForDisplay } from './parts.js?v=0.9.0';
+import { activeCorrection, ColorProcessor } from './composite-color.js?v=0.9.0';
 
 export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 export function sourceRect(videoWidth, videoHeight, aspect, source, mirror) {
+  aspect=source.aspect||aspect;
   let width = videoWidth * 0.6 / source.zoom;
   let height = width / aspect;
   if (height > videoHeight) { height = videoHeight; width = height * aspect; }
@@ -64,13 +65,10 @@ export class PartRenderer {
       this.prepareMask(width, height, settings ? {...part, feather:clamp(part.feather + settings.edgeSoftness * amount,0,100)} : part);
       const patch = this.patch.getContext('2d',this.colorPass ? {willReadFrequently:true} : undefined);
       patch.clearRect(0, 0, width, height);
-      const crop = source.crop || sourceRect(video.videoWidth, video.videoHeight, width / height, source, mirror);
+      const crop = sourceRect(video.videoWidth, video.videoHeight, width / height, source, mirror);
       patch.save();
       if (mirror) { patch.translate(width, 0); patch.scale(-1, 1); }
-      if(source.crop) {
-        patch.translate(width/2,height/2);patch.scale(width/crop.width,height/crop.height);
-        patch.rotate(-crop.angle);patch.drawImage(video,-crop.x,-crop.y);
-      } else patch.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, width, height);
+      patch.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, width, height);
       patch.restore();
       if(settings) {
         this.color ||= new ColorProcessor(this.createCanvas);
@@ -96,9 +94,9 @@ export class PartRenderer {
 
 export class CompositeRenderer {
   constructor(createRenderer = () => new PartRenderer()) { this.renderers = new Map(); this.createRenderer = createRenderer; }
-  draw(ctx, video, parts, mirror, trackedCrops = null, appearance = null) {
+  draw(ctx, video, parts, mirror, appearance = null) {
     let correctedVideo=video;
-    if(video?.readyState>=2 && appearance && parts.some(p=>p.enabled&&(!trackedCrops||trackedCrops[p.id])&&activeCorrection(appearance.composite,p.appearance))) {
+    if(video?.readyState>=2 && appearance && parts.some(p=>p.enabled&&activeCorrection(appearance.composite,p.appearance))) {
       // One CPU-readable camera snapshot per composite, rather than four GPU→CPU video copies.
       this.frameCanvas ||= document.createElement('canvas');
       if(this.frameCanvas.width!==video.videoWidth||this.frameCanvas.height!==video.videoHeight){this.frameCanvas.width=video.videoWidth;this.frameCanvas.height=video.videoHeight;}
@@ -112,11 +110,10 @@ export class CompositeRenderer {
       this.renderers.delete(id);
     }
     for (const part of orderedParts(parts)) {
-      if(trackedCrops && !trackedCrops[part.id])continue;
       if (!this.renderers.has(part.id)) this.renderers.set(part.id, this.createRenderer());
       this.renderers.get(part.id).draw(ctx, activeCorrection(appearance?.composite,part.appearance) ? correctedVideo : video,
         { ...part.targetRect, rotation: part.rotation, shape: part.shape, feather: part.feather },
-        { ...sourceForDisplay(part, mirror), ...(trackedCrops ? {crop:trackedCrops[part.id]} : {}) }, mirror, false,
+        sourceForDisplay(part, mirror), mirror, false,
         appearance ? { ...appearance, part:part.appearance } : null);
     }
   }

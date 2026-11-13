@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPart } from '../parts.js';
+import { createLegacyPart as createPart } from './fixtures/legacy-parts.mjs';
 import { validateDocument, imageHeader, LIMITS } from '../template-schema.js';
 import { cleanRecord, TemplateStore, storageMessage } from '../template-store.js';
 import { exportTemplate, importTemplate, crc32 } from '../template-zip.js';
@@ -14,12 +14,12 @@ const record = () => ({doc:doc(),background:new Blob([image],{type:'image/png'})
 const zip = (document=doc(),background=image,extra={},options={level:0}) => new Blob([zipSync({'template.json':strToU8(typeof document==='string'?document:JSON.stringify(document)),'background.png':background,...extra},options)]);
 
 test('schema preserves all four independent settings, enable states, order and mirror',()=>{
-  const input=doc(),result=validateDocument(input);assert.deepEqual(result.parts,input.parts);assert.equal(result.mirror,false);
+  const input=doc(),result=validateDocument(input);assert.deepEqual(result.parts.map(({name,...p})=>p),input.parts.map(({partType,tracking,...p})=>p));assert.deepEqual(result.parts.map(p=>p.name),['口','左目','右目','鼻']);assert.equal(result.mirror,false);
   result.parts[0].targetRect.x=90;assert.equal(input.parts[0].targetRect.x,20);
 });
 test('deleted parts and empty collection remain absent',()=>{
   const input=doc();input.parts.splice(1,1);assert.equal(validateDocument(input).parts.length,3);
-  input.parts=[];assert.deepEqual(validateDocument(input).parts,[]);
+  input.parts=[];assert.equal(validateDocument(input).parts.length,1);assert.equal(validateDocument(input).parts[0].name,'パーツ1');
 });
 test('explicit allowlist excludes camera frames, streams, view and unknown properties',()=>{
   const input=doc();input.camera='private';input.view={scale:4};input.parts[0].frame='private';input.background.face='private';
@@ -81,37 +81,18 @@ test('record rejects missing thumbnails and incorrect image byte size',()=>{
   assert.throws(()=>cleanRecord({...record(),thumbnail:null}));
   assert.throws(()=>cleanRecord({...record(),background:new Blob(['wrong'])}));
 });
-test('schema 1 migrates to manual mode and default corrections without changing source/target',()=>{
-  const input=doc();input.trackingEnabled=true;input.parts[0].tracking={offsetX:1,offsetY:1,widthScale:2,heightScale:2,rotation:30};
-  const result=validateDocument(input);assert.equal(result.schemaVersion,3);assert.equal(result.trackingEnabled,false);
-  assert.deepEqual(result.parts[0].tracking,{offsetX:0,offsetY:0,widthScale:1,heightScale:1,rotation:0});
-  assert.deepEqual(result.parts[0].sourceRect,input.parts[0].sourceRect);assert.deepEqual(result.parts[0].targetRect,input.parts[0].targetRect);
+
+for(const schemaVersion of [1,2,3])test('legacy schema '+schemaVersion+' migrates IDs, coordinates, masks, colors and manual sources without mutating original',async()=>{
+ const input=doc();input.schemaVersion=schemaVersion;input.trackingEnabled=true;input.composite={mode:'natural',blendStrength:70,autoMatch:true,textureEnabled:false};
+ input.parts[0].appearance.natural.brightness=17;const before=structuredClone(input),result=validateDocument(input);
+ assert.equal(result.schemaVersion,4);assert.equal('trackingEnabled'in result,false);assert.deepEqual(result.parts.map(p=>p.name),['口','左目','右目','鼻']);
+ for(let i=0;i<input.parts.length;i++){const p=input.parts[i],r=result.parts[i];for(const key of ['id','enabled','zIndex','targetRect','sourceRect','rotation','shape','feather','guides'])assert.deepEqual(r[key],p[key]);assert.equal('tracking'in r,false);assert.equal('partType'in r,false);}
+ assert.equal(result.parts[0].appearance.natural.brightness,schemaVersion<3?0:17);assert.deepEqual(input,before);
+ const imported=await importTemplate(zip(input));assert.deepEqual(imported.doc,result);const again=await importTemplate(await exportTemplate(imported));assert.deepEqual(again.doc,result);
 });
-test('schema 2 ZIP roundtrip preserves auto mode and independent corrections',async()=>{
-  const input=record();input.doc.schemaVersion=2;input.doc.trackingEnabled=true;
-  input.doc.parts[0].tracking={offsetX:.2,offsetY:-.3,widthScale:1.2,heightScale:1.5,rotation:-20};
-  const restored=await importTemplate(await exportTemplate(input));assert.deepEqual(restored.doc,validateDocument(input.doc));
-  assert.notDeepEqual(restored.doc.parts[0].tracking,restored.doc.parts[1].tracking);
+test('schema 4 saves eight independent parts, validates names/IDs/count/aspect and strips transient settings',()=>{
+ const d=validateDocument(doc());while(d.parts.length<8){const p=structuredClone(d.parts[0]);p.id='generic-'+d.parts.length;p.name='パーツ'+d.parts.length;p.zIndex=d.parts.length;d.parts.push(p);}
+ d.recording={title:'private'};d.trackingEnabled=true;const restored=validateDocument(d);assert.equal(restored.parts.length,8);assert.equal('recording'in restored,false);assert.equal('trackingEnabled'in restored,false);
+ for(const change of [v=>v.parts=[],v=>v.parts.push({...v.parts[0],id:'ninth',zIndex:9}),v=>v.parts[0].name=' ',v=>v.parts[1].id=v.parts[0].id,v=>v.parts[0].sourceRect.aspect=0]){const v=structuredClone(d);change(v);assert.throws(()=>validateDocument(v));}
 });
-test('schema 2 refuses absent auto preference or corrections',()=>{
-  const input=doc();input.schemaVersion=2;assert.throws(()=>validateDocument(input));input.trackingEnabled=false;
-  delete input.parts[0].tracking;assert.throws(()=>validateDocument(input));
-});
-test('schema 2 rejects nonfinite or out-of-range relative corrections',()=>{
-  for(const [key,value]of [['offsetX',NaN],['offsetY',2],['widthScale',0],['heightScale',4],['rotation',100]]){
-    const input=doc();input.schemaVersion=2;input.trackingEnabled=true;input.parts[0].tracking[key]=value;assert.throws(()=>validateDocument(input));
-  }
-});
-test('schema 2 allowlist strips transient landmarks, detections and face frames',()=>{
-  const input=doc();input.schemaVersion=2;input.trackingEnabled=true;input.landmarks='private';input.detectedCrops='private';input.parts[0].tracking.frame='private';
-  assert.equal(JSON.stringify(validateDocument(input)).includes('private'),false);
-});
-test('v0.4.0 schema 2 remains compatible and diagnostics are excluded from saved documents',()=>{
-  const input=doc();input.schemaVersion=2;input.appVersion='0.4.0';input.trackingEnabled=true;input.diagnostics={drawFps:30,history:['private']};
-  const restored=validateDocument(input);assert.equal(restored.trackingEnabled,true);assert.equal(restored.appVersion,'0.8.0');assert.equal('diagnostics' in restored,false);
-});
-test('schema 3 strips short-video transient settings while retaining existing template data',()=>{
-  const input=validateDocument(doc());input.recording={aspect:'vertical',title:'not persisted',countdown:true};input.shortVideo={fade:true};
-  const result=validateDocument(input);assert.equal(result.schemaVersion,3);assert.equal('recording' in result,false);assert.equal('shortVideo' in result,false);
-  assert.equal(JSON.stringify(result).includes('not persisted'),false);assert.equal(result.parts.length,input.parts.length);
-});
+test('a valid legacy high layer can be retained and a new front layer saved in schema 4',()=>{const input=doc();input.parts[0].zIndex=1000000;const d=validateDocument(input),copy=structuredClone(d.parts[0]);copy.id='new-front';copy.zIndex=1000001;d.parts.push(copy);assert.equal(validateDocument(d).parts.at(-1).zIndex,1000001);});

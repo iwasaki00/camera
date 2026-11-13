@@ -42,15 +42,15 @@ export class ScreenUI {
     const parts = details('settings-parts','A. パーツ・ぼかし');
     body.append(parts);
     const partActions = document.createElement('div'); partActions.className = 'part-management';
-    partActions.append($('part-enabled').closest('label'),$('part-delete'));
+    partActions.append($('part-management'));
     parts.append(partActions,document.querySelector('.quick-controls'));
     const advanced = $('advanced'), layer = document.querySelector('.layer-controls');
     parts.append(layer,advanced);
-    const cameraSettings = details('settings-camera','B. カメラ・追従');
+    const cameraSettings = details('settings-camera','B. カメラ・切り抜き');
     body.append(cameraSettings);
-    cameraSettings.append(camera.querySelector('.panel-heading'),document.querySelector('.tracking-bar'),$('eye-convention'),$('tracking-settings'));
+    cameraSettings.append(camera.querySelector('.panel-heading'));
     const source = details('source-settings','カメラ切り抜き / 数値');
-    source.append($('source-zoom').previousElementSibling,$('source-zoom'),$('source-controls'));
+    source.append($('source-zoom').previousElementSibling,$('source-zoom'),$('source-controls'),$('source-aspect-control'));
     cameraSettings.append(source);
     const quality = details('settings-quality','C. 色調・質感');
     body.append(quality);
@@ -76,8 +76,6 @@ export class ScreenUI {
     toggle.addEventListener('click',()=>{this.settings.open=!this.settings.open;});
     actions.append(toggle);bar.append(actions,$('recording-panel'));
     panel.append(this.settings,$('status'),$('export-result'),bar);
-    // Keep the tracking switch within reach on the camera screen, without duplicating controls.
-    camera.prepend(document.querySelector('.tracking-bar'));
     for(const id of ['photo','camera']){
       $(`${id}-view-reset`).textContent='全体';
       const focus=document.createElement('button');focus.id=`${id}-view-focus`;focus.type='button';focus.textContent='寄る';
@@ -88,7 +86,7 @@ export class ScreenUI {
     this.status=document.createElement('div');this.status.id='screen-state';this.status.setAttribute('aria-label','現在の状態');
     panel.insertBefore(this.status,workspace);
     this.observer=new MutationObserver(()=>this.sync());
-    for(const id of ['camera-state','tracking-status','record-status','selected-part-name','composite-mode'])
+    for(const id of ['camera-state','record-status','selected-part-name','composite-mode'])
       this.observer.observe($(id),{childList:true,characterData:true,subtree:true,attributes:true,attributeFilter:['data-state']});
     $('composite-mode').addEventListener('change',()=>this.sync());
     this.select('photo',false);
@@ -128,12 +126,12 @@ export class ScreenUI {
     $('record-start').setAttribute('aria-label',hasResult?'録り直す':'録画開始');
     $('record-start').classList.toggle('primary',!hasResult);
     $('record-open').classList.toggle('primary',hasResult);
-    const text=[connecting?'カメラ接続中':running?'カメラ使用中':'カメラ停止中',$('tracking-toggle').checked?`追従ON: ${$('tracking-status').textContent}`:'追従OFF',
+    const text=[connecting?'カメラ接続中':running?'カメラ使用中':'カメラ停止中',
       $('selected-part-name').textContent,$('composite-mode').value.toUpperCase()];
     if(busy||$('record-status').textContent.includes('未保存'))text.push($('record-status').textContent);
-    const label=text.join(' · ');if(this.status.textContent!==label)this.status.textContent=label;
+    const label=text.join(' · ');if(this.status.textContent!==label)this.status.textContent=label;this.status.title=label;
     this.status.dataset.recording=String(busy);
-    this.status.dataset.error=String($('record-status').dataset.error==='true'||$('tracking-status').dataset.state==='error');
-    this.status.dataset.warning=String(['lost','notFound'].includes($('tracking-status').dataset.state)||$('record-status').textContent.includes('未保存'));
+    this.status.dataset.error=String($('record-status').dataset.error==='true');
+    this.status.dataset.warning=String($('record-status').textContent.includes('未保存'));
   }
 }

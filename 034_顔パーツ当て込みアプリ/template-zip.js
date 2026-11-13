@@ -1,6 +1,6 @@
 // fflate 0.8.2 / MIT; bundled locally, no network or filesystem extraction.
 import { zipSync, strToU8, Inflate } from './vendor/fflate-0.8.2.js';
-import { LIMITS, validateDocument, imageHeader } from './template-schema.js?v=0.8.0';
+import { LIMITS, validateDocument, imageHeader } from './template-schema.js?v=0.9.0';
 const invalid = () => {throw new Error('ZIPファイルが不正、破損、または未対応の形式です。');};
 const crcTable=Uint32Array.from({length:256},(_,n)=>{for(let k=0;k<8;k++)n=n&1?0xedb88320^(n>>>1):n>>>1;return n>>>0;});
 export function crc32(data){let crc=0xffffffff;for(const value of data)crc=crcTable[(crc^value)&255]^(crc>>>8);return (crc^0xffffffff)>>>0;}
@@ -57,6 +57,6 @@ export async function importTemplate(file) {
     if(image.length!==doc.background.storedSize)invalid();
     const dimensions=imageHeader(image,doc.background.storedMime);
     if(dimensions.width!==doc.background.width||dimensions.height!==doc.background.height)invalid();
-    return {doc,background:new Blob([image],{type:doc.background.storedMime})};
+    return {doc,background:new Blob([image],{type:doc.background.storedMime}),legacyTracking:input.schemaVersion<4&&input.trackingEnabled===true};
   } catch(error) {if(error instanceof RangeError||error instanceof TypeError)throw new Error('ZIP・JSON・画像データを読み込めませんでした。');throw error;}
 }

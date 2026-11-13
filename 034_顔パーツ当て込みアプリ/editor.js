@@ -1,5 +1,5 @@
-import { clamp } from './renderer.js?v=0.8.0';
-import { toContent, toScreen, zoomAt, midpoint, distance } from './viewport.js?v=0.8.0';
+import { clamp } from './renderer.js?v=0.9.0';
+import { toContent, toScreen, zoomAt, midpoint, distance } from './viewport.js?v=0.9.0';
 
 export const rotate = (p, angle) => ({ x: p.x * Math.cos(angle) - p.y * Math.sin(angle), y: p.x * Math.sin(angle) + p.y * Math.cos(angle) });
 const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
@@ -32,9 +32,9 @@ export function dragBox(start, from, to, action, bounds) {
 }
 
 export function sourceFromBox(box, bounds, aspect) {
-  // Source crop keeps the destination aspect ratio. Project a corner drag onto that diagonal.
+  // Keep the chosen source aspect ratio. Project a corner drag onto that diagonal.
   const width = (box.width + box.height / aspect) / (1 + 1 / (aspect * aspect));
-  const zoom = clamp(bounds.width * .6 / Math.max(1, width), 1, 6);
+  const zoom = clamp(bounds.width * .6 / Math.max(1, width), .6, 6);
   const actualWidth = Math.min(bounds.width * .6 / zoom, bounds.height * aspect);
   const actualHeight = actualWidth / aspect;
   return { zoom, x: clamp(box.x, actualWidth / 2, bounds.width - actualWidth / 2) / bounds.width,

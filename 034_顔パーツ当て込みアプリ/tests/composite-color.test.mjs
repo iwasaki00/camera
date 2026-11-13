@@ -69,17 +69,17 @@ test('color and composite validation reject invalid values and strip private tra
   const a=defaultAppearance();a.natural.frame='private';assert.equal('frame' in validateAppearance(a).natural,false);
 });
 const png=new Uint8Array(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==','base64'));
-const document=()=>({schemaVersion:3,id:'color',name:'natural',createdAt:'2026-11-09T00:00:00.000Z',updatedAt:'2026-11-09T00:00:00.000Z',background:{path:'background.png',name:'test.png',mime:'image/png',size:png.length,storedMime:'image/png',storedSize:png.length,width:1,height:1},parts:['mouth','leftEye','rightEye','nose'].map((t,i)=>createPart(t,i)),mirror:true,trackingEnabled:true,composite:{...DEFAULT_COMPOSITE,mode:'natural',autoMatch:true}});
-test('schema 3 retains all per-part/per-mode corrections and global settings',()=>{
+const document=()=>({schemaVersion:4,id:'color',name:'natural',createdAt:'2026-11-09T00:00:00.000Z',updatedAt:'2026-11-09T00:00:00.000Z',background:{path:'background.png',name:'test.png',mime:'image/png',size:png.length,storedMime:'image/png',storedSize:png.length,width:1,height:1},parts:['mouth','leftEye','rightEye','nose'].map((t,i)=>createPart(t,i)),mirror:true,trackingEnabled:true,composite:{...DEFAULT_COMPOSITE,mode:'natural',autoMatch:true}});
+test('schema 4 retains all per-part/per-mode corrections and global settings',()=>{
   const d=document();d.parts[2].appearance.comic.temperature=23;d.parts[0].appearance.natural.brightness=12;const restored=validateDocument(d);assert.deepEqual(restored.parts,d.parts);assert.deepEqual(restored.composite,d.composite);
 });
 test('schema 1 and 2 migrate to ORIGINAL regardless of newer unknown settings',()=>{
-  for(const schemaVersion of [1,2]){const d=document();d.schemaVersion=schemaVersion;const r=validateDocument(d);assert.equal(r.composite.mode,'original');assert.deepEqual(r.parts[0].sourceRect,d.parts[0].sourceRect);}
+  for(const schemaVersion of [1,2]){const d=document();d.schemaVersion=schemaVersion;d.parts.forEach((p,i)=>{p.partType=['mouth','leftEye','rightEye','nose'][i]});const r=validateDocument(d);assert.equal(r.composite.mode,'original');assert.deepEqual(r.parts[0].sourceRect,d.parts[0].sourceRect);}
 });
-test('schema 3 requires valid global and part color settings',()=>{
+test('schema 4 requires valid global and part color settings',()=>{
   const d=document();delete d.composite;assert.throws(()=>validateDocument(d));const e=document();delete e.parts[0].appearance;assert.throws(()=>validateDocument(e));
 });
-test('schema 3 ZIP roundtrip preserves settings without camera, comparison or analysis history',async()=>{
+test('schema 4 ZIP roundtrip preserves settings without camera, comparison or analysis history',async()=>{
   const doc=document();doc.cameraFrame='private';doc.comparing=true;doc.parts[0].appearance.natural.samples='private';
   const blob=await exportTemplate({doc,background:new Blob([png],{type:'image/png'})}),restored=await importTemplate(blob);
   assert.deepEqual(restored.doc,validateDocument(doc));assert.equal(JSON.stringify(restored.doc).includes('private'),false);assert.equal('comparing' in restored.doc,false);

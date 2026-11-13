@@ -1,4 +1,4 @@
-import { DEFAULT_COMPOSITE, defaultAppearance, COLOR_RANGES } from './composite-color.js?v=0.8.0';
+import { DEFAULT_COMPOSITE, defaultAppearance, COLOR_RANGES } from './composite-color.js?v=0.9.0';
 const $=id=>document.getElementById(id);
 const labels={brightness:'明るさ',contrast:'コントラスト',saturation:'彩度',temperature:'色温度（−寒色 / ＋暖色）',tint:'色かぶり（−緑 / ＋マゼンタ）',grain:'質感 / 固定粒子',blendStrength:'このパーツの補正強度',edgeSoftness:'追加の境界ぼかし',edgeContrast:'コミカルの境界強調'};
 export class CompositeUI {

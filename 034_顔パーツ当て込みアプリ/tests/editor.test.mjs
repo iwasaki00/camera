@@ -45,5 +45,5 @@ test('source resize keeps aspect ratio, clamps zoom and center, and does not jum
   const smaller = sourceFromBox({ x: -100, y: 500, width: 64, height: 32 }, size, 2);
   near(smaller.zoom, 3); near(smaller.x, .1); near(smaller.y, 1 - 16 / 240);
   const extreme = sourceFromBox({ x: 160, y: 120, width: 1000, height: 1000 }, size, 2);
-  assert.equal(extreme.zoom, 1);
+  assert.equal(extreme.zoom, .6);
 });
