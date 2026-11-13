@@ -55,3 +55,65 @@ Windows WebKitはMediaRecorder／captureStream非対応のため、実録画で�
 - 録画結果は一時Blobのままで、OSやSafariの強制終了からの復元は保証しません。
 
 検証結果、性能表と変更ファイル一覧は以下に記録します。
+
+## 最終検証記録（2026-11-13 JST）
+
+| 検証 | 件数・条件 | 結果 |
+|---|---|---|
+| 単体テスト（モック含む） | 155件 | PASS / FAIL 0 |
+| Chrome 汎用パーツ・旧データ・PNG・座標 | 16主要グループ（既存ピンチ等を内包） | PASS |
+| Edge 同上 | 16主要グループ | PASS |
+| Chrome ORIGINAL画素互換・色調・PNG/ZIP | 10グループ | PASS |
+| Chrome 録画信頼性 | 11グループ、実動画8本 | PASS |
+| Chrome ショート動画 | 12グループ、実動画6本 | PASS |
+| Edge ショート動画 | 12グループ、実動画6本 | PASS |
+| Chrome 画像/ZIPの実クリック | 13グループ | PASS |
+| WebKit 3タブ・タッチ・8パーツ | 7グループ | PASS |
+| WebKit 色調 | 4グループ | PASS |
+| WebKit 出力用Canvas | 4グループ | PASS |
+| WebKit 録画非対応の案内 | 1グループ | PASS（実録画不可） |
+| パーツ数別性能・編集ロック・録画中タブ切替 | 12条件、実動画6本 | PASS |
+
+ブラウザは上表の主要106グループPASS（内包するズーム検証と性能12条件を別加算しない集計）。新機能に伴い固定4パーツ・顔追従前提のテストを汎用パーツ／移行テストへ置換し、顔追従専用テストを削除したため、旧版の件数との単純比較はしない。実動画は計26ファイルを生成・解析し、実際の再生、動くフレーム、コンテナと拡張子、9:16、タイトル／フェード、音声トラックを確認した。試験のカメラ入力は合成Canvas、音声はブラウザのテスト音源で、実機のカメラ／マイクではない。
+
+### 性能（PC・同条件）
+
+Desktop Chrome, moving 640x480 synthetic camera at30fps; background400x600; 1/4/8 parts, ORIGINAL/NATURAL, recording OFF/9:16 FIT ON(360x640,24fps), six native recordings. 3.5s samples after600ms settling, diagnostic rolling window reset for each condition, output preview closed, sequential single browser. Recording editing locks and camera/finished/photo tab switches verified before settling. Runtime.getHeapUsage measures JS heap, excluding GPU/media/native memory. Actual fps = decoded frames/file duration. Not iPhone results.
+
+| パーツ数 | モード | 録画 | 描画fps | 合成平均ms | 転送平均ms | 実動画fps | JSヒープ終了時MiB | 動画KiB |
+|---:|---|---|---:|---:|---:|---:|---:|---:|
+| 1 | ORIGINAL | OFF | 30.0 | 2.5 | — | — | 2.26 | — |
+| 1 | ORIGINAL | 9:16 | 30.0 | 2.1 | 0.08 | 23.9 | 2.70 | 40.6 |
+| 1 | NATURAL | OFF | 30.0 | 6.6 | — | — | 2.64 | — |
+| 1 | NATURAL | 9:16 | 30.0 | 7.1 | 0.07 | 24.3 | 2.57 | 35.2 |
+| 4 | ORIGINAL | OFF | 30.0 | 3.1 | — | — | 4.36 | — |
+| 4 | ORIGINAL | 9:16 | 29.3 | 3.1 | 0.09 | 23.7 | 1.78 | 132.1 |
+| 4 | NATURAL | OFF | 30.0 | 18.9 | — | — | 2.38 | — |
+| 4 | NATURAL | 9:16 | 29.9 | 19.4 | 0.14 | 24.2 | 2.48 | 132.3 |
+| 8 | ORIGINAL | OFF | 30.0 | 3.2 | — | — | 3.27 | — |
+| 8 | ORIGINAL | 9:16 | 29.9 | 3.5 | 0.11 | 24.3 | 1.93 | 272.3 |
+| 8 | NATURAL | OFF | 26.8 | 33.2 | — | — | 3.66 | — |
+| 8 | NATURAL | 9:16 | 28.5 | 31.2 | 0.12 | 23.7 | 2.47 | 170.0 |
+
+描画fpsは3.5秒間の実カウント。合成時間は各条件でリセットした診断窓（上限5秒）の最新表示、転送時間はその録画全体平均。実録画fpsは復号フレーム数÷ファイル時間で、始端・終端や短い測定時間による小差を含む。順番に各1回のPC計測であり、差を統計的な改善とは扱わない。JSヒープはGC等で変動し、GPU／エンコーダ／ネイティブメモリを含まない。
+
+### 互換性・追加で修正した問題
+
+- 旧スキーマ1／2／3の手動描画が凍結した旧レンダラーと画素一致。旧ZIP→スキーマ4 ZIP→再読込も一致。旧IndexedDBレコードを読み込んだ後も原本のJSONが変更されないことを実ブラウザで確認。
+- Edgeで再読込直後に保存一覧を開くと、IndexedDBの初期化と競合して一覧が空になる場合を確認。一覧更新前に既存の初期化Promiseを待つ最小修正で解消。DB自体は変更していない。
+- 375px／390px × 844pxで8パーツでもページ高877px、通常のスクロール可能量33px、主要タップ44pxを維持。v0.8.0と同じ。選択一覧だけが横スクロールし、選択項目はその中で表示される。WebKitで横画面も確認。
+- 30／60秒自動停止は今回単体テストで確認し、実時間の30／60秒録画は再実施していない。
+
+### 成果物
+
+- `reports/v0.9.0-performance.json`：12条件の生データ・測定条件。
+- `reports/v0.9.0-free-{chrome,edge}.json`：汎用パーツ・移行検証。
+- `reports/v0.9.0-{chrome,edge}-short-video.json`：実ショート動画の解析値。
+- `reports/v0.9.0-chrome-recording.json`：既存録画・音声・形式・保存保護。
+- `reports/v0.9.0-*.mp4`／`.webm`：26本の実生成ファイル。
+- `reports/v0.9.0-free-375.png`／`free-390.png`：8パーツのモバイル画面。
+
+## 新規・変更・削除ファイル
+
+
+キャッシュ識別子のみ更新した共通モジュールを含む。MediaPipe／モデルの配布ディレクトリは全削除、共通のZIPライブラリ・録画・色処理は維持。録画／PNG処理の描画アルゴリズムを不要に作り直していない。
