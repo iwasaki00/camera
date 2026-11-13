@@ -1,0 +1,21 @@
+import fs from 'node:fs';import{execFileSync}from'node:child_process';
+const file='docs/FREE_PARTS_v0.9.0.md',marker='\n## 最終検証記録';let text=fs.readFileSync(file,'utf8').split(marker)[0];
+const report=JSON.parse(fs.readFileSync('reports/v0.9.0-performance.json','utf8'));
+text+=marker+'（2026-11-13 JST）\n\n';
+text+='| 検証 | 件数・条件 | 結果 |\n|---|---|---|\n| 単体テスト（モック含む） | 155件 | PASS / FAIL 0 |\n| Chrome 汎用パーツ・旧データ・PNG・座標 | 16主要グループ（既存ピンチ等を内包） | PASS |\n| Edge 同上 | 16主要グループ | PASS |\n| Chrome ORIGINAL画素互換・色調・PNG/ZIP | 10グループ | PASS |\n| Chrome 録画信頼性 | 11グループ、実動画8本 | PASS |\n| Chrome ショート動画 | 12グループ、実動画6本 | PASS |\n| Edge ショート動画 | 12グループ、実動画6本 | PASS |\n| Chrome 画像/ZIPの実クリック | 13グループ | PASS |\n| WebKit 3タブ・タッチ・8パーツ | 7グループ | PASS |\n| WebKit 色調 | 4グループ | PASS |\n| WebKit 出力用Canvas | 4グループ | PASS |\n| WebKit 録画非対応の案内 | 1グループ | PASS（実録画不可） |\n| パーツ数別性能・編集ロック・録画中タブ切替 | 12条件、実動画6本 | PASS |\n\n';
+text+='ブラウザは上表の主要106グループPASS（内包するズーム検証と性能12条件を別加算しない集計）。新機能に伴い固定4パーツ・顔追従前提のテストを汎用パーツ／移行テストへ置換し、顔追従専用テストを削除したため、旧版の件数との単純比較はしない。実動画は計26ファイルを生成・解析し、実際の再生、動くフレーム、コンテナと拡張子、9:16、タイトル／フェード、音声トラックを確認した。試験のカメラ入力は合成Canvas、音声はブラウザのテスト音源で、実機のカメラ／マイクではない。\n';
+text+='\n### 性能（PC・同条件）\n\n'+report.conditions+'\n\n';
+text+='| パーツ数 | モード | 録画 | 描画fps | 合成平均ms | 転送平均ms | 実動画fps | JSヒープ終了時MiB | 動画KiB |\n|---:|---|---|---:|---:|---:|---:|---:|---:|\n';
+for(const r of report.rows)text+=`| ${r.parts} | ${r.mode.toUpperCase()} | ${r.recording?'9:16':'OFF'} | ${r.drawFps.toFixed(1)} | ${r.compositeAverageMs.toFixed(1)} | ${r.transferAverageMs===null?'—':r.transferAverageMs.toFixed(2)} | ${r.actualFps?.toFixed(1)||'—'} | ${(r.jsHeapAfter/1024/1024).toFixed(2)} | ${r.bytes?(r.bytes/1024).toFixed(1):'—'} |\n`;
+text+='\n描画fpsは3.5秒間の実カウント。合成時間は各条件でリセットした診断窓（上限5秒）の最新表示、転送時間はその録画全体平均。実録画fpsは復号フレーム数÷ファイル時間で、始端・終端や短い測定時間による小差を含む。順番に各1回のPC計測であり、差を統計的な改善とは扱わない。JSヒープはGC等で変動し、GPU／エンコーダ／ネイティブメモリを含まない。\n';
+text+='\n### 互換性・追加で修正した問題\n\n- 旧スキーマ1／2／3の手動描画が凍結した旧レンダラーと画素一致。旧ZIP→スキーマ4 ZIP→再読込も一致。旧IndexedDBレコードを読み込んだ後も原本のJSONが変更されないことを実ブラウザで確認。\n- Edgeで再読込直後に保存一覧を開くと、IndexedDBの初期化と競合して一覧が空になる場合を確認。一覧更新前に既存の初期化Promiseを待つ最小修正で解消。DB自体は変更していない。\n- 375px／390px × 844pxで8パーツでもページ高877px、通常のスクロール可能量33px、主要タップ44pxを維持。v0.8.0と同じ。選択一覧だけが横スクロールし、選択項目はその中で表示される。WebKitで横画面も確認。\n- 30／60秒自動停止は今回単体テストで確認し、実時間の30／60秒録画は再実施していない。\n';
+text+='\n### 成果物\n\n- `reports/v0.9.0-performance.json`：12条件の生データ・測定条件。\n- `reports/v0.9.0-free-{chrome,edge}.json`：汎用パーツ・移行検証。\n- `reports/v0.9.0-{chrome,edge}-short-video.json`：実ショート動画の解析値。\n- `reports/v0.9.0-chrome-recording.json`：既存録画・音声・形式・保存保護。\n- `reports/v0.9.0-*.mp4`／`.webm`：26本の実生成ファイル。\n- `reports/v0.9.0-free-375.png`／`free-390.png`：8パーツのモバイル画面。\n';
+text+='\n## 新規・変更・削除ファイル\n\n';
+const options=['-c','safe.directory=C:/_wk/github/camera','-c','core.quotepath=false'];
+const diff=execFileSync('git',[...options,'diff','--name-status','--','.'],{encoding:'utf8'}).trim().split('\n');
+const newFiles=execFileSync('git',[...options,'ls-files','--others','--exclude-standard','--','.'],{encoding:'utf8'}).trim().split('\n');
+const entries=new Map();for(const line of diff){const [status,...paths]=line.split('\t');let path=paths.at(-1)?.replace(/^034_[^/]+\//,'');if(path&&!path.startsWith('reports/'))entries.set(path,status==='D'?'削除':'変更');}
+for(const path of newFiles)if(path&&!path.startsWith('reports/')&&path!=='write-free-report.mjs')entries.set(path,'新規');
+for(const [path,status]of [...entries].sort((a,b)=>a[0].localeCompare(b[0])))text+=`- ${status}：\`${path}\`\n`;
+text+='\nキャッシュ識別子のみ更新した共通モジュールを含む。MediaPipe／モデルの配布ディレクトリは全削除、共通のZIPライブラリ・録画・色処理は維持。録画／PNG処理の描画アルゴリズムを不要に作り直していない。\n';
+fs.writeFileSync(file,text.replace(/\r\n/g,'\n'));
