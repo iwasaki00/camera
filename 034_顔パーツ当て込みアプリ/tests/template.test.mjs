@@ -85,7 +85,7 @@ test('record rejects missing thumbnails and incorrect image byte size',()=>{
 for(const schemaVersion of [1,2,3])test('legacy schema '+schemaVersion+' migrates IDs, coordinates, masks, colors and manual sources without mutating original',async()=>{
  const input=doc();input.schemaVersion=schemaVersion;input.trackingEnabled=true;input.composite={mode:'natural',blendStrength:70,autoMatch:true,textureEnabled:false};
  input.parts[0].appearance.natural.brightness=17;const before=structuredClone(input),result=validateDocument(input);
- assert.equal(result.schemaVersion,4);assert.equal('trackingEnabled'in result,false);assert.deepEqual(result.parts.map(p=>p.name),['口','左目','右目','鼻']);
+ assert.equal(result.schemaVersion,5);assert.equal('trackingEnabled'in result,false);assert.deepEqual(result.parts.map(p=>p.name),['口','左目','右目','鼻']);
  for(let i=0;i<input.parts.length;i++){const p=input.parts[i],r=result.parts[i];for(const key of ['id','enabled','zIndex','targetRect','sourceRect','rotation','shape','feather','guides'])assert.deepEqual(r[key],p[key]);assert.equal('tracking'in r,false);assert.equal('partType'in r,false);}
  assert.equal(result.parts[0].appearance.natural.brightness,schemaVersion<3?0:17);assert.deepEqual(input,before);
  const imported=await importTemplate(zip(input));assert.deepEqual(imported.doc,result);const again=await importTemplate(await exportTemplate(imported));assert.deepEqual(again.doc,result);

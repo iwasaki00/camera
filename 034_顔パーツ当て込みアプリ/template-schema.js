@@ -1,6 +1,7 @@
-import {createPart,LEGACY_PART_NAMES,validPartName} from './parts.js?v=0.9.0';
-import { DEFAULT_COMPOSITE, defaultAppearance, validateAppearance, validateComposite } from './composite-color.js?v=0.9.0';
-export const SCHEMA_VERSION = 4;
+import {createPart,LEGACY_PART_NAMES,validPartName} from './parts.js?v=0.9.1';
+import {validateCustomMask} from './custom-mask.js?v=0.9.1';
+import { DEFAULT_COMPOSITE, defaultAppearance, validateAppearance, validateComposite } from './composite-color.js?v=0.9.1';
+export const SCHEMA_VERSION = 5;
 export const LIMITS = Object.freeze({ zip: 25 * 1024 * 1024, image: 20 * 1024 * 1024, json: 128 * 1024, thumbnail: 256 * 1024, edge: 2048, entries: 32 });
 export const newId = () => globalThis.crypto?.randomUUID?.() || `template-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const fail = message => { throw new Error(message); };
@@ -15,7 +16,7 @@ export function validName(value) {
 
 // Copy an explicit allowlist. No streams, camera canvases, image frames or view state can enter a document.
 export function validateDocument(input) {
-  if (!object(input) || ![1, 2, 3, SCHEMA_VERSION].includes(input.schemaVersion)) fail('対応していないテンプレート形式・スキーマバージョンです。');
+  if (!object(input) || ![1, 2, 3, 4, SCHEMA_VERSION].includes(input.schemaVersion)) fail('対応していないテンプレート形式・スキーマバージョンです。');
   const legacy=input.schemaVersion<4;
   if (!string(input.id, 100) || !/^[a-zA-Z0-9_-]+$/.test(input.id) || !date(input.createdAt) || !date(input.updatedAt) || input.updatedAt < input.createdAt) fail('テンプレートIDまたは日時が不正です。');
   const b = input.background;
@@ -34,17 +35,19 @@ export function validateDocument(input) {
     const t = p.targetRect, s = p.sourceRect;
     if (!object(t) || !number(t.x, 0, 100) || !number(t.y, 0, 100) || !number(t.width, 1, 100) || !number(t.height, 1, 100)
       || !object(s) || !number(s.x, 0, 1) || !number(s.y, 0, 1) || !number(s.zoom, legacy?1:.6, 6)
-      || (s.aspect!==undefined&&!number(s.aspect,.1,10)) || !number(p.rotation, -180, 180) || !number(p.feather, 0, 100) || !['oval','rectangle'].includes(p.shape)
+      || (s.aspect!==undefined&&!number(s.aspect,.1,10)) || !number(p.rotation, -180, 180) || !number(p.feather, 0, 100) || !(input.schemaVersion>=5?['oval','rectangle','freehand']:['oval','rectangle']).includes(p.shape)
       || !Number.isInteger(p.zIndex) || !number(p.zIndex, 0, legacy?1000000:Number.MAX_SAFE_INTEGER) || layers.has(p.zIndex)) fail('パーツの座標・サイズ・回転・ぼかし・重なり順が不正です。');
     layers.add(p.zIndex);
     const guides = p.guides ?? { photo: true, camera: true };
     if (!object(guides) || typeof guides.photo !== 'boolean' || typeof guides.camera !== 'boolean') fail('枠表示の情報が不正です。');
+    const customMask=input.schemaVersion>=5&&p.customMask!=null?validateCustomMask(p.customMask):null;
+    if(p.shape==='freehand'&&!customMask)fail('フリーハンド輪郭がありません。');
     return { id: p.id, name:legacy?LEGACY_PART_NAMES[p.partType]:validPartName(p.name), enabled: p.enabled, targetRect: { x:t.x, y:t.y, width:t.width, height:t.height },
       sourceRect: { x:s.x, y:s.y, zoom:s.zoom, ...(s.aspect===undefined?{}:{aspect:s.aspect}) }, rotation:p.rotation, shape:p.shape, feather:p.feather, zIndex:p.zIndex,
       guides: { photo:guides.photo, camera:guides.camera },
-      appearance: input.schemaVersion < 3 ? defaultAppearance() : validateAppearance(p.appearance) };
+      ...(customMask?{customMask}:{}),appearance: input.schemaVersion < 3 ? defaultAppearance() : validateAppearance(p.appearance) };
   });
-  return { schemaVersion: SCHEMA_VERSION, appVersion: '0.9.0', id:input.id, name:validName(input.name), createdAt:input.createdAt, updatedAt:input.updatedAt,
+  return { schemaVersion: SCHEMA_VERSION, appVersion: '0.9.1', id:input.id, name:validName(input.name), createdAt:input.createdAt, updatedAt:input.updatedAt,
     background: { path:b.path, name:b.name, mime:b.mime, size:b.size, storedMime:b.storedMime, storedSize:b.storedSize, width:b.width, height:b.height }, parts:parts.length?parts:[createPart()], mirror:input.mirror,
     composite: input.schemaVersion < 3 ? {...DEFAULT_COMPOSITE} : validateComposite(input.composite) };
 }

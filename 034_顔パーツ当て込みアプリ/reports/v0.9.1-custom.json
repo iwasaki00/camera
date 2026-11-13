@@ -1,0 +1,46 @@
+{
+  "groups": 15,
+  "pixel": {
+    "notch": 0,
+    "inside": 255,
+    "edge": 3,
+    "cached": true,
+    "mirrored": 0
+  },
+  "pngPixels": {
+    "notch": [
+      0,
+      0,
+      0,
+      255
+    ],
+    "inside": [
+      255,
+      34,
+      0,
+      255
+    ]
+  },
+  "videoPixels": {
+    "notch": [
+      1,
+      0,
+      0
+    ],
+    "inside": [
+      254,
+      33,
+      0
+    ]
+  },
+  "video": {
+    "file": "reports/v0.9.1-custom-8-parts.mp4",
+    "width": 360,
+    "height": 640,
+    "duration": "2.460433",
+    "frames": "60",
+    "bytes": 228172
+  },
+  "browser": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/157.0.0.0 Safari/537.36",
+  "iphone": false
+}

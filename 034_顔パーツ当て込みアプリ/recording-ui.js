@@ -1,6 +1,6 @@
-import {shareableRecording} from './recording.js?v=0.9.0';
-import {recordingPlan} from './recording.js?v=0.9.0';
-import {outputOptions,drawRecordingOutput} from './recording-output.js?v=0.9.0';
+import {shareableRecording} from './recording.js?v=0.9.1';
+import {recordingPlan} from './recording.js?v=0.9.1';
+import {outputOptions,drawRecordingOutput} from './recording-output.js?v=0.9.1';
 const $=id=>document.getElementById(id);
 const names={idle:'待機',initializing:'初期化中',countdown:'カウントダウン',recording:'録画中',stopping:'録画終了処理中',completed:'録画完了',error:'エラー'};
 export class RecordingUI {

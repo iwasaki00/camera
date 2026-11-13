@@ -1,9 +1,11 @@
-import { orderedParts, sourceForDisplay } from './parts.js?v=0.9.0';
-import { activeCorrection, ColorProcessor } from './composite-color.js?v=0.9.0';
+import { orderedParts, sourceForDisplay } from './parts.js?v=0.9.1';
+import { activeCorrection, ColorProcessor } from './composite-color.js?v=0.9.1';
+import {polygonMask} from './custom-mask.js?v=0.9.1';
 
 export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 export function sourceRect(videoWidth, videoHeight, aspect, source, mirror) {
+  if(source.rect){const r=source.rect,x=r.x*videoWidth,width=r.width*videoWidth;return {x,y:r.y*videoHeight,width,height:r.height*videoHeight,visualX:mirror?videoWidth-x-width:x};}
   aspect=source.aspect||aspect;
   let width = videoWidth * 0.6 / source.zoom;
   let height = width / aspect;
@@ -23,12 +25,13 @@ export class PartRenderer {
   }
 
   prepareMask(width, height, part) {
-    const key = [width, height, part.shape, part.feather].join(':');
+    const key = [width, height, part.shape, part.feather,part.shape==='freehand'?JSON.stringify([part.maskPoints,part.maskMirror]):''].join(':');
     if (key === this.maskKey) return;
     this.maskKey = key;
     this.patch.width = this.mask.width = width;
     this.patch.height = this.mask.height = height;
     const ctx = this.mask.getContext('2d');
+    if(part.shape==='freehand'){polygonMask(ctx,width,height,part.maskPoints,part.feather,part.maskMirror);return;}
     const image = ctx.createImageData(width, height);
     const a = width / 2, b = height / 2;
     const feather = Math.min(a, b) * part.feather / 100;
@@ -112,7 +115,7 @@ export class CompositeRenderer {
     for (const part of orderedParts(parts)) {
       if (!this.renderers.has(part.id)) this.renderers.set(part.id, this.createRenderer());
       this.renderers.get(part.id).draw(ctx, activeCorrection(appearance?.composite,part.appearance) ? correctedVideo : video,
-        { ...part.targetRect, rotation: part.rotation, shape: part.shape, feather: part.feather },
+        { ...part.targetRect, rotation: part.rotation, shape: part.shape, feather: part.feather,maskPoints:part.customMask?.points,maskMirror:mirror },
         sourceForDisplay(part, mirror), mirror, false,
         appearance ? { ...appearance, part:part.appearance } : null);
     }

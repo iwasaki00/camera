@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 export async function checkWebkitShort(page){
   await page.waitForFunction(()=>document.body.dataset.appState==='ready');
   const result=await page.evaluate(async()=>{
-    const {drawRecordingOutput,outputOptions}=await import('./recording-output.js?v=0.9.0');
-    const {recordingPlan}=await import('./recording.js?v=0.9.0');
+    const {drawRecordingOutput,outputOptions}=await import('./recording-output.js?v=0.9.1');
+    const {recordingPlan}=await import('./recording.js?v=0.9.1');
     const source=document.createElement('canvas');source.width=800;source.height=400;const s=source.getContext('2d');s.fillStyle='#f00';s.fillRect(0,0,400,400);s.fillStyle='#00f';s.fillRect(400,0,400,400);
     const output=document.createElement('canvas');output.width=360;output.height=640;const c=output.getContext('2d');
     const pixel=(x,y)=>[...c.getImageData(x,y,1,1).data];

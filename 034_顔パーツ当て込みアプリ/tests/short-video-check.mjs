@@ -32,7 +32,7 @@ export async function checkShortVideo({evaluate,command,waitFor}) {
   const extract=async(name,expectedWidth,expectedHeight,audio)=>{
     await waitFor("document.querySelector('#record-result').open",220);await waitFor("document.querySelector('#record-player').readyState>=2");
     const data=await evaluate("(async()=>{const a=document.querySelector('#record-download');return {extension:a.download.split('.').at(-1),bytes:[...new Uint8Array(await(await fetch(a.href)).arrayBuffer())]};})()");
-    const file=`reports/v0.9.0-${label}-short-${name}.${data.extension}`;await writeFile(file,new Uint8Array(data.bytes));
+    const file=`reports/v0.9.1-${label}-short-${name}.${data.extension}`;await writeFile(file,new Uint8Array(data.bytes));
     const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-count_frames','-show_streams','-show_format','-of','json',file],{encoding:'utf8'}));
     const video=probe.streams.find(s=>s.codec_type==='video');assert.equal(video.width,expectedWidth);assert.equal(video.height,expectedHeight);assert.equal(probe.streams.some(s=>s.codec_type==='audio'),audio);assert.ok(data.bytes.length>1000);
     const duration=Number(probe.format.duration),frames=Number(video.nb_read_frames);assert.ok(frames>5);assert.equal(probe.format.format_name.includes('mp4'),data.extension==='mp4');
@@ -71,7 +71,7 @@ export async function checkShortVideo({evaluate,command,waitFor}) {
   await set('record-aspect','original');await set('record-title-time','none');await set('record-mic',false);await set('record-quality','normal');await set('composite-mode','comic');
   await click('record-start');await waitFor("document.querySelector('#record-status').dataset.state==='recording'");await new Promise(r=>setTimeout(r,1600));await click('record-stop');await extract('comic-original',720,360,false);pass('original aspect and COMIC native recording compatibility');
   // Pixel-exact preview comparison at a controlled timestamp; no extra model/compositor calls.
-  const preview=await evaluate(`(async()=>{const {drawRecordingOutput,outputOptions}=await import('./recording-output.js?v=0.9.0');
+  const preview=await evaluate(`(async()=>{const {drawRecordingOutput,outputOptions}=await import('./recording-output.js?v=0.9.1');
     document.querySelector('#settings-panel').open=true;document.querySelector('#settings-recording').open=true;
     const source=document.querySelector('#composition'),canvas=document.createElement('canvas');canvas.width=720;canvas.height=360;
     document.querySelector('#record-title').dispatchEvent(new Event('input'));
@@ -81,15 +81,15 @@ export async function checkShortVideo({evaluate,command,waitFor}) {
   assert.equal(preview.a,preview.b);pass('pixel-exact output preview and shared recording renderer at identical timestamp');
   await set('record-aspect','vertical');await set('record-title-time','all');await set('record-title','ショート動画の出力プレビュー');
   await evaluate("document.querySelector('#record-output-preview').scrollIntoView({block:'nearest'})");
-  const previewShot=await command('Page.captureScreenshot',{format:'png'});await writeFile(`reports/v0.9.0-${label}-output-settings.png`,Buffer.from(previewShot.data,'base64'));
+  const previewShot=await command('Page.captureScreenshot',{format:'png'});await writeFile(`reports/v0.9.1-${label}-output-settings.png`,Buffer.from(previewShot.data,'base64'));
   await set('record-title','');await set('record-title-time','none');
   await click('screen-photo');
   for(const width of [375,390]){
     await command('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:true});await new Promise(r=>setTimeout(r,150));
     assert.equal(await evaluate('document.documentElement.scrollWidth<=innerWidth'),true);
     const size=await evaluate("(()=>{document.querySelector('#settings-panel').open=false;return {height:document.documentElement.scrollHeight,button:document.querySelector('#record-start').getBoundingClientRect().height}})()");assert.ok(size.button>=44);assert.ok(size.height<=890);rows.push({layoutWidth:width,...size});
-    const screenshot=await command('Page.captureScreenshot',{format:'png'});await writeFile(`reports/v0.9.0-${label}-short-ui-${width}.png`,Buffer.from(screenshot.data,'base64'));
+    const screenshot=await command('Page.captureScreenshot',{format:'png'});await writeFile(`reports/v0.9.1-${label}-short-ui-${width}.png`,Buffer.from(screenshot.data,'base64'));
   }pass('375px / 390px no horizontal overflow, 44px recording taps, compact main scroll retained');
   await evaluate('clearInterval(feedTimer)');await click('stop');
-  await writeFile(`reports/v0.9.0-${label}-short-video.json`,JSON.stringify({groups:count,browser:await evaluate('navigator.userAgent'),rows},null,2)+'\n');
+  await writeFile(`reports/v0.9.1-${label}-short-video.json`,JSON.stringify({groups:count,browser:await evaluate('navigator.userAgent'),rows},null,2)+'\n');
 }

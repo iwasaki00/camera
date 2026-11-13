@@ -1,0 +1,54 @@
+{
+  "conditions": "Desktop Chrome, moving 640x480 synthetic camera at30fps; background400x600; ORIGINAL/NATURAL, recording OFF/9:16 FIT ON(360x640,24fps). 3.5s samples after600ms settling, diagnostic rolling window reset for each condition, output preview closed, sequential single browser. Runtime.getHeapUsage excludes GPU/media/native memory. Actual fps = decoded frames/file duration. Not iPhone results.",
+  "custom": true,
+  "rows": [
+    {
+      "parts": 8,
+      "mode": "original",
+      "recording": false,
+      "drawFps": 29.995714897871732,
+      "compositeAverageMs": 1.7,
+      "transferAverageMs": null,
+      "jsHeapBefore": 2838672,
+      "jsHeapAfter": 2926876
+    },
+    {
+      "parts": 8,
+      "mode": "original",
+      "recording": true,
+      "drawFps": 29.710041422653905,
+      "compositeAverageMs": 2.1,
+      "transferAverageMs": 0.1,
+      "jsHeapBefore": 2772504,
+      "jsHeapAfter": 3019488,
+      "duration": 4.353233,
+      "bytes": 200804,
+      "actualFps": 24.34971893303207,
+      "file": "reports/v0.9.1-custom-8-parts-original.mp4"
+    },
+    {
+      "parts": 8,
+      "mode": "natural",
+      "recording": false,
+      "drawFps": 29.44840865330084,
+      "compositeAverageMs": 21.1,
+      "transferAverageMs": null,
+      "jsHeapBefore": 5621720,
+      "jsHeapAfter": 2123176
+    },
+    {
+      "parts": 8,
+      "mode": "natural",
+      "recording": true,
+      "drawFps": 29.234012649332396,
+      "compositeAverageMs": 23.9,
+      "transferAverageMs": 0.1,
+      "jsHeapBefore": 3348512,
+      "jsHeapAfter": 3304268,
+      "duration": 4.4594,
+      "bytes": 176946,
+      "actualFps": 24.218504731578243,
+      "file": "reports/v0.9.1-custom-8-parts-natural.mp4"
+    }
+  ]
+}

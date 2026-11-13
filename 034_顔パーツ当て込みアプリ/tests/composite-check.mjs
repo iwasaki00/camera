@@ -75,7 +75,7 @@ export async function checkComposite({evaluate,command,waitFor}) {
   await evaluate("document.querySelector('#template-name').value='Color fixture';document.querySelector('#template-name-form').requestSubmit()");
   await waitFor("!document.querySelector('#template-name-dialog').open&&document.querySelector('#template-manager').getAttribute('aria-busy')==='false'");
   const saved=await evaluate(`(async()=>{const {TemplateStore}=await import('./template-store.js?v=0.6.2');const s=new TemplateStore(),rows=await s.list();s.close();return rows.find(r=>r.doc.name==='Color fixture').doc;})()`);
-  assert.equal(saved.schemaVersion,4);assert.equal(saved.composite.mode,'natural');assert.equal(saved.parts[0].appearance.natural.brightness,18);
+  assert.equal(saved.schemaVersion,5);assert.equal(saved.composite.mode,'natural');assert.equal(saved.parts[0].appearance.natural.brightness,18);
   await click('template-export');await waitFor("!document.querySelector('#template-download').hidden&&document.querySelector('#template-manager').getAttribute('aria-busy')==='false'");
   const zipDoc=await evaluate(`(async()=>{const {importTemplate}=await import('./template-zip.js?v=0.6.2');window.colorZip=await(await fetch(document.querySelector('#template-download').href)).blob();return(await importTemplate(colorZip)).doc;})()`);
   assert.deepEqual(zipDoc.parts,saved.parts);assert.deepEqual(zipDoc.composite,saved.composite);

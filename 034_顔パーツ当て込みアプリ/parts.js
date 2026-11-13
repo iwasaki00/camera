@@ -1,4 +1,5 @@
-import {defaultAppearance} from './composite-color.js?v=0.9.0';
+import {defaultAppearance} from './composite-color.js?v=0.9.1';
+import {boundedRect,validateCustomMask} from './custom-mask.js?v=0.9.1';
 export const MAX_PARTS=8;
 export const LEGACY_PART_NAMES=Object.freeze({mouth:'口',leftEye:'左目',rightEye:'右目',nose:'鼻'});
 export const newPartId=()=>globalThis.crypto?.randomUUID?.()||`part-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -7,8 +8,16 @@ export function createPart(name='パーツ1',zIndex=0){
   return {id:newPartId(),name:validPartName(name),enabled:true,zIndex,targetRect:{x:50,y:50,width:24,height:18},
     sourceRect:{x:.5,y:.5,zoom:1.5,aspect:1},rotation:0,shape:'oval',feather:20,guides:{photo:true,camera:true},appearance:defaultAppearance()};
 }
-export const sourceForDisplay=(part,mirror)=>({...part.sourceRect,x:mirror?1-part.sourceRect.x:part.sourceRect.x});
-export function setDisplaySource(part,source,mirror){part.sourceRect={...part.sourceRect,...source,x:mirror?1-source.x:source.x};}
+export const sourceForDisplay=(part,mirror)=>{
+  if(part.shape==='freehand'&&part.customMask){const r=part.customMask.rect;return {rect:r,x:mirror?1-r.x-r.width/2:r.x+r.width/2,y:r.y+r.height/2,zoom:.6/r.width};}
+  return {...part.sourceRect,x:mirror?1-part.sourceRect.x:part.sourceRect.x};
+};
+export function setDisplaySource(part,source,mirror){
+  if(part.shape==='freehand'&&part.customMask){const r=part.customMask.rect,scale=(.6/r.width)/source.zoom,w=r.width*scale,h=r.height*scale,f=Math.min(1,1/w,1/h),width=w*f,height=h*f;
+    const rect=boundedRect({x:(mirror?1-source.x:source.x)-width/2,y:source.y-height/2,width,height});
+    try{validateCustomMask({...part.customMask,rect});part.customMask.rect=rect;return true;}catch{return false;}}
+  part.sourceRect={...part.sourceRect,...source,x:mirror?1-source.x:source.x};
+}
 export const orderedParts=parts=>[...parts].filter(p=>p.enabled).sort((a,b)=>a.zIndex-b.zIndex);
 export class PartCollection {
   constructor(){this.parts=[createPart()];this.selectedId=this.parts[0].id;}

@@ -1,16 +1,18 @@
-import { Camera } from './camera.js?v=0.9.0';
-import { CompositeRenderer, sourceRect } from './renderer.js?v=0.9.0';
-import { TouchEditor, sourceFromBox } from './editor.js?v=0.9.0';
-import { Viewport, toScreen } from './viewport.js?v=0.9.0';
-import { Magnifier } from './magnifier.js?v=0.9.0';
-import { PartCollection, MAX_PARTS, sourceForDisplay, setDisplaySource } from './parts.js?v=0.9.0';
-import { TemplateUI } from './template-ui.js?v=0.9.0';
-import { Diagnostics, DiagnosticPanel } from './diagnostics.js?v=0.9.0';
-import { DEFAULT_COMPOSITE } from './composite-color.js?v=0.9.0';
-import { CompositeUI } from './composite-ui.js?v=0.9.0';
-import { VideoRecording } from './recording.js?v=0.9.0';
-import { RecordingUI } from './recording-ui.js?v=0.9.0';
-import { ScreenUI } from './screen-ui.js?v=0.9.0';
+import {CustomShapeEditor} from './custom-shape-editor.js?v=0.9.1';
+import {boundedRect,validateCustomMask} from './custom-mask.js?v=0.9.1';
+import { Camera } from './camera.js?v=0.9.1';
+import { CompositeRenderer, sourceRect } from './renderer.js?v=0.9.1';
+import { TouchEditor, sourceFromBox } from './editor.js?v=0.9.1';
+import { Viewport, toScreen } from './viewport.js?v=0.9.1';
+import { Magnifier } from './magnifier.js?v=0.9.1';
+import { PartCollection, MAX_PARTS, sourceForDisplay, setDisplaySource } from './parts.js?v=0.9.1';
+import { TemplateUI } from './template-ui.js?v=0.9.1';
+import { Diagnostics, DiagnosticPanel } from './diagnostics.js?v=0.9.1';
+import { DEFAULT_COMPOSITE } from './composite-color.js?v=0.9.1';
+import { CompositeUI } from './composite-ui.js?v=0.9.1';
+import { VideoRecording } from './recording.js?v=0.9.1';
+import { RecordingUI } from './recording-ui.js?v=0.9.1';
+import { ScreenUI } from './screen-ui.js?v=0.9.1';
 
 const $ = id => document.getElementById(id);
 const canvas = $('composition'), ctx = canvas.getContext('2d');
@@ -29,10 +31,10 @@ function writeValue(key, value) {
   if (Object.prototype.hasOwnProperty.call(part.targetRect, key)) part.targetRect[key] = value; else part[key] = value;
 }
 let frame = 0, imageGeneration = 0, exportUrl = null, lastDraw = -Infinity;
-let photoEditor, cameraEditor;
+let photoEditor, cameraEditor, customEditor;
 let photoMagnifier, cameraMagnifier;
 let templates;
-const screens = new ScreenUI({changed:()=>{cancelEditors();photoMagnifier?.cancelDrag();cameraMagnifier?.cancelDrag();render();}});
+const screens = new ScreenUI({changed:()=>{cancelEditors();photoMagnifier?.cancelDrag();cameraMagnifier?.cancelDrag();customEditor?.sync();render();}});
 const photoView = new Viewport(canvas, { min: .5, changed: () => { syncViewControls(); render(); } });
 const cameraView = new Viewport($('camera-preview'), { changed: () => { syncViewControls(); render(); } });
 const controls = [];
@@ -64,7 +66,8 @@ function syncControls() {
   for (const id of ['quick-feather', 'shape', 'source-zoom', 'part-enabled', 'part-delete', 'part-front', 'part-back']) $(id).disabled = !part;
   $('quick-feather').value = part?.feather ?? 20;
   $('quick-feather-value').value = part ? `${Math.round(part.feather)}%` : '—';
-  $('shape').value = part?.shape ?? 'oval';
+  $('shape').value = part?.shape ?? 'oval';$('camera-shape').value=part?.shape??'oval';
+  $('source-zoom').max=part?.shape==='freehand'?60:6;
   $('source-zoom').value = source.zoom;
   $('source-zoom-value').value = part ? `${source.zoom.toFixed(2)}×` : '—';
   $('part-enabled').checked = part?.enabled ?? false;
@@ -84,7 +87,7 @@ function syncControls() {
   }
   photoMagnifier?.setLabel(part ? part.name : '未選択');
   cameraMagnifier?.setLabel(part ? part.name : '未選択');
-  recordingUI?.applyLock();
+  customEditor?.sync();recordingUI?.applyLock();
 }
 function update() { syncControls(); render(); templates?.changed(); }
 
@@ -130,25 +133,26 @@ function render() {
   photoMagnifier?.draw();
   const preview = $('camera-preview'), c = preview.getContext('2d');
   c.clearRect(0, 0, preview.width, preview.height);
-  if (!state.running || video.readyState < 2 || !video.videoWidth) { cameraEditor?.draw(); cameraMagnifier?.draw(); return; }
+  if (!state.running || video.readyState < 2 || !video.videoWidth) { cameraEditor?.draw(); cameraMagnifier?.draw();customEditor?.draw(); return; }
   const height = Math.round(preview.width * video.videoHeight / video.videoWidth);
   if (preview.height !== height) preview.height = height;
   c.save(); if (state.mirror) { c.translate(preview.width, 0); c.scale(-1, 1); }
-  c.drawImage(video, 0, 0, preview.width, preview.height); c.restore();
+  c.drawImage(customEditor?.still||video, 0, 0, preview.width, preview.height); c.restore();
   cameraEditor?.draw();
-  cameraMagnifier?.draw();
+  cameraMagnifier?.draw();customEditor?.draw();
 }
 function tick(time = performance.now()) {
   if(time-lastDraw>=1000/30-1){render();lastDraw=time;}
   frame = state.running ? requestAnimationFrame(tick) : 0;
 }
 function stopCamera(text = 'カメラを停止しました。') {
+  customEditor?.cancel();
   recording?.stop('カメラ停止のため録画を終了しました。');
   cameraEditor?.cancel();
   camera.stop(); state.running = false; cancelAnimationFrame(frame); frame = 0;
   $('start').disabled = false; $('stop').disabled = true;
   $('camera-state').textContent = '停止中'; $('camera-hint').hidden = false;
-  render(); message(text);
+  customEditor?.sync();render(); message(text);
   recordingUI?.sync();
 }
 $('start').addEventListener('click', async () => {
@@ -161,7 +165,7 @@ $('start').addEventListener('click', async () => {
     camera.stream.getVideoTracks().forEach(track => track.addEventListener('ended', () => {
       if (state.running) stopCamera('カメラとの接続が終了しました。再度開始してください。');
     }, { once: true }));
-    message('枠をドラッグして位置を合わせます。'); tick();
+    customEditor?.sync();message('枠をドラッグして位置を合わせます。'); tick();
     recordingUI?.sync();
   } catch (error) {
     stopCamera();
@@ -172,7 +176,7 @@ $('start').addEventListener('click', async () => {
   }
 });
 $('stop').addEventListener('click', () => stopCamera());
-$('mirror').addEventListener('change', event => { cameraEditor.cancel(); state.mirror = event.target.checked; update(); });
+$('mirror').addEventListener('change', event => { customEditor?.cancel();cameraEditor.cancel(); state.mirror = event.target.checked; update(); });
 for (const [id, viewport] of [['photo', photoView], ['camera', cameraView]]) {
   $(`${id}-guide`).addEventListener('change', event => {
     photoEditor.cancel(); cameraEditor.cancel(); if (selected()) selected().guides[id] = event.target.checked; render(); templates?.changed();
@@ -194,14 +198,19 @@ function focusPart(id) {
 $('interaction-mode').addEventListener('change', event => {
   photoEditor.cancel(); cameraEditor.cancel(); state.mode = event.target.value; render();
 });
-$('shape').addEventListener('change', event => { if (selected()) selected().shape = event.target.value; update(); });
+function changeShape(event){
+  const part=selected();if(!part||recording?.busy)return;customEditor?.cancel();
+  if(event.target.value==='freehand'&&!part.customMask){screens.select('camera');customEditor?.start();syncControls();return;}
+  part.shape=event.target.value;update();
+}
+for(const id of ['shape','camera-shape'])$(id).addEventListener('change',changeShape);
 $('source-zoom').addEventListener('input', event => {
   setSource({ ...selectedSource(), zoom: Number(event.target.value) }); update();
 });
 $('quick-feather').addEventListener('input', event => {
   if (selected()) selected().feather = Number(event.target.value); update();
 });
-function cancelEditors() { photoEditor?.cancel(); cameraEditor?.cancel(); }
+function cancelEditors() { customEditor?.cancel();photoEditor?.cancel(); cameraEditor?.cancel(); }
 function syncPartList(){
   const list=$('part-list'),ids=state.parts.map(p=>p.id).join('|');
   if(list.dataset.ids!==ids){list.replaceChildren();for(const p of state.parts){const b=document.createElement('button');b.type='button';b.dataset.partId=p.id;b.addEventListener('click',()=>{if(recording?.busy)return;cancelEditors();collection.select(p.id);update();if(photoView.returnView)focusPart('photo');if(cameraView.returnView)focusPart('camera');});list.append(b);}list.dataset.ids=ids;}
@@ -212,7 +221,8 @@ function syncPartList(){
   $('part-delete').disabled=state.parts.length<=1;$('part-delete').title=state.parts.length<=1?'最後の1個は削除できません':'';
   $('part-name').value=selected()?.name||'';
   $('part-top').disabled=$('part-front').disabled;$('part-bottom').disabled=$('part-back').disabled;
-  $('source-aspect').value=selected()?.sourceRect.aspect||1;$('source-aspect-value').value=selected()?.sourceRect.aspect?selected().sourceRect.aspect.toFixed(2)+' : 1':'旧版：配置の縦横比';
+  $('source-aspect').disabled=selected()?.shape==='freehand';
+  $('source-aspect').value=selected()?.sourceRect.aspect||1;$('source-aspect-value').value=selected()?.shape==='freehand'?'輪郭の枠で縦横を調整':selected()?.sourceRect.aspect?selected().sourceRect.aspect.toFixed(2)+' : 1':'旧版：配置の縦横比';
 }
 $('part-add').addEventListener('click',()=>{if(recording?.busy)return;cancelEditors();if(collection.add())message('パーツを追加しました。');update();});
 $('part-duplicate').addEventListener('click',()=>{if(recording?.busy)return;cancelEditors();if(collection.duplicate())message('パーツを複製しました。');update();});
@@ -294,9 +304,9 @@ photoEditor = new TouchEditor(canvas, {
 });
 cameraEditor = new TouchEditor($('camera-preview'), {
   color: '#ffba69', rotation: false,
-  editable: () => !recording?.busy && screens.screen === 'camera',
-  enabled: () => screens.screen === 'camera' && !!selected()?.guides.camera && state.running && video.readyState >= 2, viewport: cameraView, mode: () => state.mode,
-  snapshot: () => ({ ...selected().sourceRect }), restore: saved => { selected().sourceRect = { ...saved }; update(); },
+  editable: () => !customEditor?.active && !recording?.busy && screens.screen === 'camera',
+  enabled: () => !customEditor?.active && screens.screen === 'camera' && !!selected()?.guides.camera && state.running && video.readyState >= 2, viewport: cameraView, mode: () => state.mode,
+  snapshot: () => ({sourceRect:{...selected().sourceRect},customMask:selected().customMask?structuredClone(selected().customMask):null}), restore: saved => {selected().sourceRect={...saved.sourceRect};if(saved.customMask)selected().customMask=structuredClone(saved.customMask);update();},
   getBox: size => {
     if (!video.videoWidth || !selected()) return null;
     const p = selected().targetRect, crop = sourceRect(video.videoWidth, video.videoHeight,
@@ -306,6 +316,11 @@ cameraEditor = new TouchEditor($('camera-preview'), {
       width: crop.width / video.videoWidth * size.width, height: crop.height / video.videoHeight * size.height, angle: 0 };
   },
   change: (box, size, drag) => {
+    if(selected().shape==='freehand'&&selected().customMask){
+      const width=box.width/size.width,height=box.height/size.height,rect=boundedRect({x:state.mirror?1-(box.x+box.width/2)/size.width:(box.x-box.width/2)/size.width,y:(box.y-box.height/2)/size.height,width,height});
+      try{validateCustomMask({...selected().customMask,rect});selected().customMask.rect=rect;}catch{message('輪郭の領域が小さすぎます。',true);}
+      update();return;
+    }
     if (drag.action.type === 'move') {
       // Use the visible crop center at drag start, avoiding a jump after edge clamping.
       const p = selected().targetRect, aspect = selectedSource().aspect || canvas.width * p.width / (canvas.height * p.height);
@@ -334,6 +349,7 @@ photoMagnifier = new Magnifier(canvas.parentElement, {
 cameraMagnifier = new Magnifier($('camera-preview').parentElement, {
   getAnchor:()=>{const g=cameraView.geometry();const box=cameraEditor.getBox(g);return box?toScreen(box,cameraView.view,g.origin):null;},
   id: 'camera', label: 'カメラ側', color: '#ffba69', getSource: () => {
+    if(customEditor?.active)return null;
     if (!state.running || video.readyState < 2 || !video.videoWidth || !selected()) return null;
     const part = selected().targetRect, crop = sourceRect(video.videoWidth, video.videoHeight,
       canvas.width * part.width / (canvas.height * part.height), selectedSource(), state.mirror);
@@ -341,6 +357,9 @@ cameraMagnifier = new Magnifier($('camera-preview').parentElement, {
       fit: cameraView.geometry().width / video.videoWidth, mirror: state.mirror };
   }
 });
+customEditor=new CustomShapeEditor({target:$('camera-preview'),video,viewport:cameraView,selected,mirror:()=>state.mirror,
+  ready:()=>screens.screen==='camera'&&state.running&&video.readyState>=2&&!!selected(),locked:()=>!!recording?.busy,before:cancelEditors,
+  changed:()=>{update();recordingUI?.sync();},message});
 templates = new TemplateUI({
   locked: () => !!recording?.busy,
   read: () => ({ canvas: state.image, metadata: state.imageMetadata, revision: state.backgroundRevision, parts: state.parts, mirror: state.mirror, composite:state.composite }),
@@ -363,7 +382,7 @@ templates = new TemplateUI({
 });
 compositeUI = new CompositeUI({read:()=>state.composite,selected,changed:update,compare:active=>{comparing=active;render();}});
 recording = new VideoRecording({changed:()=>recordingUI?.sync()});
-recordingUI = new RecordingUI({recorder:recording,ready:()=>!!state.image&&state.running&&video.readyState>=2,
+recordingUI = new RecordingUI({recorder:recording,ready:()=>!customEditor?.active&&!!state.image&&state.running&&video.readyState>=2,
   start:()=>{if(!state.image||!state.running||video.readyState<2)return;return recording.start({source:canvas,...recordingUI.options()});},
   lockChanged:busy=>{if(busy){imageGeneration++;cancelEditors();compositeUI.setCompare(false);}else{$('start').disabled=state.running;$('stop').disabled=!state.running;}syncControls();render();templates?.changed();}
 });

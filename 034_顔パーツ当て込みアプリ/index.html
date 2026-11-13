@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#172c2b">
   <title>顔パーツ当て込みアプリ / Portrait Face Parts Player</title>
-  <link rel="stylesheet" href="style.css?v=0.9.0">
+  <link rel="stylesheet" href="style.css?v=0.9.1">
   <script type="module">
-    import('./app.js?v=0.9.0').catch(error => {
+    import('./app.js?v=0.9.1').catch(error => {
       const status = document.getElementById('status');
       document.body.dataset.appState = 'error';
       for (const input of document.querySelectorAll('input[type="file"]')) input.disabled = true;
@@ -21,7 +21,7 @@
 </head>
 <body data-app-state="initializing">
   <main>
-    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.9.0</span></p><div class="title-row"><h1>顔パーツ当て込みアプリ</h1><button id="templates-open" type="button">保存・読込</button></div></header>
+    <header><p class="eyebrow">PORTRAIT FACE PARTS PLAYER <span class="version">v0.9.1</span></p><div class="title-row"><h1>顔パーツ当て込みアプリ</h1><button id="templates-open" type="button">保存・読込</button></div></header>
     <section class="preview-panel" aria-labelledby="preview-title">
       <div class="panel-heading"><h2 id="preview-title">絵画側 / <span id="selected-part-name">パーツ1</span></h2><select id="interaction-mode" aria-label="操作モード"><option value="edit">枠を編集</option><option value="pan">画像を移動</option><option value="view">鑑賞</option></select></div>
       <div class="part-bar" aria-label="パーツの追加と選択">
@@ -42,7 +42,7 @@
             <button id="save" disabled>PNG保存</button>
           </div>
           <div class="quick-controls">
-            <label for="shape">形状 <select id="shape"><option value="oval">楕円</option><option value="rectangle">四角</option></select></label>
+            <label for="shape">形状 <select id="shape"><option value="oval">楕円</option><option value="rectangle">四角</option><option value="freehand">フリーハンド</option></select></label>
             <label for="quick-feather">ぼかし <input id="quick-feather" type="range" min="0" max="100" value="20"><output id="quick-feather-value">20%</output></label>
           </div>
           <div class="composite-bar" aria-label="合成の色調と比較">
@@ -79,6 +79,7 @@
           </details>
         </div>
         <section class="camera-panel" aria-labelledby="camera-title">
+          <div id="shape-tools"><select id="camera-shape" aria-label="選択パーツの形状"><option value="oval">楕円</option><option value="rectangle">四角</option><option value="freehand">フリーハンド</option></select><button id="shape-draw" type="button" disabled>輪郭を描く</button><div id="shape-actions" hidden><button id="shape-confirm" type="button" disabled>確定</button><button id="shape-redraw" type="button">描き直す</button><button id="shape-cancel" type="button">キャンセル</button></div></div>
           <div class="panel-heading"><h2 id="camera-title">カメラ側 / <span id="camera-part-name">パーツ1</span></h2><label class="toggle"><input id="mirror" type="checkbox" checked>左右反転</label><span id="camera-state">停止中</span></div>
           <div class="camera-stage"><video id="camera" autoplay muted playsinline aria-hidden="true"></video><canvas id="camera-preview" width="480" height="360" aria-label="切り抜き枠の内側で移動、四隅でサイズ変更"></canvas><p id="camera-hint">カメラを開始してください</p></div>
           <div class="view-tools" aria-label="カメラ側の表示設定">
@@ -100,7 +101,7 @@
       </details>
       <div id="export-result" hidden><p>PNGを作成しました。画像を長押しして保存することもできます。</p><a id="download" class="button" download="portrait-parts.png">PNGをダウンロード</a><img id="export-image" alt="保存用の合成画像"></div>
     </section>
-    <footer>Version 0.9.0 — FREE PARTS FOUNDATION · カメラは HTTPS / localhost で利用できます。</footer>
+    <footer>Version 0.9.1 — CUSTOM SHAPE MASK · カメラは HTTPS / localhost で利用できます。</footer>
   </main>
   <div id="record-countdown-overlay" hidden role="status" aria-live="assertive"><span>録画まで</span><output id="record-countdown-number">3</output><button id="record-countdown-cancel" type="button" data-recording-safe>キャンセル</button></div>
   <dialog id="record-result" aria-labelledby="record-result-title"><div class="panel-heading"><h2 id="record-result-title">録画済み動画 / ライブではありません</h2><button id="record-close" type="button">閉じる</button></div>

@@ -27,7 +27,7 @@ export function recordingDiagnosticText(r={},uiError='') {
     `終了理由: ${r.reason||'なし'}`,`最終エラー: ${uiError||r.lastError||'なし'}`].join('\n');
 }
 export function diagnosticText(s){return [
-  'Portrait Face Parts Player v0.9.0', '計測窓: 直近'+s.windowMs/1000+'秒（現在'+fixed(s.elapsedMs/1000)+'秒）',
+  'Portrait Face Parts Player v0.9.1', '計測窓: 直近'+s.windowMs/1000+'秒（現在'+fixed(s.elapsedMs/1000)+'秒）',
   '描画fps: '+fixed(s.drawFps), '合成ms 平均/最大（同じ計測窓）: '+fixed(s.compositeAverageMs)+' / '+fixed(s.compositeMaxMs),
   '録画Canvas転送ms 平均/最大（今回の録画全体）: '+fixed(s.recordingAverageMs,2)+' / '+fixed(s.recordingMaxMs,2),
   '録画: '+(s.recordingState||'idle')+' / 転送'+(s.recordingFrames||0)+'回 / '+fixed((s.recordingBytes||0)/1024/1024,2)+' MB',
